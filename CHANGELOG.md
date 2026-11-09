@@ -3,6 +3,13 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.5 (2026-11-09)
+- **Front + Rear view:** the Front/Rear button now cycles Front → Rear → Front + Rear, showing both sides of a rack (or location) side by side so you can patch front to back directly.
+- **Shift-click to connect:** select a jack, hold Shift and click another jack. The first jack stays selected. Works across a flip too.
+- **Connect to list:** a selected jack's panel lists every jack it can connect to (right direction only), with search and notes for "in use" and "needs adapter". Double-click or press Connect.
+- **Pick on the rack:** a button that waits for your next jack click instead of using Shift. Esc cancels.
+- **Tie lines:** in rig mode, choose whether new connections are Cables or Tie lines; change an existing connection's type from its panel.
+
 ## v0.0.4 (2026-11-09)
 - **Resize racks** in rig mode: drag the amber handle on a rack's bottom edge, or use the − 1U / + 1U buttons under it. A rack can't shrink past the lowest piece of gear.
 - **Arrange gear inside locations** (floor pockets, FOH…): drag units anywhere on a 10px grid. Drop below the area to make it bigger. Overlapping spots are refused.

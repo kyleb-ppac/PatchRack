@@ -549,9 +549,11 @@ function rackView() {
       <label class="tog">Cables <select id="cable-mode" data-chg="cableMode" data-val="${project.view.cableMode}"><option value="all">All units</option><option value="picked">Only units I pick</option><option value="none">Hidden</option></select></label>
       <label class="tog"><input type="checkbox" id="tg-ties" data-chg="showTies" ${ui.showTies ? 'checked' : ''}> Show in-wall tie lines</label>
       ${modeSeg()}
+      ${rigMode() ? `<div class="seg"><span>New connections</span><button data-act="newKind" data-k="cable" class="${ui.newKind !== 'tie' ? 'on' : ''}">Cables</button><button data-act="newKind" data-k="tie" class="${ui.newKind === 'tie' ? 'on' : ''}">Tie lines</button></div>` : ''}
       <span class="spacer"></span>
       ${rigMode() ? '<button data-act="addRack">+ Rack</button><button data-act="addLoc">+ Location</button>' : ''}
     </div>
+    ${ui.pick && port(ui.pick) ? `<div class="note pick"><span><b>Click the jack to connect to ${esc(portLong(ui.pick))}.</b> Use Front / Rear / Front + Rear to reach the other side of a rack. Esc cancels.</span><button data-act="cancelPick">Cancel</button></div>` : ''}
     <div class="mode-hint ${rigMode() ? 'rig' : ''}">${rigMode()
       ? '<b>Editing the rig.</b> Changes apply to every patch. Drag gear by its name strip to move it (gear in the way slides over), click an empty space to add gear, and cables you draw are permanent.'
       : `<b>Editing ${esc(pt.name)}.</b> Gear is locked. Cables you draw and sources you assign belong to this patch only.`}</div>
@@ -570,10 +572,19 @@ function rackView() {
 }
 function faceBtn(id) {
   const f = ui.faces[id] || 'front';
-  return `<button class="face-btn" data-act="flip" data-id="${id}" title="Show the other side">${f === 'front' ? 'Front' : 'Rear'} ⇄</button>`;
+  return `<button class="face-btn" data-act="flip" data-id="${id}" title="Switch view: front, rear, or both side by side">${f === 'front' ? 'Front' : f === 'rear' ? 'Rear' : 'Front + Rear'} ⇄</button>`;
 }
 function rackHTML(rack) {
-  const face = ui.faces[rack.id] || 'front';
+  const view = ui.faces[rack.id] || 'front';
+  const faces = view === 'both' ? ['front', 'rear'] : [view];
+  const sel = ui.sel?.kind === 'rack' && ui.sel.id === rack.id;
+  return `<div class="rack">
+    <div class="rack-head"><button class="rack-title" data-act="selRack" data-id="${rack.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(rack.name)}</button><span class="muted small mono">${rack.ru}U</span>${faceBtn(rack.id)}${rigMode() ? `<span class="reorder"><button data-act="moveRack" data-id="${rack.id}" data-d="-1" title="Move rack left" aria-label="Move rack left">◀</button><button data-act="moveRack" data-id="${rack.id}" data-d="1" title="Move rack right" aria-label="Move rack right">▶</button></span>` : ''}</div>
+    <div class="rack-faces">${faces.map((f) => rackFaceHTML(rack, f, faces.length > 1)).join('')}</div>
+    ${rigMode() ? `<div class="rack-foot"><button data-act="rackRU" data-id="${rack.id}" data-d="-1" ${rack.ru <= rackMinRU(rack) ? 'disabled title="Gear is in the bottom space"' : ''}>− 1U</button><span class="muted small">drag the bottom edge or use the buttons</span><button data-act="rackRU" data-id="${rack.id}" data-d="1">+ 1U</button></div>` : ''}
+  </div>`;
+}
+function rackFaceHTML(rack, face, caption) {
   const occ = occupancy(rack);
   const H = rack.ru * U;
   const selSlot = ui.sel?.kind === 'slot' && ui.sel.rackId === rack.id ? ui.sel : null;
@@ -598,17 +609,13 @@ function rackHTML(rack) {
     const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
     return devHTML(d, def, face, { top: (d.place.u - 1) * U, left, w: side === 'full' ? W : W / 2, h: def.ru * U, cls: side === 'full' ? '' : 'half-' + side });
   }).join('');
-  const sel = ui.sel?.kind === 'rack' && ui.sel.id === rack.id;
-  return `<div class="rack">
-    <div class="rack-head"><button class="rack-title" data-act="selRack" data-id="${rack.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(rack.name)}</button><span class="muted small mono">${rack.ru}U</span>${faceBtn(rack.id)}${rigMode() ? `<span class="reorder"><button data-act="moveRack" data-id="${rack.id}" data-d="-1" title="Move rack left" aria-label="Move rack left">◀</button><button data-act="moveRack" data-id="${rack.id}" data-d="1" title="Move rack right" aria-label="Move rack right">▶</button></span>` : ''}</div>
+  return `<div class="rack-face">${caption ? `<div class="face-cap">${face}</div>` : ''}
     <div class="rack-body">
       <div class="rail" style="height:${H}px">${rail}</div>
-      <div class="rack-bay" data-rack="${rack.id}" style="width:${W}px;height:${H}px">${slots}${devs}</div>
+      <div class="rack-bay" data-rack="${rack.id}" data-face="${face}" style="width:${W}px;height:${H}px">${slots}${devs}</div>
       <div class="rail" style="height:${H}px">${rail}</div>
       ${rigMode() ? `<div class="rack-grip" data-rack="${rack.id}" title="Drag to make the rack taller or shorter"></div>` : ''}
-    </div>
-    ${rigMode() ? `<div class="rack-foot"><button data-act="rackRU" data-id="${rack.id}" data-d="-1" ${rack.ru <= rackMinRU(rack) ? 'disabled title="Gear is in the bottom space"' : ''}>− 1U</button><span class="muted small">drag the bottom edge or use the buttons</span><button data-act="rackRU" data-id="${rack.id}" data-d="1">+ 1U</button></div>` : ''}
-  </div>`;
+    </div></div>`;
 }
 const LOC_GRID = 10, LOC_MIN_W = 550;
 const devSize = (def) => ({ w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U });
@@ -636,16 +643,17 @@ function locLayout(loc, ov = null) {
   return { map, devs, w: Math.max(LOC_MIN_W, right + LOC_GRID), h: Math.max(64, bottom + LOC_GRID) };
 }
 function locHTML(loc) {
-  const face = ui.faces[loc.id] || 'front';
+  const view = ui.faces[loc.id] || 'front';
+  const faces = view === 'both' ? ['front', 'rear'] : [view];
   const lay = locLayout(loc);
-  const body = lay.devs.map((d) => {
+  const bodyFor = (face) => lay.devs.map((d) => {
     const def = idx.def.get(d.defId); const b = lay.map.get(d.id); if (!def || !b) return '';
     return devHTML(d, def, face, { top: b.y, left: b.x, w: b.w, h: b.h, cls: 'free' });
   }).join('');
   const sel = ui.sel?.kind === 'loc' && ui.sel.id === loc.id;
   return `<div class="loc" data-loc="${loc.id}">
     <div class="loc-head"><button class="rack-title" data-act="selLoc" data-id="${loc.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(loc.name)}</button>${faceBtn(loc.id)}${rigMode() ? `<button class="face-btn" data-act="locAdd" data-id="${loc.id}">+ Gear</button><span class="reorder"><button data-act="moveLoc" data-id="${loc.id}" data-d="-1" title="Move up" aria-label="Move location up">▲</button><button data-act="moveLoc" data-id="${loc.id}" data-d="1" title="Move down" aria-label="Move location down">▼</button></span>` : ''}</div>
-    <div class="loc-body" style="width:${lay.w}px;height:${lay.h}px">${body || `<span class="loc-empty">Nothing here yet.${rigMode() ? ' Use “+ Gear”, or drag gear in.' : ''}</span>`}</div>
+    <div class="rack-faces">${faces.map((f) => `<div class="rack-face">${faces.length > 1 ? `<div class="face-cap">${f}</div>` : ''}<div class="loc-body" data-face="${f}" style="width:${lay.w}px;height:${lay.h}px">${bodyFor(f) || `<span class="loc-empty">Nothing here yet.${rigMode() ? ' Use “+ Gear”, or drag gear in.' : ''}</span>`}</div></div>`).join('')}</div>
   </div>`;
 }
 function devHTML(d, def, face, box) {
@@ -672,7 +680,7 @@ function devHTML(d, def, face, box) {
     const fill = grp ? `--fill:${grp.color};` : idx.outMark.get(ref) ? '--fill:#5b6f86;' : '';
     const cls = ['port', 'c-' + pp.conn, 'd-' + pp.dir];
     if (idx.cables.get(ref)) cls.push('plugged');
-    if (ui.sel?.kind === 'port' && ui.sel.ref === ref) cls.push('sel');
+    if ((ui.sel?.kind === 'port' && ui.sel.ref === ref) || ui.pick === ref) cls.push('sel');
     else if (hl.has(ref)) cls.push('hl');
     const p = port(ref);
     const num = p ? portNum(p) : pp.n;
@@ -766,7 +774,12 @@ function onPointerMove(e) {
 function onPointerUp(e) {
   window.removeEventListener('pointermove', onPointerMove);
   const d = drag; drag = null; if (!d) return;
-  if (!d.moved) { select({ kind: 'port', ref: d.from }); return; }
+  if (!d.moved) {
+    const from = ui.pick || (e.shiftKey && ui.sel?.kind === 'port' ? ui.sel.ref : null);
+    ui.pick = null;
+    if (from && from !== d.from) { connect(from, d.from, { keepSel: from }); return; }
+    select({ kind: 'port', ref: d.from }); return;
+  }
   suppressNextClick();
   const t = $('#cable-temp'); if (t) t.setAttribute('d', '');
   const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.port');
@@ -789,7 +802,7 @@ function devDropTarget(e) {
   if (bay) {
     const rack = project.racks.find((r) => r.id === bay.dataset.rack); const br = bay.getBoundingClientRect();
     const u = Math.max(1, Math.min(rack.ru - h + 1, Math.floor((e.clientY - br.top) / U) + 1 - devDrag.grabU));
-    const face = ui.faces[rack.id] || 'front';
+    const face = bay.dataset.face || 'front';
     const leftHalf = e.clientX - br.left < W / 2;
     const side = def.width === 'half' ? (leftHalf === (face === 'front') ? 'L' : 'R') : 'full';
     const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
@@ -797,7 +810,7 @@ function devDropTarget(e) {
   }
   const loc = hit?.closest('.loc');
   if (loc) {
-    const body = loc.querySelector('.loc-body'); const br = body.getBoundingClientRect(); const sz = devSize(def);
+    const body = hit.closest('.loc-body') || loc.querySelector('.loc-body'); const br = body.getBoundingClientRect(); const sz = devSize(def);
     const snap = (v) => Math.round(v / LOC_GRID) * LOC_GRID;
     const x = Math.max(0, Math.min(1200 - sz.w, snap(e.clientX - br.left - devDrag.grabX)));
     const y = Math.max(0, Math.min(br.height + 2 * U, snap(e.clientY - br.top - devDrag.grabY)));
@@ -909,19 +922,22 @@ function endGroupDrag(e) {
   });
 }
 
-function connect(a, b, kind = 'cable') {
+function connect(a, b, opts = {}) {
   let pa = port(a), pb = port(b); if (!pa || !pb) return;
+  if (!isPhysical(pa.g) || !isPhysical(pb.g)) { toast('Dante channels are routed in the Dante tab.'); return; }
   if ((pa.g.dir === 'in' && pb.g.dir !== 'in') || (pb.g.dir === 'out' && pa.g.dir !== 'out')) { [a, b] = [b, a]; [pa, pb] = [pb, pa]; }
   if (idx.active.some((c) => (c.a === a && c.b === b) || (c.a === b && c.b === a))) { toast('Those two jacks are already connected.'); return; }
-  const layer = ui.layer === 'rig' ? 'rig' : patch().id;
+  const kind = opts.kind || (rigMode() && ui.newKind === 'tie' ? 'tie' : 'cable');
+  const layer = kind === 'tie' || rigMode() ? 'rig' : patch().id;
   const id = uid('c');
-  commit(`Cabled ${portLong(a)} → ${portLong(b)}${layer === 'rig' ? ' (rig)' : ''}`, (p) => p.connections.push({ id, a, b, kind, layer, color: '' }), { quiet: true });
-  ui.sel = { kind: 'conn', id };
+  commit(`${kind === 'tie' ? 'Added tie line' : 'Cabled'} ${portLong(a)} → ${portLong(b)}${layer === 'rig' && kind !== 'tie' ? ' (rig)' : ''}`, (p) => p.connections.push({ id, a, b, kind, layer, color: '' }), { quiet: true });
+  if (kind === 'tie' && !ui.showTies) ui.showTies = true;
+  ui.sel = opts.keepSel ? { kind: 'port', ref: opts.keepSel } : { kind: 'conn', id };
   render();
   const mine = checks.filter((c) => c.sev !== 'info' && c.sel && ((c.sel.kind === 'conn' && c.sel.id === id) || (c.sel.kind === 'port' && (c.sel.ref === a || c.sel.ref === b))));
   if (mine.length) toast('⚠ ' + mine[0].msg, 5000); else toast(`Patched ${portLabel(a)} → ${portLabel(b)}`);
 }
-function select(sel) { ui.sel = sel; ui.addQuery = ''; render(); }
+function select(sel) { ui.sel = sel; ui.addQuery = ''; ui.connQuery = ''; render(); }
 
 /* ---------- 7. inspector ---------- */
 function confirmBtn(act, label, attrs = '') {
@@ -1041,10 +1057,39 @@ function portInspector(ref) {
       ${srcs.length ? srcs.map((s) => `<div class="chips"><span class="chip"><span class="sw" style="background:${project.groups.find((g) => g.id === s.groupId)?.color || '#ccc'}"></span>${esc(s.name)}</span><span class="small muted">${esc(s.mic || '')}</span><button data-act="unassign" data-src="${s.id}" data-ref="${ref}" style="padding:1px 6px">Remove</button></div>`).join('') : '<p class="small muted" style="margin:0">None in this patch.</p>'}
       <div class="inline-fields" style="gap:4px"><select id="pt-assign" style="flex:1"><option value="">Assign a source…</option>${srcOpts}</select><button data-act="assign" data-ref="${ref}">Assign</button></div>
       <button data-act="newSrcHere" data-ref="${ref}">+ New source on this jack</button>` : ''}
+    ${isPhysical(p.g) ? `<div class="eyebrow">Connect to</div>
+      <input id="pt-q" data-inp="connQuery" data-ref="${ref}" placeholder="Search, e.g. PSM or Out 3" value="${esc(ui.connQuery || '')}" autocomplete="off">
+      <select id="pt-target" size="7" style="width:100%" aria-label="Jack to connect to">${connectOptions(ref, ui.connQuery)}</select>
+      <div class="toolbar"><button class="primary" data-act="connectPicked" data-ref="${ref}">Connect${rigMode() && ui.newKind === 'tie' ? ' tie line' : ''}</button><button data-act="pickMode" data-ref="${ref}">Pick on the rack…</button></div>
+      <p class="small muted" style="margin:0">Shortcut: with this jack selected, hold <b>Shift</b> and click another jack. New connections go in ${rigMode() ? '<b>the rig</b>' : `<b>${esc(patch().name)}</b>`}.</p>` : ''}
     <div class="eyebrow">Cables</div>
     ${conns.length ? conns.map((c) => `<div class="chips"><span class="pill ${c.layer === 'rig' ? 'rig' : 'patch'}">${c.kind === 'dante' ? 'Dante' : c.kind === 'tie' ? 'Tie line' : c.layer === 'rig' ? 'Rig' : 'Patch'}</span><span class="chip" data-act="selConn" data-id="${c.id}" style="cursor:pointer">${c.a === ref ? '→' : '←'} ${esc(portLong(c.a === ref ? c.b : c.a))}</span></div>`).join('') : '<p class="small muted" style="margin:0">Nothing plugged in.</p>'}
     <div class="eyebrow">Signal comes from</div>${traceHTML(bpaths)}
     <div class="eyebrow">Signal goes to</div>${traceHTML(fpaths)}`;
+}
+// jacks that `ref` could be cabled to, for the "Connect to" list
+function connectOptions(ref, q = '') {
+  const p = port(ref); if (!p) return '';
+  const want = p.g.dir === 'in' ? ['out', 'io'] : p.g.dir === 'out' ? ['in', 'io'] : ['io'];
+  q = (q || '').toLowerCase().trim();
+  let html = '';
+  for (const d of project.devices) {
+    const def = idx.def.get(d.defId); if (!def) continue;
+    let opts = '';
+    for (const g of def.groups) {
+      if (!isPhysical(g) || !want.includes(g.dir)) continue;
+      for (let i = 1; i <= g.count; i++) {
+        const r = mkRef(d.id, g.id, i); if (r === ref) continue;
+        const pp = port(r); const custom = d.portNames?.[`${g.id}:${i}`];
+        const flags = [g.face, idx.cables.get(r) ? 'in use' : '', compatible(p.g.conn, g.conn) ? '' : 'needs adapter'].filter(Boolean).join(', ');
+        const text = `${g.label} ${pp.g.names?.[i - 1] ?? ((g.start ?? 1) + i - 1)}${custom ? ` “${custom}”` : ''}${portLabel(r) !== `${d.short} ${g.label} ${(g.start ?? 1) + i - 1}` && !custom ? ` (${portLabel(r)})` : ''} · ${flags}`;
+        if (q && !`${d.name} ${d.short} ${text}`.toLowerCase().includes(q)) continue;
+        opts += `<option value="${r}">${esc(text)}</option>`;
+      }
+    }
+    if (opts) html += `<optgroup label="${esc(d.name)}">${opts}</optgroup>`;
+  }
+  return html || '<option disabled>No matching jacks</option>';
 }
 function connInspector(c) {
   if (!c) return inspectorHome();
@@ -1053,7 +1098,8 @@ function connInspector(c) {
     <h3>${esc(portLabel(c.a))} → ${esc(portLabel(c.b))}</h3></div>
     <dl class="kv"><dt>From</dt><dd><a href="#" data-act="selPort" data-ref="${c.a}">${esc(portLong(c.a))}</a></dd><dt>To</dt><dd><a href="#" data-act="selPort" data-ref="${c.b}">${esc(portLong(c.b))}</a></dd></dl>
     ${c.kind === 'cable' ? `<div class="row"><label for="cn-col">Cable</label><select id="cn-col" data-chg="connColor" data-id="${c.id}" data-val="${c.color || ''}"><option value="">Not set</option>${colors}</select></div>` : ''}
-    <div class="row"><label for="cn-layer">Belongs to</label><select id="cn-layer" data-chg="connLayer" data-id="${c.id}" data-val="${c.layer === 'rig' ? 'rig' : 'patch'}"><option value="patch">${esc(patch().name)} only</option><option value="rig">The rig (every patch)</option></select></div>
+    ${c.kind !== 'dante' && rigMode() ? `<div class="row"><label for="cn-kind">Type</label><select id="cn-kind" data-chg="connKind" data-id="${c.id}" data-val="${c.kind}"><option value="cable">Cable</option><option value="tie">Tie line (installed)</option></select></div>` : ''}
+    ${c.kind === 'tie' ? '<p class="small muted" style="margin:0">Tie lines are part of the rig and appear in every patch.</p>' : `<div class="row"><label for="cn-layer">Belongs to</label><select id="cn-layer" data-chg="connLayer" data-id="${c.id}" data-val="${c.layer === 'rig' ? 'rig' : 'patch'}"><option value="patch">${esc(patch().name)} only</option><option value="rig">The rig (every patch)</option></select></div>`}
     <div class="toolbar">${confirmBtn('delConn', 'Remove cable', `data-id="${c.id}"`)}</div>`;
 }
 function rackInspector(r) {
@@ -1474,7 +1520,7 @@ const actions = {
   closeModal,
   dismissSample: () => commit('', (p) => { p.sample = false; }),
   layer: (el) => { ui.layer = el.dataset.layer; render(); },
-  flip: (el) => { ui.faces[el.dataset.id] = (ui.faces[el.dataset.id] || 'front') === 'front' ? 'rear' : 'front'; render(); },
+  flip: (el) => { const next = { front: 'rear', rear: 'both', both: 'front' }; ui.faces[el.dataset.id] = next[ui.faces[el.dataset.id] || 'front']; render(); },
   addRack: () => { const id = uid('r'); commit('Added a rack', (p) => p.racks.push({ id, name: `Rack ${p.racks.length + 1}`, ru: 12 })); select({ kind: 'rack', id }); },
   addLoc: () => { const id = uid('l'); commit('Added a location', (p) => p.locations.push({ id, name: `Location ${p.locations.length + 1}` })); select({ kind: 'loc', id }); },
   slot: (el) => select({ kind: 'slot', rackId: el.dataset.rack, u: +el.dataset.u, side: el.dataset.side }),
@@ -1494,6 +1540,14 @@ const actions = {
     select({ kind: 'device', id });
   },
   newGearFromAdd: () => { ui.tab = 'library'; actions.newDef(); },
+  newKind: (el) => { ui.newKind = el.dataset.k; render(); },
+  pickMode: (el) => { ui.pick = el.dataset.ref; render(); },
+  cancelPick: () => { ui.pick = null; render(); },
+  connectPicked: (el) => {
+    const t = $('#pt-target')?.value;
+    if (!t) { toast('Choose a jack from the list first.'); return; }
+    connect(el.dataset.ref, t, { keepSel: el.dataset.ref });
+  },
   resetLayout: (el) => commit('Reset panel layout', () => {
     const d = libDef(); const face = el.dataset.face;
     if (d.layout) delete d.layout[face];
@@ -1620,7 +1674,7 @@ const actions = {
 function closeMenu() { $('#file-menu').open = false; }
 function revealFace(p) {
   const id = p.dev.place.type === 'rack' ? p.dev.place.rackId : p.dev.place.locId;
-  if (p.g.face === 'front' || p.g.face === 'rear') ui.faces[id] = p.g.face;
+  if ((p.g.face === 'front' || p.g.face === 'rear') && ui.faces[id] !== 'both') ui.faces[id] = p.g.face;
 }
 
 const changes = {
@@ -1653,6 +1707,10 @@ const changes = {
   },
   normal: (el) => commit('Changed normalling', () => { const d = project.devices.find((y) => y.id === ui.sel.id); (d.normalling ||= {})[el.dataset.n] = el.value; }),
   portName: (el) => { const p = port(el.dataset.ref); commit(`Renamed ${portShort(el.dataset.ref)}`, () => { const d = project.devices.find((y) => y.id === p.dev.id); const k = `${p.g.id}:${p.n}`; if (el.value.trim()) d.portNames[k] = el.value.trim(); else delete d.portNames[k]; }); },
+  connKind: (el) => commit(el.value === 'tie' ? 'Made a cable into a tie line' : 'Made a tie line into a cable', (p) => {
+    const c = p.connections.find((x) => x.id === el.dataset.id); c.kind = el.value;
+    if (c.kind === 'tie') { c.layer = 'rig'; ui.showTies = true; }
+  }),
   connColor: (el) => commit('Changed cable colour', (p) => { p.connections.find((c) => c.id === el.dataset.id).color = el.value; }),
   connLayer: (el) => commit('Moved a cable', (p) => { p.connections.find((c) => c.id === el.dataset.id).layer = el.value === 'rig' ? 'rig' : patch().id; }),
   rackField: (el) => {
@@ -1707,6 +1765,7 @@ const changes = {
   }),
 };
 const inputs = {
+  connQuery: (el) => { ui.connQuery = el.value; const s = $('#pt-target'); if (s) s.innerHTML = connectOptions(el.dataset.ref, el.value); },
   addQuery: (el) => {
     ui.addQuery = el.value;
     const tmp = document.createElement('div'); tmp.innerHTML = inspectorHTML();
@@ -1737,13 +1796,16 @@ document.addEventListener('input', (e) => {
   if (el && inputs[el.dataset.inp]) inputs[el.dataset.inp](el, e);
 });
 document.addEventListener('pointerdown', onPointerDown);
+document.addEventListener('dblclick', (e) => {
+  if (e.target.closest('#pt-target') && ui.sel?.kind === 'port') actions.connectPicked({ dataset: { ref: ui.sel.ref } });
+});
 document.addEventListener('toggle', (e) => {
   const d = e.target; if (d.classList?.contains('dgrp') && d.dataset.dev) (ui.danteOpen ||= {})[d.dataset.dev] = d.open;
 }, true);
 document.addEventListener('keydown', (e) => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '');
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-  else if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (ui.sel) select(null); }
+  else if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (ui.pick) { ui.pick = null; render(); } else if (ui.sel) select(null); }
   else if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && ui.sel?.kind === 'conn') { const id = ui.sel.id; commit('Removed a cable', (p) => { p.connections = p.connections.filter((c) => c.id !== id); }); select(null); }
 });
 window.addEventListener('resize', () => { if (ui.tab === 'rack') drawCables(); });
