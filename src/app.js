@@ -421,14 +421,19 @@ function portShape(conn, p) {
   return { w: d, h: d };
 }
 
-function occupancy(rack) {
+// which device sits in each U (left/right half) of a rack.
+// `ov` optionally overrides some devices' places, to test a move before making it.
+function occupancy(rack, ov = null) {
   const occ = {}; for (let u = 1; u <= rack.ru; u++) occ[u] = { L: null, R: null };
   for (const d of project.devices) {
-    if (d.place?.type !== 'rack' || d.place.rackId !== rack.id) continue;
+    const place = ov?.get(d.id) || d.place;
+    if (place?.type !== 'rack' || place.rackId !== rack.id) continue;
     const def = idx.def.get(d.defId); const ru = def?.ru || 1;
-    for (let u = d.place.u; u < d.place.u + ru; u++) {
-      if (!occ[u]) continue;
-      if (d.place.side === 'full') { occ[u].L = d.id; occ[u].R = d.id; } else occ[u][d.place.side] = d.id;
+    for (let u = place.u; u < place.u + ru; u++) {
+      const o = occ[u];
+      if (!o) { occ.over = true; continue; }
+      if (place.side === 'full') { if (o.L || o.R) occ.clash = true; o.L = d.id; o.R = d.id; }
+      else { if (o[place.side]) occ.clash = true; o[place.side] = d.id; }
     }
   }
   return occ;
@@ -445,21 +450,76 @@ function canPlace(rack, u, ru, side, ignoreId) {
   return true;
 }
 
+// Work out how to move gear to `dest`. If other gear is in the way in the same
+// rack, it slides into the space being vacated (e.g. drag a 5U unit down past a
+// 1U unit and the 1U ends up above it). Returns { ok, moves: [[devId, place]], msg }.
+function planMove(d, dest) {
+  const def = idx.def.get(d.defId); const h = def?.ru || 1;
+  if (dest.type === 'loc') return { ok: true, moves: [[d.id, { type: 'loc', locId: dest.locId }]], shuffled: 0 };
+  if (def.form !== 'rack') return { ok: false, msg: `${def.model} isn't rack-mountable. Change its mounting in the Library first.` };
+  const rack = project.racks.find((r) => r.id === dest.rackId);
+  const side = def.width === 'half' ? (dest.side === 'full' ? 'L' : dest.side) : 'full';
+  const u = dest.u;
+  if (u < 1 || u + h - 1 > rack.ru) return { ok: false, msg: `A ${h}U unit at U${u} runs past the bottom of ${rack.name}.` };
+  const target = { type: 'rack', rackId: rack.id, u, side };
+  if (canPlace(rack, u, h, side, d.id)) return { ok: true, moves: [[d.id, target]], shuffled: 0 };
+  if (d.place.type !== 'rack' || d.place.rackId !== rack.id) return { ok: false, msg: `That space in ${rack.name} is taken. Make room there first.` };
+  const others = project.devices.filter((x) => x.id !== d.id && x.place.type === 'rack' && x.place.rackId === rack.id);
+  const span = (x) => [x.place.u, x.place.u + (idx.def.get(x.defId)?.ru || 1) - 1];
+  const moves = [[d.id, target]];
+  if (side !== 'full') {
+    // half-rack gear trades places with one half-rack unit of the same height
+    const hit = others.filter((x) => { const [a, b] = span(x); return a <= u + h - 1 && b >= u && (x.place.side === 'full' || x.place.side === side); });
+    const x = hit[0];
+    if (hit.length === 1 && x.place.side !== 'full' && x.place.u === u && (idx.def.get(x.defId)?.ru || 1) === h) moves.push([x.id, { ...d.place }]);
+    else return { ok: false, msg: 'Half-rack gear can only trade places with another half-rack unit of the same height.' };
+  } else {
+    const u0 = d.place.u;
+    const [r0, r1, shift] = u > u0 ? [u0 + h, u + h - 1, -h] : [u, u0 - 1, h];
+    for (const x of others) {
+      const [a, b] = span(x);
+      if (b < r0 || a > r1) continue;
+      if (a < r0 || b > r1) return { ok: false, msg: `${x.name} (${b - a + 1}U) is in the way and can't slide past cleanly. Try one space further, or move it first.` };
+      moves.push([x.id, { ...x.place, u: a + shift }]);
+    }
+  }
+  const occ = occupancy(rack, new Map(moves));
+  if (occ.clash || occ.over) return { ok: false, msg: "There isn't room to shuffle the gear that way." };
+  return { ok: true, moves, shuffled: moves.length - 1 };
+}
+function applyMoves(moves, msg) {
+  const extra = moves.length - 1;
+  commit(msg + (extra ? ` (${extra} other item${extra > 1 ? 's' : ''} slid to make room)` : ''), (p) => {
+    for (const [id, place] of moves) p.devices.find((x) => x.id === id).place = place;
+  });
+  if (extra) toast(`${extra} item${extra > 1 ? 's' : ''} slid to make room.`);
+}
+const rigMode = () => ui.layer === 'rig';
+function lockNote(what) {
+  return `<div class="note"><span>This is part of the rig. Switch to <b>The rig</b> to ${what}.</span><button data-act="layer" data-layer="rig">Edit the rig</button></div>`;
+}
+function modeSeg() {
+  const b = (v, t) => `<button data-act="layer" data-layer="${v}" class="${v === 'rig' ? 'rigbtn ' : ''}${ui.layer === v ? 'on' : ''}">${t}</button>`;
+  return `<div class="seg"><span>Editing</span>${b('patch', 'Patch: ' + esc(patch().name))}${b('rig', 'The rig')}</div>`;
+}
+
 function rackView() {
   const pt = patch();
-  const layerBtn = (v, t) => `<button data-act="layer" data-layer="${v}" class="${ui.layer === v ? 'on' : ''}">${t}</button>`;
   return `<section class="view">
     ${project.sample ? `<div class="note"><span><b>Sample rig built from your Nov 8 patchlist.</b> The inputs match your PDF. Rack layouts, the pocket-to-Rio tie lines and the Dante numbering are placeholders, so move gear and fix routes to match the real thing. Gear marked <span class="pill unv">unverified</span> needs checking against the manual.</span><button data-act="dismissSample">Got it</button></div>` : ''}
     <div class="toolbar">
       <label class="tog"><input type="checkbox" id="tg-cables" data-chg="showCables" ${ui.showCables ? 'checked' : ''}> Show cables</label>
       <label class="tog"><input type="checkbox" id="tg-ties" data-chg="showTies" ${ui.showTies ? 'checked' : ''}> Show in-wall tie lines</label>
-      <div class="seg"><span>New cables go in</span>${layerBtn('patch', esc(pt.name))}${layerBtn('rig', 'The rig (permanent)')}</div>
+      ${modeSeg()}
       <span class="spacer"></span>
-      <button data-act="addRack">+ Rack</button><button data-act="addLoc">+ Location</button>
+      ${rigMode() ? '<button data-act="addRack">+ Rack</button><button data-act="addLoc">+ Location</button>' : ''}
     </div>
+    <div class="mode-hint ${rigMode() ? 'rig' : ''}">${rigMode()
+      ? '<b>Editing the rig.</b> Changes apply to every patch. Drag gear by its name strip to move it (gear in the way slides over), click an empty space to add gear, and cables you draw are permanent.'
+      : `<b>Editing ${esc(pt.name)}.</b> Gear is locked. Cables you draw and sources you assign belong to this patch only.`}</div>
     <div class="legend"><span><i style="--ring:var(--ring-in)"></i>Input</span><span><i style="--ring:var(--ring-out)"></i>Output</span><span><i style="--ring:var(--ring-io)"></i>Network / two-way</span><span>Filled jack = source colour · white dot = cable plugged in · drag from one jack to another to patch</span></div>
     <div class="rack-split">
-      <div class="stage" id="stage" data-keep-scroll>
+      <div class="stage ${rigMode() ? 'rig' : ''}" id="stage" data-keep-scroll>
         <div class="stage-inner" id="stage-inner">
           ${project.racks.map(rackHTML).join('')}
           <div class="locs">${project.locations.map(locHTML).join('')}</div>
@@ -490,6 +550,7 @@ function rackHTML(rack) {
       const on = selSlot && selSlot.u === u && selSlot.side === side;
       return `<div class="slot ${on ? 'sel' : ''}" data-act="slot" data-rack="${rack.id}" data-u="${u}" data-side="${side}" style="top:${top}px;left:${left}px;width:${w}px;height:${U}px">+ add gear at U${u}${side === 'full' ? '' : ' ' + (side === 'L' ? 'left' : 'right')}</div>`;
     };
+    if (!rigMode()) continue;
     if (!o.L && !o.R) slots += slot('full');
     else { if (!o.L) slots += slot('L'); if (!o.R) slots += slot('R'); }
   }
@@ -501,10 +562,10 @@ function rackHTML(rack) {
   }).join('');
   const sel = ui.sel?.kind === 'rack' && ui.sel.id === rack.id;
   return `<div class="rack">
-    <div class="rack-head"><button class="rack-title" data-act="selRack" data-id="${rack.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(rack.name)}</button><span class="muted small mono">${rack.ru}U</span>${faceBtn(rack.id)}</div>
+    <div class="rack-head"><button class="rack-title" data-act="selRack" data-id="${rack.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(rack.name)}</button><span class="muted small mono">${rack.ru}U</span>${faceBtn(rack.id)}${rigMode() ? `<span class="reorder"><button data-act="moveRack" data-id="${rack.id}" data-d="-1" title="Move rack left" aria-label="Move rack left">◀</button><button data-act="moveRack" data-id="${rack.id}" data-d="1" title="Move rack right" aria-label="Move rack right">▶</button></span>` : ''}</div>
     <div class="rack-body">
       <div class="rail" style="height:${H}px">${rail}</div>
-      <div class="rack-bay" style="width:${W}px;height:${H}px">${slots}${devs}</div>
+      <div class="rack-bay" data-rack="${rack.id}" style="width:${W}px;height:${H}px">${slots}${devs}</div>
       <div class="rail" style="height:${H}px">${rail}</div>
     </div>
   </div>`;
@@ -518,9 +579,9 @@ function locHTML(loc) {
     return devHTML(d, def, face, { w, h: (def.ru || 1) * U, cls: 'free', free: true });
   }).join('');
   const sel = ui.sel?.kind === 'loc' && ui.sel.id === loc.id;
-  return `<div class="loc">
-    <div class="loc-head"><button class="rack-title" data-act="selLoc" data-id="${loc.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(loc.name)}</button>${faceBtn(loc.id)}<button class="face-btn" data-act="locAdd" data-id="${loc.id}">+ Gear</button></div>
-    <div class="loc-body">${body || '<span class="loc-empty">Nothing here yet. Use “+ Gear”.</span>'}</div>
+  return `<div class="loc" data-loc="${loc.id}">
+    <div class="loc-head"><button class="rack-title" data-act="selLoc" data-id="${loc.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(loc.name)}</button>${faceBtn(loc.id)}${rigMode() ? `<button class="face-btn" data-act="locAdd" data-id="${loc.id}">+ Gear</button><span class="reorder"><button data-act="moveLoc" data-id="${loc.id}" data-d="-1" title="Move up" aria-label="Move location up">▲</button><button data-act="moveLoc" data-id="${loc.id}" data-d="1" title="Move down" aria-label="Move location down">▼</button></span>` : ''}</div>
+    <div class="loc-body">${body || `<span class="loc-empty">Nothing here yet.${rigMode() ? ' Use “+ Gear”, or drag gear in.' : ''}</span>`}</div>
   </div>`;
 }
 function devHTML(d, def, face, box) {
@@ -599,7 +660,10 @@ function drawCables() {
 // drag-to-patch
 let drag = null;
 function onPointerDown(e) {
-  const el = e.target.closest('.port'); if (!el || e.button > 0 || !el.closest('#stage-inner')) return;
+  if (e.button > 0) return;
+  const lab = e.target.closest('.dev-label');
+  if (lab && rigMode() && lab.closest('#stage-inner')) { startDevDrag(e, lab); return; }
+  const el = e.target.closest('.port'); if (!el || !el.closest('#stage-inner')) return;
   e.preventDefault();
   const inner = $('#stage-inner').getBoundingClientRect();
   const r = el.getBoundingClientRect();
@@ -623,9 +687,69 @@ function onPointerUp(e) {
   window.removeEventListener('pointermove', onPointerMove);
   const d = drag; drag = null; if (!d) return;
   if (!d.moved) { select({ kind: 'port', ref: d.from }); return; }
+  suppressNextClick();
   const t = $('#cable-temp'); if (t) t.setAttribute('d', '');
   const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.port');
   if (over && over.dataset.ref !== d.from) connect(d.from, over.dataset.ref);
+}
+// dragging gear by its name strip (rig mode only)
+let devDrag = null;
+function suppressNextClick() { ui.suppressClick = true; setTimeout(() => { ui.suppressClick = false; }, 0); }
+function startDevDrag(e, lab) {
+  e.preventDefault();
+  const el = lab.closest('.dev'); const r = el.getBoundingClientRect();
+  devDrag = { id: lab.dataset.id, el, x0: e.clientX, y0: e.clientY, moved: false, grabU: Math.max(0, Math.floor((e.clientY - r.top) / U)), plan: null, target: null };
+  window.addEventListener('pointermove', onDevMove);
+  window.addEventListener('pointerup', onDevUp, { once: true });
+}
+function devDropTarget(e) {
+  const d = idx.dev.get(devDrag.id); const def = idx.def.get(d.defId); const h = def.ru || 1;
+  const hit = document.elementFromPoint(e.clientX, e.clientY);
+  const bay = hit?.closest('.rack-bay');
+  if (bay) {
+    const rack = project.racks.find((r) => r.id === bay.dataset.rack); const br = bay.getBoundingClientRect();
+    const u = Math.max(1, Math.min(rack.ru - h + 1, Math.floor((e.clientY - br.top) / U) + 1 - devDrag.grabU));
+    const face = ui.faces[rack.id] || 'front';
+    const leftHalf = e.clientX - br.left < W / 2;
+    const side = def.width === 'half' ? (leftHalf === (face === 'front') ? 'L' : 'R') : 'full';
+    const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
+    return { dest: { type: 'rack', rackId: rack.id, u, side }, el: bay, top: (u - 1) * U, left, w: side === 'full' ? W : W / 2, h: Math.min(h, rack.ru) * U };
+  }
+  const loc = hit?.closest('.loc');
+  if (loc) { const body = loc.querySelector('.loc-body'); return { dest: { type: 'loc', locId: loc.dataset.loc }, el: body, top: 0, left: 0, w: body.offsetWidth, h: body.offsetHeight }; }
+  return null;
+}
+function onDevMove(e) {
+  if (!devDrag) return;
+  if (!devDrag.moved && Math.hypot(e.clientX - devDrag.x0, e.clientY - devDrag.y0) < 5) return;
+  if (!devDrag.moved) { devDrag.moved = true; devDrag.el.classList.add('dragging'); }
+  let g = $('#dev-ghost');
+  if (!g) { g = document.createElement('div'); g.id = 'dev-ghost'; g.className = 'ghost'; $('#stage-inner').appendChild(g); }
+  const t = devDropTarget(e); devDrag.target = t;
+  if (!t) { g.hidden = true; devDrag.plan = null; return; }
+  const plan = planMove(idx.dev.get(devDrag.id), t.dest); devDrag.plan = plan;
+  const inner = $('#stage-inner').getBoundingClientRect(), br = t.el.getBoundingClientRect();
+  Object.assign(g.style, { left: `${br.left - inner.left + t.left}px`, top: `${br.top - inner.top + t.top}px`, width: `${t.w}px`, height: `${t.h}px` });
+  g.hidden = false; g.classList.toggle('bad', !plan.ok);
+  g.textContent = !plan.ok ? "✕ Can't go here" : t.dest.type === 'loc' ? 'Move here'
+    : `U${t.dest.u}${plan.shuffled ? ` · ${plan.shuffled} item${plan.shuffled > 1 ? 's' : ''} will slide over` : ''}`;
+}
+function onDevUp() {
+  window.removeEventListener('pointermove', onDevMove);
+  const dd = devDrag; devDrag = null; $('#dev-ghost')?.remove();
+  if (!dd || !dd.moved) return;               // a plain click selects via the click handler
+  suppressNextClick();
+  dd.el.classList.remove('dragging');
+  const d = idx.dev.get(dd.id);
+  if (!dd.plan || !dd.target) { render(); return; }
+  if (!dd.plan.ok) { toast(dd.plan.msg, 5000); render(); return; }
+  const dest = dd.target.dest;
+  const same = dest.type === 'loc' ? d.place.type === 'loc' && d.place.locId === dest.locId
+    : d.place.type === 'rack' && d.place.rackId === dest.rackId && d.place.u === dest.u && d.place.side === (dest.side === 'full' && idx.def.get(d.defId).width === 'half' ? 'L' : dest.side);
+  if (same) { render(); return; }
+  const where = dest.type === 'loc' ? project.locations.find((l) => l.id === dest.locId)?.name : `${project.racks.find((r) => r.id === dest.rackId)?.name} U${dest.u}`;
+  ui.sel = { kind: 'device', id: d.id };
+  applyMoves(dd.plan.moves, `Moved ${d.name} to ${where}`);
 }
 function connect(a, b, kind = 'cable') {
   let pa = port(a), pb = port(b); if (!pa || !pb) return;
@@ -666,10 +790,9 @@ function inspectorHome() {
   <ul class="small" style="margin:0;padding-left:18px;display:grid;gap:4px">
     <li><b>Drag</b> from one jack to another to run a cable.</li>
     <li><b>Click a jack</b> to see what's plugged in and trace the signal to the console.</li>
-    <li><b>Click a gear name</b> to rename, move or relabel it.</li>
-    <li><b>Click an empty rack space</b> to install gear. Half-rack gear can sit side by side.</li>
     <li><b>Front/Rear</b> flips a rack. Half-rack items swap sides, just like walking around the back.</li>
-    <li>Cables go in <b>this patch</b> or <b>the rig</b>. Rig cables stay in every patch.</li>
+    <li><b>Editing: Patch</b> is for this week. Gear is locked, and cables you draw belong to this patch only.</li>
+    <li><b>Editing: The rig</b> is for permanent setup: drag gear by its name strip to move it, click an empty space to add gear, reorder racks with ◀ ▶. Cables you draw stay in every patch.</li>
   </ul>
   <div class="eyebrow">Checks</div>
   ${errs.length ? errs.map(checkHTML).join('') + (checks.length > 4 ? `<button data-act="tab" data-tab="checks">See all ${checks.length}</button>` : '') : '<p class="small muted" style="margin:0">No problems found in this patch.</p>'}`;
@@ -704,6 +827,14 @@ function addGearHTML(title, s) {
 function deviceInspector(d) {
   if (!d) return inspectorHome();
   const def = idx.def.get(d.defId);
+  if (!rigMode()) {
+    const where = d.place.type === 'rack' ? project.racks.find((r) => r.id === d.place.rackId)?.name : project.locations.find((l) => l.id === d.place.locId)?.name;
+    return `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${def.form === 'rack' ? def.ru + 'U' + (def.width === 'half' ? ' half-width' : '') : def.form}</div>
+      <h3>${esc(d.name)}</h3> ${def.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified gear definition</span>'}</div>
+      <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd>${d.place.type === 'rack' ? `<dt>Position</dt><dd>U${d.place.u}${d.place.side === 'full' ? '' : d.place.side === 'L' ? ', left half' : ', right half'}</dd>` : ''}${d.zone ? `<dt>Stage</dt><dd>${esc(d.zone)} · ${esc(d.position || '')}</dd>` : ''}</dl>
+      ${def.ref ? `<p class="small muted" style="margin:0">${esc(def.ref)}</p>` : ''}
+      ${lockNote('rename, move, relabel or remove it')}`;
+  }
   const containers = [...project.racks.map((r) => `<option value="r:${r.id}">Rack: ${esc(r.name)}</option>`), ...project.locations.map((l) => `<option value="l:${l.id}">Location: ${esc(l.name)}</option>`)].join('');
   const cur = d.place.type === 'rack' ? 'r:' + d.place.rackId : 'l:' + d.place.locId;
   const srcGroups = def.groups.filter((g) => g.src || g.id === 'tie');
@@ -747,7 +878,7 @@ function portInspector(ref) {
   const srcOpts = patch().sources.map((s) => `<option value="${s.id}">${esc(s.name || 'Untitled')}${(s.ports || []).some(Boolean) ? ' · ' + esc(stereoLabel(s.ports)) : ''}</option>`).join('');
   return `<div><div class="eyebrow">${esc(p.dev.name)} · ${esc(CONN_NAMES[p.g.conn] || p.g.conn)} ${p.g.dir === 'in' ? 'input' : p.g.dir === 'out' ? 'output' : 'two-way'}</div>
     <h3>${esc(portLabel(ref))}</h3><div class="small muted">${esc(portLong(ref))}</div></div>
-    <div class="row"><label for="pt-name">Custom name</label><input id="pt-name" value="${esc(p.dev.portNames?.[key] || '')}" placeholder="e.g. PREACH MIC" data-chg="portName" data-ref="${ref}"></div>
+    ${rigMode() ? `<div class="row"><label for="pt-name">Custom name</label><input id="pt-name" value="${esc(p.dev.portNames?.[key] || '')}" placeholder="e.g. PREACH MIC" data-chg="portName" data-ref="${ref}"></div>` : ''}
     ${canSrc ? `<div class="eyebrow">Source plugged in here</div>
       ${srcs.length ? srcs.map((s) => `<div class="chips"><span class="chip"><span class="sw" style="background:${project.groups.find((g) => g.id === s.groupId)?.color || '#ccc'}"></span>${esc(s.name)}</span><span class="small muted">${esc(s.mic || '')}</span><button data-act="unassign" data-src="${s.id}" data-ref="${ref}" style="padding:1px 6px">Remove</button></div>`).join('') : '<p class="small muted" style="margin:0">None in this patch.</p>'}
       <div class="inline-fields" style="gap:4px"><select id="pt-assign" style="flex:1"><option value="">Assign a source…</option>${srcOpts}</select><button data-act="assign" data-ref="${ref}">Assign</button></div>
@@ -770,17 +901,21 @@ function connInspector(c) {
 function rackInspector(r) {
   if (!r) return inspectorHome();
   const n = project.devices.filter((d) => d.place?.type === 'rack' && d.place.rackId === r.id).length;
+  if (!rigMode()) return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3><dl class="kv"><dt>Size</dt><dd>${r.ru}U</dd><dt>Gear</dt><dd>${n} items</dd></dl>${lockNote('rename, resize, reorder or delete it')}`;
   return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3>
     <div class="row"><label for="rk-name">Name</label><input id="rk-name" value="${esc(r.name)}" data-chg="rackField" data-f="name" data-id="${r.id}"></div>
     <div class="row"><label for="rk-ru">Size (U)</label><input id="rk-ru" type="number" min="1" max="60" value="${r.ru}" data-chg="rackField" data-f="ru" data-id="${r.id}"></div>
+    <div class="toolbar"><button data-act="moveRack" data-id="${r.id}" data-d="-1">◀ Move left</button><button data-act="moveRack" data-id="${r.id}" data-d="1">Move right ▶</button></div>
     <div class="toolbar">${confirmBtn('delRack', n ? `Delete rack and its ${n} items` : 'Delete rack', `data-id="${r.id}"`)}</div>`;
 }
 function locInspector(l) {
   if (!l) return inspectorHome();
   const n = project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === l.id).length;
+  if (!rigMode()) return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3><dl class="kv"><dt>Gear</dt><dd>${n} items</dd></dl>${lockNote('rename, reorder or delete it, or add gear')}`;
   return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3>
     <p class="small muted" style="margin:0">Locations hold gear that isn't in a rack: floor pockets, wall plates, the console, a stage-box on a shelf.</p>
     <div class="row"><label for="lc-name">Name</label><input id="lc-name" value="${esc(l.name)}" data-chg="locField" data-id="${l.id}"></div>
+    <div class="toolbar"><button data-act="moveLoc" data-id="${l.id}" data-d="-1">▲ Move up</button><button data-act="moveLoc" data-id="${l.id}" data-d="1">Move down ▼</button></div>
     <div class="toolbar"><button data-act="locAdd" data-id="${l.id}">+ Gear</button>${confirmBtn('delLoc', n ? `Delete location and its ${n} items` : 'Delete location', `data-id="${l.id}"`)}</div>`;
 }
 function sourceInspector(s) {
@@ -914,7 +1049,7 @@ function danteView() {
       const cell = editing
         ? `<select id="dsel" data-chg="danteSub" data-ref="${r}" data-val="${subs[0]?.a || ''}">${danteTxOptions(txDevs)}</select>`
         : `<button class="dsub ${subs.length ? 'set' : ''}" data-act="danteEdit" data-ref="${r}">${subs.length ? subs.map((c) => esc(portShort(c.a))).join(' + ') : '—'}</button>`;
-      return `<tr><td class="num">${i + 1}</td><td><input id="dn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}"></td><td>${cell}</td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
+      return `<tr><td class="num">${i + 1}</td><td><input id="dn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}" ${rigMode() ? '' : 'disabled'}></td><td>${cell}</td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
     }).join('');
     return `<details class="dgrp card" ${ui.danteOpen?.[d.id] ?? (g.count <= 64) ? 'open' : ''} data-dev="${d.id}"><summary>${esc(d.name)} <span class="muted small">· receives ${used}/${g.count}</span></summary>
       <div class="tbl-wrap"><table class="grid"><thead><tr><th>Rx</th><th>Channel name</th><th>Subscribed to</th><th>Source</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
@@ -922,11 +1057,11 @@ function danteView() {
   const txHTML = txDevs.map(([d, g]) => `<details class="dgrp card"><summary>${esc(d.name)} <span class="muted small">· ${g.count} transmit channels</span></summary>
     <div class="tbl-wrap"><table class="grid"><thead><tr><th>Tx</th><th>Channel name</th><th>Source</th></tr></thead><tbody>${Array.from({ length: g.count }, (_, i) => {
       const r = mkRef(d.id, g.id, i + 1); const src = idx.mark.get(r);
-      return `<tr><td class="num">${i + 1}</td><td><input id="tn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}"></td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
+      return `<tr><td class="num">${i + 1}</td><td><input id="tn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}" ${rigMode() ? '' : 'disabled'}></td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
     }).join('')}</tbody></table></div></details>`).join('');
   return `<section class="view">
-    <div class="card"><div class="card-head"><h2>Dante routing</h2><span class="spacer"></span><div class="seg"><span>Changes go in</span>${layerBtn('patch', esc(patch().name))}${layerBtn('rig', 'The rig (permanent)')}</div></div>
-      <p class="small muted" style="margin:0">Click a “Subscribed to” cell to choose which transmitter feeds that receive channel. The signal trace and Console Ch columns follow these routes. Importing and exporting Dante Controller preset files is planned for a later phase.</p></div>
+    <div class="card"><div class="card-head"><h2>Dante routing</h2><span class="spacer"></span>${modeSeg()}</div>
+      <p class="small muted" style="margin:0">${rigMode() ? 'Routes you set now are permanent (every patch). Channel names can be edited.' : `Routes you set now apply to ${esc(patch().name)} only. Switch to The rig to make permanent routes or rename channels.`} Click a “Subscribed to” cell to choose which transmitter feeds that receive channel. The signal trace and Console Ch columns follow these routes. Importing and exporting Dante Controller preset files is planned for a later phase.</p></div>
     <h3>Receivers</h3>${rxHTML}
     <h3>Transmitters</h3>${txHTML}
   </section>`;
@@ -1196,6 +1331,8 @@ const actions = {
     select({ kind: 'device', id });
   },
   newGearFromAdd: () => { ui.tab = 'library'; actions.newDef(); },
+  moveRack: (el) => commit('Reordered racks', (p) => moveIn(p.racks, el.dataset.id, +el.dataset.d)),
+  moveLoc: (el) => commit('Reordered locations', (p) => moveIn(p.locations, el.dataset.id, +el.dataset.d)),
   dupDev: (el) => {
     const d = idx.dev.get(el.dataset.id); const def = idx.def.get(d.defId);
     const id = uid('d'); const copy = { ...JSON.parse(JSON.stringify(d)), id, name: d.name + ' copy' };
@@ -1322,14 +1459,16 @@ const changes = {
     toast(`No room in ${rack.name} for ${def.ru}U.`); render();
   },
   devU: (el) => {
-    const d = project.devices.find((y) => y.id === ui.sel.id); const def = idx.def.get(d.defId); const rack = project.racks.find((r) => r.id === d.place.rackId);
-    const u = +el.value; if (!canPlace(rack, u, def.ru, d.place.side, d.id)) { toast(`Something is already at U${u}, or it runs off the rack.`); render(); return; }
-    commit(`Moved ${d.name} to U${u}`, () => { d.place.u = u; });
+    const d = project.devices.find((y) => y.id === ui.sel.id); const u = +el.value;
+    const plan = planMove(d, { ...d.place, u });
+    if (!plan.ok) { toast(plan.msg, 5000); render(); return; }
+    applyMoves(plan.moves, `Moved ${d.name} to U${u}`);
   },
   devSide: (el) => {
-    const d = project.devices.find((y) => y.id === ui.sel.id); const def = idx.def.get(d.defId); const rack = project.racks.find((r) => r.id === d.place.rackId);
-    if (!canPlace(rack, d.place.u, def.ru, el.value, d.id)) { toast('That half is taken.'); render(); return; }
-    commit(`Moved ${d.name}`, () => { d.place.side = el.value; });
+    const d = project.devices.find((y) => y.id === ui.sel.id);
+    const plan = planMove(d, { ...d.place, side: el.value });
+    if (!plan.ok) { toast(plan.msg, 5000); render(); return; }
+    applyMoves(plan.moves, `Moved ${d.name} to the ${el.value === 'L' ? 'left' : 'right'} half`);
   },
   normal: (el) => commit('Changed normalling', () => { const d = project.devices.find((y) => y.id === ui.sel.id); (d.normalling ||= {})[el.dataset.n] = el.value; }),
   portName: (el) => { const p = port(el.dataset.ref); commit(`Renamed ${portShort(el.dataset.ref)}`, () => { const d = project.devices.find((y) => y.id === p.dev.id); const k = `${p.g.id}:${p.n}`; if (el.value.trim()) d.portNames[k] = el.value.trim(); else delete d.portNames[k]; }); },
@@ -1400,6 +1539,7 @@ const inputs = {
 };
 
 document.addEventListener('click', (e) => {
+  if (ui.suppressClick) { ui.suppressClick = false; return; }
   const el = e.target.closest('[data-act]');
   if (el && !el.disabled) { const fn = actions[el.dataset.act]; if (fn) { fn(el, e); return; } }
   const hit = e.target.closest('path.hit');

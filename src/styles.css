@@ -16,6 +16,8 @@
   --warn: #b26a00;
   --info: #2f6f9f;
   --ok: #2f7d4f;
+  --rig: #b86e00;             /* rig-edit mode */
+  --rig-bg: #fbf1df;
 
   /* hardware (same in both themes) */
   --metal: #23272c;
@@ -40,6 +42,7 @@
     --bg: #11151a; --panel: #192028; --panel-2: #1f2730; --fg: #e5eaf0; --muted: #95a2b0;
     --line: #2c3540; --accent: #8db1d6; --accent-fg: #0f1720; --accent-soft: #24313f;
     --err: #ff7a70; --warn: #f0b456; --info: #7fb6e6; --ok: #73c995;
+    --rig: #f0a830; --rig-bg: #2a2216;
     color-scheme: dark;
   }
 }
@@ -47,6 +50,7 @@
   --bg: #11151a; --panel: #192028; --panel-2: #1f2730; --fg: #e5eaf0; --muted: #95a2b0;
   --line: #2c3540; --accent: #8db1d6; --accent-fg: #0f1720; --accent-soft: #24313f;
   --err: #ff7a70; --warn: #f0b456; --info: #7fb6e6; --ok: #73c995;
+  --rig: #f0a830; --rig-bg: #2a2216;
   color-scheme: dark;
 }
 
@@ -130,6 +134,21 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .seg > span { padding: 0 8px; font-size: 12px; color: var(--muted); }
 .seg button { border: 0; border-left: 1px solid var(--line); border-radius: 0; }
 .seg button.on { background: var(--accent); color: var(--accent-fg); }
+.seg button.rigbtn.on { background: var(--rig); color: #fff; }
+.mode-hint { font-size: 13px; padding: 6px 12px; border-radius: var(--r); background: var(--accent-soft); }
+.mode-hint.rig { background: var(--rig-bg); box-shadow: inset 3px 0 0 var(--rig); }
+.stage.rig { border: 2px solid var(--rig); background: var(--rig-bg); }
+.stage.rig .dev-label { cursor: grab; }
+.stage.rig .dev-label:active { cursor: grabbing; }
+.reorder { display: inline-flex; gap: 2px; }
+.reorder button { font-size: 10px; padding: 1px 6px; }
+.dev.dragging { opacity: .35; }
+.ghost {
+  position: absolute; z-index: 8; pointer-events: none; border: 2px dashed #6fbf8e; border-radius: 3px;
+  background: rgba(111,191,142,.22); color: #f2fff6; text-shadow: 0 1px 3px #000, 0 0 2px #000; font: 600 13px var(--f-mono);
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 2px;
+}
+.ghost.bad { border-color: #ff7a70; background: rgba(194,54,47,.22); color: #ffe1de; }
 .note {
   background: var(--accent-soft); border-radius: var(--r); padding: 8px 12px; font-size: 13px;
   display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
