@@ -8,7 +8,7 @@ Built first for the Peace Portal Church sanctuary rig.
 
 ## Using it
 
-Open `dist/PatchRack.html` in a web browser (double-click it on a Mac). Nothing to install.
+Open the newest `dist/PatchRack-v….html` in a web browser (double-click it on a Mac). Nothing to install. See `CHANGELOG.md` for what changed in each version.
 
 - Your work saves automatically in that browser.
 - **Save to GitHub** (the button in the top bar, or Cmd+S) stores the project in the `projects/`
@@ -23,7 +23,7 @@ Open `dist/PatchRack.html` in a web browser (double-click it on a Mac). Nothing 
 
 | Folder | What it holds |
 |---|---|
-| `dist/` | The app, ready to open (`PatchRack.html`) |
+| `dist/` | The app, ready to open (`PatchRack-v<version>.html`) |
 | `projects/` | Saved projects (one `.patchrack.json` per rig/venue) |
 | `src/` | Source code |
 
@@ -37,7 +37,7 @@ Open `dist/PatchRack.html` in a web browser (double-click it on a Mac). Nothing 
 | `src/app.js` | Signal tracing, checks, rack view, patchlist, Dante, print, library editor |
 | `src/github.js` | Saving to and opening from GitHub |
 | `src/main.js` | Start-up |
-| `build.py` | Bundles `src/` into the single files in `dist/` |
+| `build.py` | Bundles `src/` into the single files in `dist/`; the version number comes from `VERSION` |
 
 After changing anything in `src/`, rebuild with:
 

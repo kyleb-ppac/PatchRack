@@ -1,7 +1,10 @@
 """Bundle src/ into one self-contained file.
 
-dist/patchrack.html  - the page body (used for the hosted preview)
-dist/PatchRack.html  - a full standalone page you can double-click on a Mac
+The version number lives in the VERSION file. Bump it (and add a CHANGELOG.md
+entry) for every update that gets handed out.
+
+dist/PatchRack-v<version>.html - standalone page you can double-click on a Mac
+dist/patchrack.html            - page body only (used for the hosted preview)
 """
 from pathlib import Path
 
@@ -9,12 +12,15 @@ root = Path(__file__).parent
 src = root / 'src'
 dist = root / 'dist'
 dist.mkdir(exist_ok=True)
+version = (root / 'VERSION').read_text().strip()
 
 page = (src / 'index.html').read_text()
 css = (src / 'styles.css').read_text()
 js = '\n'.join((src / f).read_text() for f in ['library.js', 'app.js', 'github.js', 'main.js'])
 
-body = page.replace('/*@@STYLES@@*/', css).replace('/*@@SCRIPTS@@*/', js)
+body = (page.replace('/*@@STYLES@@*/', css)
+            .replace('/*@@SCRIPTS@@*/', f"const APP_VERSION = '{version}';\n" + js)
+            .replace('@@VERSION@@', version))
 (dist / 'patchrack.html').write_text(body)
 
 standalone = (
@@ -23,5 +29,10 @@ standalone = (
     '<style>[hidden]{display:none!important} body{margin:0}</style>\n'
     '</head>\n<body>\n' + body + '\n</body>\n</html>\n'
 )
-(dist / 'PatchRack.html').write_text(standalone)
-print('built', len(body) // 1024, 'KB')
+out = dist / f'PatchRack-v{version}.html'
+# keep only the current version in dist/ (older ones stay in GitHub history)
+for old in dist.glob('PatchRack*.html'):
+    if old != out:
+        old.unlink()
+out.write_text(standalone)
+print('built', out.name, len(body) // 1024, 'KB')

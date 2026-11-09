@@ -97,6 +97,7 @@ h2 { font-size: 22px; } h3 { font-size: 17px; }
 }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
 .brand { display: flex; align-items: center; gap: 8px; font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: .03em; }
+.brand .ver { font: 500 11px var(--f-mono); color: var(--muted); letter-spacing: 0; align-self: flex-end; margin: 0 0 4px -3px; }
 .brand-mark { width: 22px; height: 22px; border-radius: 3px; background:
   radial-gradient(circle at 30% 35%, var(--accent-fg) 0 2.5px, transparent 3px),
   radial-gradient(circle at 70% 35%, var(--accent-fg) 0 2.5px, transparent 3px),
@@ -347,7 +348,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack</div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.2</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -393,6 +394,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 <input type="file" id="file-logo" accept="image/*" hidden>
 
 <script>
+const APP_VERSION = '0.0.2';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
