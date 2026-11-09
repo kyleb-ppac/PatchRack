@@ -229,8 +229,25 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .locs { display: flex; flex-direction: column; gap: 22px; flex: none; }
 .loc { flex: none; }
-.loc-body { display: flex; flex-wrap: wrap; gap: 10px; width: 540px; padding: 10px; border: 1px dashed #6b747d; border-radius: 6px; }
-.loc-body .dev { position: relative; }
+.loc-body { position: relative; border: 1px dashed #6b747d; border-radius: 6px; }
+.stage.rig .loc-body { background-image: radial-gradient(circle, rgba(120,128,138,.35) 1px, transparent 1.2px); background-size: 10px 10px; }
+.loc-empty { position: absolute; left: 12px; top: 12px; }
+.stage.rig .loc { padding-bottom: 96px; }  /* room to drop gear below and grow the area */
+.rack-body { position: relative; }
+.rack-grip { position: absolute; left: 0; right: 0; bottom: -7px; height: 12px; cursor: ns-resize; z-index: 4; display: flex; justify-content: center; align-items: center; }
+.rack-grip::after { content: ""; width: 60px; height: 5px; border-radius: 3px; background: var(--rig); box-shadow: 0 0 0 2px var(--rig-bg); }
+.rack-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.rack-foot button { font-size: 12px; padding: 3px 10px; }
+.cab-tog {
+  position: absolute; top: 2px; right: 12px; z-index: 3; font: 600 9px/12px var(--f-display); letter-spacing: .08em; text-transform: uppercase;
+  padding: 0 5px; border-radius: 3px; border: 1px solid #4b5259; background: #1a1d21; color: #7d868f; cursor: pointer;
+}
+.cab-tog.on { color: #0f1a12; background: #8fd1a6; border-color: #8fd1a6; }
+.dev-label { right: 64px; }
+.pv { outline: 1px dashed var(--line); outline-offset: 2px; }
+.pv .dev { background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(180deg, var(--metal-2), var(--metal)); background-size: 8px 8px, 8px 8px, auto; }
+.grp-box { position: absolute; z-index: 4; border: 1px dashed rgba(143,209,166,.55); border-radius: 3px; cursor: move; touch-action: none; }
+.grp-box:hover, .grp-box.moving { border: 2px solid #8fd1a6; background: rgba(143,209,166,.12); }
 .loc-empty { color: var(--muted); font-size: 12px; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }

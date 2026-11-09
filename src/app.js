@@ -47,7 +47,7 @@ function fmtDate(iso) {
 /* ---------- 2. state & saving ---------- */
 let project;
 const ui = {
-  tab: 'rack', patchId: null, sel: null, faces: {}, showCables: true, showTies: false,
+  tab: 'rack', patchId: null, sel: null, faces: {}, showTies: false,
   layer: 'patch', libSel: null, libQuery: '', addQuery: '', armed: null,
 };
 const undoStack = [], redoStack = [];
@@ -60,6 +60,7 @@ function migrate(p) {
   if (!p.schema) p.schema = 1;
   p.library ||= []; p.racks ||= []; p.locations ||= []; p.devices ||= []; p.connections ||= [];
   p.patches ||= []; p.groups ||= []; p.columns ||= []; p.history ||= [];
+  p.view ||= {}; p.view.cableMode ||= 'all'; p.view.cables ||= {};
   p.cableColors ||= JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS));
   p.print = { ...defaultPrint(), ...(p.print || {}) };
   p.print.include = { ...defaultPrint().include, ...(p.print.include || {}) };
@@ -383,23 +384,48 @@ function renderTop() {
 /* ---------- 6. rack view ---------- */
 const PITCH = { xlr: 26, combo: 26, dmx5: 26, dmx3: 26, ethercon: 24, rj45: 19, trs: 18, headphone: 18, bnc: 17, sfp: 19, phoenix: 13, iec: 28, nema: 28, dc: 16, speakon: 28, powercon: 28, usb: 15, hdmi: 20 };
 const layoutCache = new Map();
+function groupDims(g, s, h, top) {
+  const p = (PITCH[g.conn] || 20) * s;
+  const lab = g.nolabel ? 0 : 10 * Math.max(s, 0.7);
+  const maxRows = Math.max(1, Math.floor((h - top - lab - 2) / p));
+  let rows = g.rows || (g.count <= 12 ? 1 : g.count <= 24 ? 2 : 4);
+  rows = Math.max(1, Math.min(rows, maxRows, g.count));
+  const cols = Math.ceil(g.count / rows);
+  return { p, lab, rows, cols, bw: cols * p, bh: rows * p + lab };
+}
 function layoutFace(def, face, w, h) {
-  const key = `${def.id}|${face}|${w}|${h}|${JSON.stringify(def.groups.map((g) => [g.id, g.label, g.count, g.conn, g.face, g.rows]))}`;
+  const key = `${def.id}|${face}|${w}|${h}|${JSON.stringify(def.groups.map((g) => [g.id, g.label, g.count, g.conn, g.face, g.rows, g.pos]))}|${JSON.stringify(def.layout?.[face] || null)}`;
   if (layoutCache.has(key)) return layoutCache.get(key);
   const gs = def.groups.filter((g) => g.face === face);
   let best = null;
+  const fixed = def.layout?.[face];
+  if (fixed) {
+    // positions set by dragging port groups in the Library
+    const s = fixed.s || 1, pad = 14, top = 14;
+    const ports = [], labels = [], blocks = [];
+    let bottom = top;
+    for (const g of [...gs.filter((g) => g.pos), ...gs.filter((g) => !g.pos)]) {
+      const dm = groupDims(g, s, h, top);
+      const x = g.pos ? g.pos.x : pad, y = g.pos ? g.pos.y : bottom + 3;
+      if (!g.nolabel) labels.push({ x, y, text: g.label, s });
+      for (let i = 0; i < g.count; i++) {
+        const r = Math.floor(i / dm.cols), c = i % dm.cols;
+        ports.push({ gid: g.id, n: i + 1, x: x + c * dm.p, y: y + dm.lab + r * dm.p, p: dm.p, conn: g.conn, dir: g.dir });
+      }
+      blocks.push({ gid: g.id, x, y, w: dm.bw, h: dm.bh });
+      bottom = Math.max(bottom, y + dm.bh);
+    }
+    best = { ports, labels, blocks, s, fixed: true };
+    layoutCache.set(key, best);
+    return best;
+  }
   for (let s = 1; s >= 0.3; s -= 0.06) {
     const pad = 14, top = 14; let x = pad, y = top, bandH = 0, maxR = 0;
-    const ports = [], labels = [];
+    const ports = [], labels = [], blocks = [];
     for (const g of gs) {
-      const p = (PITCH[g.conn] || 20) * s;
-      const lab = g.nolabel ? 0 : 10 * Math.max(s, 0.7);
-      const maxRows = Math.max(1, Math.floor((h - top - lab - 2) / p));
-      let rows = g.rows || (g.count <= 12 ? 1 : g.count <= 24 ? 2 : 4);
-      rows = Math.max(1, Math.min(rows, maxRows, g.count));
-      const cols = Math.ceil(g.count / rows);
-      const bw = cols * p, bh = rows * p + lab;
+      const { p, lab, cols, bw, bh } = groupDims(g, s, h, top);
       if (x + bw > w - pad && x > pad) { x = pad; y += bandH + 3; bandH = 0; }
+      blocks.push({ gid: g.id, x, y, w: bw, h: bh });
       if (!g.nolabel) labels.push({ x, y, text: g.label, s });
       for (let i = 0; i < g.count; i++) {
         const r = Math.floor(i / cols), c = i % cols;
@@ -407,7 +433,7 @@ function layoutFace(def, face, w, h) {
       }
       x += bw + 12 * s; bandH = Math.max(bandH, bh); maxR = Math.max(maxR, x - 12 * s);
     }
-    best = { ports, labels, s };
+    best = { ports, labels, blocks, s };
     if (y + bandH <= h - 1 && maxR <= w - pad + 2) break;
   }
   layoutCache.set(key, best);
@@ -455,7 +481,20 @@ function canPlace(rack, u, ru, side, ignoreId) {
 // 1U unit and the 1U ends up above it). Returns { ok, moves: [[devId, place]], msg }.
 function planMove(d, dest) {
   const def = idx.def.get(d.defId); const h = def?.ru || 1;
-  if (dest.type === 'loc') return { ok: true, moves: [[d.id, { type: 'loc', locId: dest.locId }]], shuffled: 0 };
+  if (dest.type === 'loc') {
+    const loc = project.locations.find((l) => l.id === dest.locId);
+    if (dest.x == null) return { ok: true, moves: [[d.id, { type: 'loc', locId: loc.id }]], shuffled: 0 };
+    // pin every other piece of gear in this location to where it is shown now
+    const before = locLayout(loc);
+    const moves = [[d.id, { type: 'loc', locId: loc.id, x: dest.x, y: dest.y }]];
+    for (const o of before.devs) if (o.id !== d.id && o.place.x == null) { const b = before.map.get(o.id); if (b) moves.push([o.id, { ...o.place, x: b.x, y: b.y }]); }
+    const sz = devSize(def);
+    for (const [oid, b] of before.map) {
+      if (oid === d.id) continue;
+      if (dest.x < b.x + b.w && dest.x + sz.w > b.x && dest.y < b.y + b.h && dest.y + sz.h > b.y) return { ok: false, msg: `That spot overlaps ${idx.dev.get(oid)?.name}.` };
+    }
+    return { ok: true, moves, shuffled: 0 };
+  }
   if (def.form !== 'rack') return { ok: false, msg: `${def.model} isn't rack-mountable. Change its mounting in the Library first.` };
   const rack = project.racks.find((r) => r.id === dest.rackId);
   const side = def.width === 'half' ? (dest.side === 'full' ? 'L' : dest.side) : 'full';
@@ -487,8 +526,7 @@ function planMove(d, dest) {
   if (occ.clash || occ.over) return { ok: false, msg: "There isn't room to shuffle the gear that way." };
   return { ok: true, moves, shuffled: moves.length - 1 };
 }
-function applyMoves(moves, msg) {
-  const extra = moves.length - 1;
+function applyMoves(moves, msg, extra = moves.length - 1) {
   commit(msg + (extra ? ` (${extra} other item${extra > 1 ? 's' : ''} slid to make room)` : ''), (p) => {
     for (const [id, place] of moves) p.devices.find((x) => x.id === id).place = place;
   });
@@ -508,7 +546,7 @@ function rackView() {
   return `<section class="view">
     ${project.sample ? `<div class="note"><span><b>Sample rig built from your Nov 8 patchlist.</b> The inputs match your PDF. Rack layouts, the pocket-to-Rio tie lines and the Dante numbering are placeholders, so move gear and fix routes to match the real thing. Gear marked <span class="pill unv">unverified</span> needs checking against the manual.</span><button data-act="dismissSample">Got it</button></div>` : ''}
     <div class="toolbar">
-      <label class="tog"><input type="checkbox" id="tg-cables" data-chg="showCables" ${ui.showCables ? 'checked' : ''}> Show cables</label>
+      <label class="tog">Cables <select id="cable-mode" data-chg="cableMode" data-val="${project.view.cableMode}"><option value="all">All units</option><option value="picked">Only units I pick</option><option value="none">Hidden</option></select></label>
       <label class="tog"><input type="checkbox" id="tg-ties" data-chg="showTies" ${ui.showTies ? 'checked' : ''}> Show in-wall tie lines</label>
       ${modeSeg()}
       <span class="spacer"></span>
@@ -567,21 +605,47 @@ function rackHTML(rack) {
       <div class="rail" style="height:${H}px">${rail}</div>
       <div class="rack-bay" data-rack="${rack.id}" style="width:${W}px;height:${H}px">${slots}${devs}</div>
       <div class="rail" style="height:${H}px">${rail}</div>
+      ${rigMode() ? `<div class="rack-grip" data-rack="${rack.id}" title="Drag to make the rack taller or shorter"></div>` : ''}
     </div>
+    ${rigMode() ? `<div class="rack-foot"><button data-act="rackRU" data-id="${rack.id}" data-d="-1" ${rack.ru <= rackMinRU(rack) ? 'disabled title="Gear is in the bottom space"' : ''}>− 1U</button><span class="muted small">drag the bottom edge or use the buttons</span><button data-act="rackRU" data-id="${rack.id}" data-d="1">+ 1U</button></div>` : ''}
   </div>`;
+}
+const LOC_GRID = 10, LOC_MIN_W = 550;
+const devSize = (def) => ({ w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U });
+// where each piece of gear sits inside a location. Gear never dragged there is
+// laid out automatically (in rows), or stacked below gear that has been placed.
+function locLayout(loc, ov = null) {
+  const devs = project.devices.filter((d) => { const pl = ov?.get(d.id) || d.place; return pl?.type === 'loc' && pl.locId === loc.id; });
+  const map = new Map(); let right = 0, bottom = 0;
+  const placeOf = (d) => ov?.get(d.id) || d.place;
+  const anyFixed = devs.some((d) => placeOf(d).x != null);
+  for (const d of devs) {
+    const pl = placeOf(d); if (pl.x == null) continue;
+    const def = idx.def.get(d.defId); if (!def) continue; const sz = devSize(def);
+    map.set(d.id, { x: pl.x, y: pl.y, ...sz }); right = Math.max(right, pl.x + sz.w); bottom = Math.max(bottom, pl.y + sz.h);
+  }
+  let x = LOC_GRID, y = anyFixed ? bottom + LOC_GRID : LOC_GRID, rowH = 0;
+  for (const d of devs) {
+    if (placeOf(d).x != null) continue;
+    const def = idx.def.get(d.defId); if (!def) continue; const sz = devSize(def);
+    if (x + sz.w > LOC_MIN_W - LOC_GRID && x > LOC_GRID) { x = LOC_GRID; y += rowH + LOC_GRID; rowH = 0; }
+    map.set(d.id, { x, y, ...sz });
+    right = Math.max(right, x + sz.w); bottom = Math.max(bottom, y + sz.h);
+    x += sz.w + LOC_GRID; rowH = Math.max(rowH, sz.h);
+  }
+  return { map, devs, w: Math.max(LOC_MIN_W, right + LOC_GRID), h: Math.max(64, bottom + LOC_GRID) };
 }
 function locHTML(loc) {
   const face = ui.faces[loc.id] || 'front';
-  const devs = project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === loc.id);
-  const body = devs.map((d) => {
-    const def = idx.def.get(d.defId); if (!def) return '';
-    const w = def.width === 'half' ? W / 2 - 5 : W;
-    return devHTML(d, def, face, { w, h: (def.ru || 1) * U, cls: 'free', free: true });
+  const lay = locLayout(loc);
+  const body = lay.devs.map((d) => {
+    const def = idx.def.get(d.defId); const b = lay.map.get(d.id); if (!def || !b) return '';
+    return devHTML(d, def, face, { top: b.y, left: b.x, w: b.w, h: b.h, cls: 'free' });
   }).join('');
   const sel = ui.sel?.kind === 'loc' && ui.sel.id === loc.id;
   return `<div class="loc" data-loc="${loc.id}">
     <div class="loc-head"><button class="rack-title" data-act="selLoc" data-id="${loc.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(loc.name)}</button>${faceBtn(loc.id)}${rigMode() ? `<button class="face-btn" data-act="locAdd" data-id="${loc.id}">+ Gear</button><span class="reorder"><button data-act="moveLoc" data-id="${loc.id}" data-d="-1" title="Move up" aria-label="Move location up">▲</button><button data-act="moveLoc" data-id="${loc.id}" data-d="1" title="Move down" aria-label="Move location down">▼</button></span>` : ''}</div>
-    <div class="loc-body">${body || `<span class="loc-empty">Nothing here yet.${rigMode() ? ' Use “+ Gear”, or drag gear in.' : ''}</span>`}</div>
+    <div class="loc-body" style="width:${lay.w}px;height:${lay.h}px">${body || `<span class="loc-empty">Nothing here yet.${rigMode() ? ' Use “+ Gear”, or drag gear in.' : ''}</span>`}</div>
   </div>`;
 }
 function devHTML(d, def, face, box) {
@@ -591,6 +655,11 @@ function devHTML(d, def, face, box) {
   const sub = d.zone ? `${d.zone} · ${d.position || ''}` : `${def.make} ${def.model}`;
   let html = `<div class="dev ${box.cls || ''} ${def.style ? 'st-' + def.style : ''} ${selDev ? 'sel' : ''}" data-dev="${d.id}" style="${box.free ? '' : `top:${box.top}px;left:${box.left}px;`}width:${box.w}px;height:${box.h}px">`;
   html += `<div class="dev-label" data-act="selDev" data-id="${d.id}" title="${esc(def.make + ' ' + def.model)}"><b>${esc(d.name)}</b> <em>${esc(sub)}</em>${def.verified ? '' : '<span class="unv">· unverified</span>'}</div>`;
+  const mode = project.view.cableMode;
+  if (mode !== 'none' && !def.style && !box.preview && def.groups.some(isPhysical)) {
+    const on = cablesOn(d.id);
+    html += `<button class="cab-tog ${on ? 'on' : ''}" data-act="cabTog" data-id="${d.id}" title="${on ? 'Hide' : 'Show'} this unit's cables" aria-pressed="${on}">cables</button>`;
+  }
   if (!lay.ports.length && !def.style) html += `<div class="dev-empty">No connectors on the ${face}</div>`;
   if (def.style === 'drawer') html += `<div class="dev-empty"></div>`;
   for (const l of lay.labels) html += `<div class="grp-label" style="left:${l.x}px;top:${l.y}px;font-size:${Math.max(7, 8.5 * l.s)}px">${esc(l.text)}</div>`;
@@ -626,10 +695,14 @@ function highlightSet() {
   return set;
 }
 
+function cablesOn(devId) {
+  const v = project.view.cables[devId];
+  return project.view.cableMode === 'picked' ? v === true : v !== false;
+}
 function drawCables() {
   const svg = $('#cables'), inner = $('#stage-inner'); if (!svg || !inner) return;
   svg.setAttribute('width', inner.scrollWidth); svg.setAttribute('height', inner.scrollHeight);
-  if (!ui.showCables) { svg.innerHTML = ''; return; }
+  if (project.view.cableMode === 'none') { svg.innerHTML = ''; return; }
   const box = inner.getBoundingClientRect();
   const pos = new Map();
   for (const el of $$('.port', inner)) {
@@ -641,6 +714,8 @@ function drawCables() {
   for (const c of idx.active) {
     if (c.kind === 'dante') continue;
     if (c.kind === 'tie' && !ui.showTies) continue;
+    const da = parseRef(c.a).devId, db = parseRef(c.b).devId;
+    if (project.view.cableMode === 'picked' ? !(cablesOn(da) || cablesOn(db)) : !(cablesOn(da) && cablesOn(db))) continue;
     const proxy = (r) => pos.get(r) || (c.kind === 'tie' ? [...prev(r), ...next(r)].filter((x) => parseRef(x).devId === parseRef(r).devId).map((x) => pos.get(x)).find(Boolean) : null);
     const a = proxy(c.a), b = proxy(c.b); if (!a || !b) continue;
     const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -661,6 +736,11 @@ function drawCables() {
 let drag = null;
 function onPointerDown(e) {
   if (e.button > 0) return;
+  if (e.target.closest('.cab-tog')) return;
+  const grip = e.target.closest('.rack-grip');
+  if (grip && rigMode()) { startRackResize(e, grip); return; }
+  const gb = e.target.closest('.grp-box');
+  if (gb) { startGroupDrag(e, gb); return; }
   const lab = e.target.closest('.dev-label');
   if (lab && rigMode() && lab.closest('#stage-inner')) { startDevDrag(e, lab); return; }
   const el = e.target.closest('.port'); if (!el || !el.closest('#stage-inner')) return;
@@ -698,7 +778,7 @@ function suppressNextClick() { ui.suppressClick = true; setTimeout(() => { ui.su
 function startDevDrag(e, lab) {
   e.preventDefault();
   const el = lab.closest('.dev'); const r = el.getBoundingClientRect();
-  devDrag = { id: lab.dataset.id, el, x0: e.clientX, y0: e.clientY, moved: false, grabU: Math.max(0, Math.floor((e.clientY - r.top) / U)), plan: null, target: null };
+  devDrag = { id: lab.dataset.id, el, x0: e.clientX, y0: e.clientY, moved: false, grabU: Math.max(0, Math.floor((e.clientY - r.top) / U)), grabX: e.clientX - r.left, grabY: e.clientY - r.top, plan: null, target: null };
   window.addEventListener('pointermove', onDevMove);
   window.addEventListener('pointerup', onDevUp, { once: true });
 }
@@ -716,7 +796,13 @@ function devDropTarget(e) {
     return { dest: { type: 'rack', rackId: rack.id, u, side }, el: bay, top: (u - 1) * U, left, w: side === 'full' ? W : W / 2, h: Math.min(h, rack.ru) * U };
   }
   const loc = hit?.closest('.loc');
-  if (loc) { const body = loc.querySelector('.loc-body'); return { dest: { type: 'loc', locId: loc.dataset.loc }, el: body, top: 0, left: 0, w: body.offsetWidth, h: body.offsetHeight }; }
+  if (loc) {
+    const body = loc.querySelector('.loc-body'); const br = body.getBoundingClientRect(); const sz = devSize(def);
+    const snap = (v) => Math.round(v / LOC_GRID) * LOC_GRID;
+    const x = Math.max(0, Math.min(1200 - sz.w, snap(e.clientX - br.left - devDrag.grabX)));
+    const y = Math.max(0, Math.min(br.height + 2 * U, snap(e.clientY - br.top - devDrag.grabY)));
+    return { dest: { type: 'loc', locId: loc.dataset.loc, x, y }, el: body, top: y, left: x, w: sz.w, h: sz.h };
+  }
   return null;
 }
 function onDevMove(e) {
@@ -731,7 +817,7 @@ function onDevMove(e) {
   const inner = $('#stage-inner').getBoundingClientRect(), br = t.el.getBoundingClientRect();
   Object.assign(g.style, { left: `${br.left - inner.left + t.left}px`, top: `${br.top - inner.top + t.top}px`, width: `${t.w}px`, height: `${t.h}px` });
   g.hidden = false; g.classList.toggle('bad', !plan.ok);
-  g.textContent = !plan.ok ? "✕ Can't go here" : t.dest.type === 'loc' ? 'Move here'
+  g.textContent = !plan.ok ? "✕ Can't go here" : t.dest.type === 'loc' ? ''
     : `U${t.dest.u}${plan.shuffled ? ` · ${plan.shuffled} item${plan.shuffled > 1 ? 's' : ''} will slide over` : ''}`;
 }
 function onDevUp() {
@@ -744,13 +830,85 @@ function onDevUp() {
   if (!dd.plan || !dd.target) { render(); return; }
   if (!dd.plan.ok) { toast(dd.plan.msg, 5000); render(); return; }
   const dest = dd.target.dest;
-  const same = dest.type === 'loc' ? d.place.type === 'loc' && d.place.locId === dest.locId
+  const same = dest.type === 'loc' ? d.place.type === 'loc' && d.place.locId === dest.locId && d.place.x === dest.x && d.place.y === dest.y
     : d.place.type === 'rack' && d.place.rackId === dest.rackId && d.place.u === dest.u && d.place.side === (dest.side === 'full' && idx.def.get(d.defId).width === 'half' ? 'L' : dest.side);
   if (same) { render(); return; }
   const where = dest.type === 'loc' ? project.locations.find((l) => l.id === dest.locId)?.name : `${project.racks.find((r) => r.id === dest.rackId)?.name} U${dest.u}`;
   ui.sel = { kind: 'device', id: d.id };
-  applyMoves(dd.plan.moves, `Moved ${d.name} to ${where}`);
+  applyMoves(dd.plan.moves, `Moved ${d.name} to ${where}`, dd.plan.shuffled);
 }
+// resizing a rack by dragging its bottom edge (rig mode)
+let rackDrag = null;
+function rackMinRU(rack) {
+  let min = 1;
+  for (const d of project.devices) if (d.place.type === 'rack' && d.place.rackId === rack.id) min = Math.max(min, d.place.u + (idx.def.get(d.defId)?.ru || 1) - 1);
+  return min;
+}
+function startRackResize(e, grip) {
+  e.preventDefault();
+  const rack = project.racks.find((r) => r.id === grip.dataset.rack);
+  rackDrag = { rack, y0: e.clientY, ru: rack.ru, min: rackMinRU(rack), bay: grip.closest('.rack').querySelector('.rack-bay') };
+  window.addEventListener('pointermove', onRackResize);
+  window.addEventListener('pointerup', endRackResize, { once: true });
+}
+function onRackResize(e) {
+  if (!rackDrag) return;
+  const r = rackDrag;
+  r.ru = Math.max(r.min, Math.min(60, r.rack.ru + Math.round((e.clientY - r.y0) / U)));
+  let g = $('#rack-ghost');
+  if (!g) { g = document.createElement('div'); g.id = 'rack-ghost'; g.className = 'ghost'; $('#stage-inner').appendChild(g); }
+  const inner = $('#stage-inner').getBoundingClientRect(), br = r.bay.getBoundingClientRect();
+  Object.assign(g.style, { left: `${br.left - inner.left}px`, top: `${br.top - inner.top}px`, width: `${br.width}px`, height: `${r.ru * U}px` });
+  g.classList.toggle('bad', r.ru === r.min && e.clientY - r.y0 < (r.min - r.rack.ru) * U - U / 2);
+  g.textContent = `${r.ru}U${r.ru === r.min && r.min > 1 ? ' (gear below stops it shrinking further)' : ''}`;
+}
+function endRackResize() {
+  window.removeEventListener('pointermove', onRackResize);
+  const r = rackDrag; rackDrag = null; $('#rack-ghost')?.remove();
+  if (!r) return;
+  suppressNextClick();
+  if (r.ru !== r.rack.ru) commit(`Resized ${r.rack.name} to ${r.ru}U`, () => { r.rack.ru = r.ru; });
+}
+
+// dragging a port group around a panel in the Library preview
+let grpDrag = null;
+function startGroupDrag(e, box) {
+  e.preventDefault();
+  grpDrag = { box, face: box.dataset.face, gid: box.dataset.gid, x0: e.clientX, y0: e.clientY, left: parseFloat(box.style.left), top: parseFloat(box.style.top), moved: false };
+  window.addEventListener('pointermove', onGroupDrag);
+  window.addEventListener('pointerup', endGroupDrag, { once: true });
+}
+const GRID = 4;
+function grpTarget(e, g = grpDrag) {
+  const pv = g.box.parentElement;
+  const snap = (v) => Math.round(v / GRID) * GRID;
+  const x = Math.max(0, Math.min(pv.offsetWidth - g.box.offsetWidth, snap(g.left + e.clientX - g.x0)));
+  const y = Math.max(0, Math.min(pv.offsetHeight - g.box.offsetHeight, snap(g.top + e.clientY - g.y0)));
+  return { x, y };
+}
+function onGroupDrag(e) {
+  if (!grpDrag) return;
+  if (!grpDrag.moved && Math.hypot(e.clientX - grpDrag.x0, e.clientY - grpDrag.y0) < 3) return;
+  grpDrag.moved = true; grpDrag.box.classList.add('moving');
+  const t = grpTarget(e);
+  grpDrag.box.style.left = t.x + 'px'; grpDrag.box.style.top = t.y + 'px';
+}
+function endGroupDrag(e) {
+  window.removeEventListener('pointermove', onGroupDrag);
+  const g = grpDrag; grpDrag = null; if (!g || !g.moved) return;
+  suppressNextClick();
+  const t = grpTarget(e, g);
+  const def = libDef(); const sz = devSize(def);
+  const lay = layoutFace(def, g.face, sz.w, sz.h);
+  commit(`Moved ${def.groups.find((x) => x.id === g.gid)?.label} on the ${g.face} of ${def.model}`, () => {
+    def.layout ||= {};
+    def.layout[g.face] = { s: lay.s };
+    for (const b of lay.blocks) { const grp = def.groups.find((x) => x.id === b.gid); if (grp) grp.pos = { x: b.x, y: b.y }; }
+    def.groups.find((x) => x.id === g.gid).pos = { x: t.x, y: t.y };
+    layoutCache.clear();
+  });
+}
+
 function connect(a, b, kind = 'cable') {
   let pa = port(a), pb = port(b); if (!pa || !pb) return;
   if ((pa.g.dir === 'in' && pb.g.dir !== 'in') || (pb.g.dir === 'out' && pa.g.dir !== 'out')) { [a, b] = [b, a]; [pa, pb] = [pb, pa]; }
@@ -1267,13 +1425,18 @@ function defEditor(d) {
     <div class="card-head"><h3>Internal routing</h3><span class="spacer"></span><button data-act="linkAdd" ${d.groups.length < 2 ? 'disabled' : ''}>+ Route</button></div>
     <p class="small muted" style="margin:0">What feeds what inside the box, number for number. Example: In 1 → Dante Tx 1 means input 5 comes out on Dante Tx 5.</p>
     <div class="tbl-wrap"><table class="grid"><thead><tr><th>From</th><th>Start</th><th></th><th>To</th><th>Start</th><th>How many</th><th></th></tr></thead><tbody>${linkRows || '<tr><td colspan="7" class="muted small">No internal routing.</td></tr>'}</tbody></table></div>
-    <div class="card-head"><h3>Preview</h3></div>
-    <div style="overflow-x:auto"><div style="display:flex;gap:16px;flex-wrap:wrap">${['front', 'rear'].map((face) => `<div><div class="eyebrow">${face}</div><div style="position:relative;width:${d.width === 'half' ? W / 2 : W}px;height:${(d.ru || 1) * U}px">${previewDev(d, face)}</div></div>`).join('')}</div></div>`;
+    <div class="card-head"><h3>Panel layout</h3><span class="muted small">Drag a block of ports to move it. It snaps to a ${GRID}px grid.</span></div>
+    <div style="overflow-x:auto"><div style="display:grid;gap:14px">${['front', 'rear'].map((face) => {
+      const sz = devSize(d); const lay = layoutFace(d, face, sz.w, sz.h);
+      const boxes = lay.blocks.map((b) => `<div class="grp-box" data-face="${face}" data-gid="${b.gid}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px" title="Drag to move"></div>`).join('');
+      return `<div><div class="card-head"><span class="eyebrow">${face}</span>${d.layout?.[face] ? `<button class="face-btn" data-act="resetLayout" data-face="${face}">Reset to automatic</button>` : '<span class="muted small">automatic layout</span>'}</div>
+        <div class="pv" style="position:relative;width:${sz.w}px;height:${sz.h}px">${previewDev(d, face)}${boxes}</div></div>`;
+    }).join('')}</div></div>`;
 }
 function previewDev(def, face) {
   const fake = { id: '__pv', defId: def.id, name: def.model, short: def.short || '', place: {}, portNames: {}, labels: {} };
   idx.dev.set('__pv', fake);
-  const html = devHTML(fake, def, face, { top: 0, left: 0, w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U, cls: 'free' });
+  const html = devHTML(fake, def, face, { top: 0, left: 0, w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U, cls: 'free', preview: true });
   idx.dev.delete('__pv');
   return html;
 }
@@ -1331,6 +1494,24 @@ const actions = {
     select({ kind: 'device', id });
   },
   newGearFromAdd: () => { ui.tab = 'library'; actions.newDef(); },
+  resetLayout: (el) => commit('Reset panel layout', () => {
+    const d = libDef(); const face = el.dataset.face;
+    if (d.layout) delete d.layout[face];
+    for (const g of d.groups) if (g.face === face) delete g.pos;
+    layoutCache.clear();
+  }),
+  cabTog: (el) => {
+    const id = el.dataset.id, v = project.view;
+    if (v.cableMode === 'picked') { if (v.cables[id] === true) delete v.cables[id]; else v.cables[id] = true; }
+    else { if (v.cables[id] === false) delete v.cables[id]; else v.cables[id] = false; }
+    save(); render();
+  },
+  rackRU: (el) => {
+    const r = project.racks.find((x) => x.id === el.dataset.id); const ru = r.ru + +el.dataset.d;
+    if (ru < rackMinRU(r)) { toast('Gear is in the bottom space. Move it up first.'); return; }
+    if (ru > 60) return;
+    commit(`Resized ${r.name} to ${ru}U`, () => { r.ru = ru; });
+  },
   moveRack: (el) => commit('Reordered racks', (p) => moveIn(p.racks, el.dataset.id, +el.dataset.d)),
   moveLoc: (el) => commit('Reordered locations', (p) => moveIn(p.locations, el.dataset.id, +el.dataset.d)),
   dupDev: (el) => {
@@ -1445,7 +1626,7 @@ function revealFace(p) {
 const changes = {
   projName: (el) => commit('Renamed project', (p) => { p.name = el.value; }),
   pickPatch: (el) => { ui.patchId = el.value; ui.sel = null; render(); toast(`Now editing ${patch().name}`); },
-  showCables: (el) => { ui.showCables = el.checked; render(); },
+  cableMode: (el) => { project.view.cableMode = el.value; save(); render(); },
   showTies: (el) => { ui.showTies = el.checked; render(); },
   devField: (el) => { const d = idx.dev.get(ui.sel.id); commit(`Edited ${d.name}`, () => { const x = project.devices.find((y) => y.id === d.id); x[el.dataset.f] = el.value; }); },
   devLabel: (el) => commit('Edited jack labels', () => { const d = project.devices.find((y) => y.id === ui.sel.id); const L = (d.labels[el.dataset.g] ||= {}); if (el.value === '') delete L[el.dataset.f]; else L[el.dataset.f] = el.dataset.f === 'start' ? +el.value : el.value; }),
@@ -1515,7 +1696,7 @@ const changes = {
     else if (f === 'rows') { if (+el.value > 0) g.rows = +el.value; else delete g.rows; }
     else if (f === 'names') { const n = el.value.split(',').map((x) => x.trim()).filter(Boolean); if (n.length) g.names = n; else delete g.names; }
     else if (f === 'src') g.src = el.checked;
-    else g[f] = el.value;
+    else { if (f === 'face' && g.face !== el.value) delete g.pos; g[f] = el.value; }
     layoutCache.clear();
   }),
   linkField: (el) => commit('Edited gear', () => {

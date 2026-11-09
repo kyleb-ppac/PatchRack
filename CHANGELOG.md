@@ -3,6 +3,12 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.4 (2026-11-09)
+- **Resize racks** in rig mode: drag the amber handle on a rack's bottom edge, or use the − 1U / + 1U buttons under it. A rack can't shrink past the lowest piece of gear.
+- **Arrange gear inside locations** (floor pockets, FOH…): drag units anywhere on a 10px grid. Drop below the area to make it bigger. Overlapping spots are refused.
+- **Panel layout editor** in the Library: drag blocks of ports (inputs, outputs, network…) around the front and rear panels on a 4px grid. "Reset to automatic" undoes it.
+- **Per-unit cables:** each unit has a CABLES switch. The Cables menu chooses All units (switch units off), Only units I pick (switch units on), or Hidden.
+
 ## v0.0.3 (2026-11-09)
 - **Editing mode switch:** "Editing: Patch" (gear locked, cables belong to this patch) or "Editing: The rig" (permanent setup; the workspace turns amber).
 - **Drag gear** by its name strip to a new spot, another rack, or a location (rig mode).
