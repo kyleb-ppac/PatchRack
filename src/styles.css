@@ -105,6 +105,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .badge.warn { background: var(--warn); }
 .badge.zero { background: var(--ok); }
 .top-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.gh-status { font-size: 12px; font-weight: 500; }
+.gh-status.dirty { border-color: var(--warn); color: var(--warn); }
+.gh-status.clean { color: var(--ok); }
+.gh-status.clean::before { content: "✓ "; }
 .menu { position: relative; }
 .menu > summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r); padding: 5px 10px; }
 .menu > summary::-webkit-details-marker { display: none; }

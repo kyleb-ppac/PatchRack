@@ -11,8 +11,21 @@ Built first for the Peace Portal Church sanctuary rig.
 Open `dist/PatchRack.html` in a web browser (double-click it on a Mac). Nothing to install.
 
 - Your work saves automatically in that browser.
-- **File → Save project file** writes a `.patchrack.json` backup you can open on another computer.
+- **Save to GitHub** (the button in the top bar, or Cmd+S) stores the project in the `projects/`
+  folder of this repo. Each save is a new version; GitHub keeps them all.
+- **File → Open from GitHub** opens any saved project, from any computer.
+- **File → GitHub settings** is where the access token goes (instructions are in that window).
+  The token is stored only in that browser.
+- **File → Save project file** still writes a local `.patchrack.json` backup if you want one.
 - **Print → Print / Save as PDF** makes the patchlist PDF.
+
+## What's where
+
+| Folder | What it holds |
+|---|---|
+| `dist/` | The app, ready to open (`PatchRack.html`) |
+| `projects/` | Saved projects (one `.patchrack.json` per rig/venue) |
+| `src/` | Source code |
 
 ## How the code is organised
 
@@ -21,7 +34,9 @@ Open `dist/PatchRack.html` in a web browser (double-click it on a Mac). Nothing 
 | `src/index.html` | Page layout: top bar, tabs, menus |
 | `src/styles.css` | All styling, including the print layout |
 | `src/library.js` | Starter gear library and the Sanctuary sample project |
-| `src/app.js` | Everything else: signal tracing, checks, rack view, patchlist, Dante, print, library editor |
+| `src/app.js` | Signal tracing, checks, rack view, patchlist, Dante, print, library editor |
+| `src/github.js` | Saving to and opening from GitHub |
+| `src/main.js` | Start-up |
 | `build.py` | Bundles `src/` into the single files in `dist/` |
 
 After changing anything in `src/`, rebuild with:

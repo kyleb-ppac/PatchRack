@@ -1,0 +1,2973 @@
+{
+ "schema": 1,
+ "name": "Sanctuary",
+ "created": "2026-11-09T17:44:59.927Z",
+ "modified": "2026-11-09T17:44:59.927Z",
+ "sample": true,
+ "library": [
+  {
+   "id": "yamaha-rio3224-d2",
+   "make": "Yamaha",
+   "model": "Rio3224-D2",
+   "short": "RIO",
+   "category": "stagebox",
+   "form": "rack",
+   "ru": 5,
+   "width": "full",
+   "watts": 120,
+   "verified": false,
+   "ref": "Yamaha spec sheet: 5U, 32 analog in, 16 analog out, AES/EBU out 1-8, 120 W. Connector positions approximate.",
+   "groups": [
+    {
+     "id": "in",
+     "label": "In",
+     "count": 32,
+     "conn": "xlr",
+     "dir": "in",
+     "face": "front",
+     "start": 1,
+     "rows": 4,
+     "src": true
+    },
+    {
+     "id": "out",
+     "label": "Out",
+     "count": 16,
+     "conn": "xlr",
+     "dir": "out",
+     "face": "front",
+     "start": 1,
+     "rows": 2
+    },
+    {
+     "id": "aes",
+     "label": "AES Out",
+     "count": 4,
+     "conn": "xlr",
+     "dir": "out",
+     "face": "front",
+     "start": 1,
+     "rows": 1,
+     "names": [
+      "1/2",
+      "3/4",
+      "5/6",
+      "7/8"
+     ]
+    },
+    {
+     "id": "net",
+     "label": "Dante",
+     "count": 2,
+     "conn": "ethercon",
+     "dir": "io",
+     "face": "front",
+     "start": 1,
+     "names": [
+      "Pri",
+      "Sec"
+     ]
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "dtx",
+     "label": "Dante Tx",
+     "count": 32,
+     "conn": "dante",
+     "dir": "out",
+     "face": "dante",
+     "start": 1
+    },
+    {
+     "id": "drx",
+     "label": "Dante Rx",
+     "count": 24,
+     "conn": "dante",
+     "dir": "in",
+     "face": "dante",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "in",
+     "to": "dtx"
+    },
+    {
+     "from": "drx",
+     "to": "out",
+     "count": 16
+    }
+   ]
+  },
+  {
+   "id": "yamaha-tio1608-d",
+   "make": "Yamaha",
+   "model": "Tio1608-D",
+   "short": "TIO",
+   "category": "stagebox",
+   "form": "rack",
+   "ru": 2,
+   "width": "full",
+   "watts": 75,
+   "verified": false,
+   "ref": "Yamaha datasheet: 480x88x364 mm (2U), 16 mic/line combo in, 8 XLR line out, Dante pri/sec etherCON.",
+   "groups": [
+    {
+     "id": "in",
+     "label": "In",
+     "count": 16,
+     "conn": "combo",
+     "dir": "in",
+     "face": "front",
+     "start": 1,
+     "rows": 2,
+     "src": true
+    },
+    {
+     "id": "out",
+     "label": "Out",
+     "count": 8,
+     "conn": "xlr",
+     "dir": "out",
+     "face": "front",
+     "start": 1,
+     "rows": 1
+    },
+    {
+     "id": "net",
+     "label": "Dante",
+     "count": 2,
+     "conn": "ethercon",
+     "dir": "io",
+     "face": "front",
+     "start": 1,
+     "names": [
+      "Pri",
+      "Sec"
+     ]
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "dtx",
+     "label": "Dante Tx",
+     "count": 16,
+     "conn": "dante",
+     "dir": "out",
+     "face": "dante",
+     "start": 1
+    },
+    {
+     "id": "drx",
+     "label": "Dante Rx",
+     "count": 8,
+     "conn": "dante",
+     "dir": "in",
+     "face": "dante",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "in",
+     "to": "dtx"
+    },
+    {
+     "from": "drx",
+     "to": "out"
+    }
+   ]
+  },
+  {
+   "id": "shure-ulxd4q",
+   "make": "Shure",
+   "model": "ULX-D4Q",
+   "short": "ULXD",
+   "category": "wireless",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "watts": 30,
+   "verified": false,
+   "ref": "Quad receiver. 4 XLR outs, antenna in/cascade, Dante. Rear layout approximate.",
+   "groups": [
+    {
+     "id": "rf",
+     "label": "RF Ch",
+     "count": 4,
+     "conn": "rf",
+     "dir": "in",
+     "face": "virtual",
+     "start": 1,
+     "src": true
+    },
+    {
+     "id": "out",
+     "label": "Out",
+     "count": 4,
+     "conn": "xlr",
+     "dir": "out",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "ant",
+     "label": "Ant In",
+     "count": 2,
+     "conn": "bnc",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "A",
+      "B"
+     ]
+    },
+    {
+     "id": "cas",
+     "label": "Cascade",
+     "count": 2,
+     "conn": "bnc",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "A",
+      "B"
+     ]
+    },
+    {
+     "id": "net",
+     "label": "Network",
+     "count": 4,
+     "conn": "rj45",
+     "dir": "io",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "Dante P",
+      "Dante S",
+      "Ctl 1",
+      "Ctl 2"
+     ]
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "dtx",
+     "label": "Dante Tx",
+     "count": 4,
+     "conn": "dante",
+     "dir": "out",
+     "face": "dante",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "rf",
+     "to": "out"
+    },
+    {
+     "from": "rf",
+     "to": "dtx"
+    }
+   ]
+  },
+  {
+   "id": "shure-psm900-p9t",
+   "make": "Shure",
+   "model": "PSM900 P9T",
+   "short": "PSM9",
+   "category": "iem",
+   "form": "rack",
+   "ru": 1,
+   "width": "half",
+   "watts": 15,
+   "verified": false,
+   "ref": "Half-rack IEM transmitter. Line inputs only (L/R), loop outs, antenna out. Layout approximate.",
+   "groups": [
+    {
+     "id": "in",
+     "label": "In",
+     "count": 2,
+     "conn": "combo",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "L",
+      "R"
+     ]
+    },
+    {
+     "id": "loop",
+     "label": "Loop",
+     "count": 2,
+     "conn": "trs",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "L",
+      "R"
+     ]
+    },
+    {
+     "id": "ant",
+     "label": "RF",
+     "count": 1,
+     "conn": "bnc",
+     "dir": "out",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "pwr",
+     "label": "DC",
+     "count": 1,
+     "conn": "dc",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "in",
+     "to": "loop"
+    }
+   ]
+  },
+  {
+   "id": "shure-psm300-p3t",
+   "make": "Shure",
+   "model": "PSM300 P3T",
+   "short": "PSM3",
+   "category": "iem",
+   "form": "rack",
+   "ru": 1,
+   "width": "half",
+   "watts": 10,
+   "verified": false,
+   "ref": "Half-rack IEM transmitter. Line inputs only (L/R), loop outs, antenna out. Layout approximate.",
+   "groups": [
+    {
+     "id": "in",
+     "label": "In",
+     "count": 2,
+     "conn": "combo",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "L",
+      "R"
+     ]
+    },
+    {
+     "id": "loop",
+     "label": "Loop",
+     "count": 2,
+     "conn": "trs",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "L",
+      "R"
+     ]
+    },
+    {
+     "id": "ant",
+     "label": "RF",
+     "count": 1,
+     "conn": "bnc",
+     "dir": "out",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "pwr",
+     "label": "DC",
+     "count": 1,
+     "conn": "dc",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "in",
+     "to": "loop"
+    }
+   ]
+  },
+  {
+   "id": "ah-avantis",
+   "make": "Allen & Heath",
+   "model": "Avantis",
+   "short": "AVANTIS",
+   "category": "console",
+   "form": "desk",
+   "ru": 3,
+   "width": "full",
+   "watts": 300,
+   "verified": false,
+   "ref": "Desk console. Rear I/O shown approximately. Assumes one 64x64 Dante card; Dante Rx n feeds input channel n.",
+   "groups": [
+    {
+     "id": "in",
+     "label": "Local In",
+     "count": 12,
+     "conn": "xlr",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "rows": 2,
+     "src": true
+    },
+    {
+     "id": "out",
+     "label": "Local Out",
+     "count": 12,
+     "conn": "xlr",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "rows": 2
+    },
+    {
+     "id": "aesi",
+     "label": "AES In",
+     "count": 1,
+     "conn": "xlr",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "aeso",
+     "label": "AES Out",
+     "count": 1,
+     "conn": "xlr",
+     "dir": "out",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "net",
+     "label": "Dante card",
+     "count": 2,
+     "conn": "rj45",
+     "dir": "io",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "Pri",
+      "Sec"
+     ]
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "drx",
+     "label": "Dante Rx",
+     "count": 64,
+     "conn": "dante",
+     "dir": "in",
+     "face": "dante",
+     "start": 1
+    },
+    {
+     "id": "dtx",
+     "label": "Dante Tx",
+     "count": 64,
+     "conn": "dante",
+     "dir": "out",
+     "face": "dante",
+     "start": 1
+    },
+    {
+     "id": "ch",
+     "label": "Ch",
+     "count": 64,
+     "conn": "channel",
+     "dir": "in",
+     "face": "virtual",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "drx",
+     "to": "ch"
+    }
+   ]
+  },
+  {
+   "id": "ah-ahm32",
+   "make": "Allen & Heath",
+   "model": "AHM-32",
+   "short": "AHM",
+   "category": "processor",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "watts": 70,
+   "verified": false,
+   "ref": "1U matrix processor, 12 in / 12 out on Phoenix. Dante via option card (32 ch shown).",
+   "groups": [
+    {
+     "id": "in",
+     "label": "In",
+     "count": 12,
+     "conn": "phoenix",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "rows": 1
+    },
+    {
+     "id": "out",
+     "label": "Out",
+     "count": 12,
+     "conn": "phoenix",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "rows": 1
+    },
+    {
+     "id": "net",
+     "label": "Network",
+     "count": 1,
+     "conn": "rj45",
+     "dir": "io",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "card",
+     "label": "Dante card",
+     "count": 2,
+     "conn": "rj45",
+     "dir": "io",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "Pri",
+      "Sec"
+     ]
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "drx",
+     "label": "Dante Rx",
+     "count": 32,
+     "conn": "dante",
+     "dir": "in",
+     "face": "dante",
+     "start": 1
+    },
+    {
+     "id": "dtx",
+     "label": "Dante Tx",
+     "count": 32,
+     "conn": "dante",
+     "dir": "out",
+     "face": "dante",
+     "start": 1
+    }
+   ],
+   "links": []
+  },
+  {
+   "id": "generic-amp-2ch",
+   "make": "Generic",
+   "model": "2-ch power amp (2U)",
+   "short": "AMP",
+   "category": "amp",
+   "form": "rack",
+   "ru": 2,
+   "width": "full",
+   "watts": 600,
+   "verified": false,
+   "ref": "Stand-in for amps you have not identified yet. Duplicate it in the Library and adjust.",
+   "groups": [
+    {
+     "id": "in",
+     "label": "In",
+     "count": 2,
+     "conn": "xlr",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "A",
+      "B"
+     ]
+    },
+    {
+     "id": "spk",
+     "label": "Speaker",
+     "count": 2,
+     "conn": "speakon",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "A",
+      "B"
+     ]
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "in",
+     "to": "spk"
+    }
+   ]
+  },
+  {
+   "id": "art-headamp6",
+   "make": "ART",
+   "model": "HeadAmp6",
+   "short": "HA6",
+   "category": "utility",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "watts": 10,
+   "verified": false,
+   "ref": "6-channel headphone amp. Layout approximate.",
+   "groups": [
+    {
+     "id": "hp",
+     "label": "Phones",
+     "count": 6,
+     "conn": "headphone",
+     "dir": "out",
+     "face": "front",
+     "start": 1
+    },
+    {
+     "id": "in",
+     "label": "In",
+     "count": 2,
+     "conn": "trs",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "names": [
+      "L",
+      "R"
+     ]
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    }
+   ],
+   "links": []
+  },
+  {
+   "id": "luminex-gigacore30i",
+   "make": "Luminex",
+   "model": "GigaCore 30i",
+   "short": "GC30",
+   "category": "network",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "watts": 60,
+   "verified": false,
+   "ref": "Network switch. Port count/type approximate (24 RJ45 + 6 SFP shown).",
+   "groups": [
+    {
+     "id": "eth",
+     "label": "Port",
+     "count": 24,
+     "conn": "rj45",
+     "dir": "io",
+     "face": "front",
+     "start": 1,
+     "rows": 2
+    },
+    {
+     "id": "sfp",
+     "label": "SFP",
+     "count": 6,
+     "conn": "sfp",
+     "dir": "io",
+     "face": "front",
+     "start": 1,
+     "rows": 2
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    }
+   ],
+   "links": []
+  },
+  {
+   "id": "sonnet-rackmac-mini",
+   "make": "Sonnet",
+   "model": "RackMac mini",
+   "short": "MAC",
+   "category": "computer",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "watts": 60,
+   "verified": false,
+   "ref": "Mac mini in a rack shelf. Dante channels assume Dante Virtual Soundcard (16x16 shown).",
+   "groups": [
+    {
+     "id": "eth",
+     "label": "Ethernet",
+     "count": 1,
+     "conn": "rj45",
+     "dir": "io",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "pwr",
+     "label": "AC",
+     "count": 1,
+     "conn": "iec",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    },
+    {
+     "id": "dtx",
+     "label": "Dante Tx",
+     "count": 16,
+     "conn": "dante",
+     "dir": "out",
+     "face": "dante",
+     "start": 1,
+     "src": true
+    },
+    {
+     "id": "drx",
+     "label": "Dante Rx",
+     "count": 16,
+     "conn": "dante",
+     "dir": "in",
+     "face": "dante",
+     "start": 1
+    }
+   ],
+   "links": []
+  },
+  {
+   "id": "cyberpower-or500lcdrm1u",
+   "make": "CyberPower",
+   "model": "OR500LCDRM1U",
+   "short": "UPS",
+   "category": "power",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "watts": 300,
+   "verified": false,
+   "ref": "1U UPS. Outlet count approximate.",
+   "groups": [
+    {
+     "id": "out",
+     "label": "Outlet",
+     "count": 6,
+     "conn": "nema",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "rows": 1
+    },
+    {
+     "id": "ac",
+     "label": "AC In",
+     "count": 1,
+     "conn": "nema",
+     "dir": "in",
+     "face": "rear",
+     "start": 1
+    }
+   ],
+   "links": []
+  },
+  {
+   "id": "generic-patchbay-48",
+   "make": "Generic",
+   "model": "TRS patch bay 48-pt",
+   "short": "PB",
+   "category": "patchbay",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "watts": 0,
+   "verified": true,
+   "ref": "24 pairs. Rear top = from a device output, rear bottom = to a device input. Normalling set per point in the gear inspector.",
+   "groups": [
+    {
+     "id": "ft",
+     "label": "Front Top",
+     "count": 24,
+     "conn": "trs",
+     "dir": "out",
+     "face": "front",
+     "start": 1,
+     "rows": 1,
+     "nolabel": true
+    },
+    {
+     "id": "fb",
+     "label": "Front Bottom",
+     "count": 24,
+     "conn": "trs",
+     "dir": "in",
+     "face": "front",
+     "start": 1,
+     "rows": 1,
+     "nolabel": true
+    },
+    {
+     "id": "rt",
+     "label": "Rear Top",
+     "count": 24,
+     "conn": "trs",
+     "dir": "in",
+     "face": "rear",
+     "start": 1,
+     "rows": 1,
+     "nolabel": true
+    },
+    {
+     "id": "rb",
+     "label": "Rear Bottom",
+     "count": 24,
+     "conn": "trs",
+     "dir": "out",
+     "face": "rear",
+     "start": 1,
+     "rows": 1,
+     "nolabel": true
+    }
+   ],
+   "links": [],
+   "patchbay": {
+    "rt": "rt",
+    "rb": "rb",
+    "ft": "ft",
+    "fb": "fb",
+    "mode": "half"
+   }
+  },
+  {
+   "id": "blank-1u",
+   "make": "Generic",
+   "model": "Blank panel 1U",
+   "short": "BLANK",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "style": "blank",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "blank-2u",
+   "make": "Generic",
+   "model": "Blank panel 2U",
+   "short": "BLANK",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 2,
+   "width": "full",
+   "style": "blank",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "blank-half-1u",
+   "make": "Generic",
+   "model": "Half-rack blank 1U",
+   "short": "BLANK",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 1,
+   "width": "half",
+   "style": "blank",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "vent-1u",
+   "make": "Generic",
+   "model": "Vent panel 1U",
+   "short": "VENT",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 1,
+   "width": "full",
+   "style": "vent",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "vent-2u",
+   "make": "Generic",
+   "model": "Vent panel 2U",
+   "short": "VENT",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 2,
+   "width": "full",
+   "style": "vent",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "drawer-2u",
+   "make": "Generic",
+   "model": "Rack drawer 2U",
+   "short": "DRAWER",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 2,
+   "width": "full",
+   "style": "drawer",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "drawer-3u",
+   "make": "Generic",
+   "model": "Rack drawer 3U",
+   "short": "DRAWER",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 3,
+   "width": "full",
+   "style": "drawer",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "drawer-4u",
+   "make": "Generic",
+   "model": "Rack drawer 4U",
+   "short": "DRAWER",
+   "category": "hardware",
+   "form": "rack",
+   "ru": 4,
+   "width": "full",
+   "style": "drawer",
+   "verified": true,
+   "groups": [],
+   "links": []
+  },
+  {
+   "id": "floor-pocket-6",
+   "make": "Venue",
+   "model": "Floor pocket (6 XLR)",
+   "short": "FP",
+   "category": "pocket",
+   "form": "pocket",
+   "ru": 1,
+   "width": "half",
+   "verified": true,
+   "ref": "Six XLR inputs. The rear \"Tie\" jacks stand for the in-wall lines that run to a stage box.",
+   "groups": [
+    {
+     "id": "in",
+     "label": "In",
+     "count": 6,
+     "conn": "xlr",
+     "dir": "in",
+     "face": "front",
+     "start": 1,
+     "src": true
+    },
+    {
+     "id": "tie",
+     "label": "Tie",
+     "count": 6,
+     "conn": "xlr",
+     "dir": "out",
+     "face": "rear",
+     "start": 1
+    }
+   ],
+   "links": [
+    {
+     "from": "in",
+     "to": "tie"
+    }
+   ]
+  }
+ ],
+ "racks": [
+  {
+   "id": "ru7hr7ap",
+   "name": "Stage Rack A",
+   "ru": 8
+  },
+  {
+   "id": "r5ndh0b1",
+   "name": "Stage Rack B",
+   "ru": 6
+  },
+  {
+   "id": "r7r00i1y",
+   "name": "Backstage",
+   "ru": 4
+  },
+  {
+   "id": "rpjlm49g",
+   "name": "RF / IEM",
+   "ru": 8
+  },
+  {
+   "id": "rwdw0bdm",
+   "name": "Amp Rack",
+   "ru": 7
+  }
+ ],
+ "locations": [
+  {
+   "id": "lgr57ok3",
+   "name": "Stage floor pockets"
+  },
+  {
+   "id": "l5ykk4fo",
+   "name": "FOH"
+  }
+ ],
+ "devices": [
+  {
+   "id": "ddknz1fc",
+   "defId": "yamaha-rio3224-d2",
+   "name": "Rio A",
+   "short": "RIO A",
+   "place": {
+    "type": "rack",
+    "rackId": "ru7hr7ap",
+    "u": 1,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dykhmnv8",
+   "defId": "luminex-gigacore30i",
+   "name": "GigaCore 30i",
+   "short": "GC30",
+   "place": {
+    "type": "rack",
+    "rackId": "ru7hr7ap",
+    "u": 6,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dxjhacri",
+   "defId": "vent-1u",
+   "name": "Vent",
+   "short": "VENT",
+   "place": {
+    "type": "rack",
+    "rackId": "ru7hr7ap",
+    "u": 7,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dabtogmz",
+   "defId": "cyberpower-or500lcdrm1u",
+   "name": "UPS A",
+   "short": "UPS A",
+   "place": {
+    "type": "rack",
+    "rackId": "ru7hr7ap",
+    "u": 8,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "d35d9f0c",
+   "defId": "yamaha-rio3224-d2",
+   "name": "Rio B",
+   "short": "RIO B",
+   "place": {
+    "type": "rack",
+    "rackId": "r5ndh0b1",
+    "u": 1,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "d2vioacl",
+   "defId": "blank-1u",
+   "name": "Blank",
+   "short": "BLANK",
+   "place": {
+    "type": "rack",
+    "rackId": "r5ndh0b1",
+    "u": 6,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dia6g5en",
+   "defId": "yamaha-tio1608-d",
+   "name": "Tio",
+   "short": "TIO",
+   "place": {
+    "type": "rack",
+    "rackId": "r7r00i1y",
+    "u": 1,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "TIO",
+     "start": 1
+    }
+   },
+   "zone": "Backstage",
+   "position": "Tio"
+  },
+  {
+   "id": "dl5hc80v",
+   "defId": "drawer-2u",
+   "name": "Drawer",
+   "short": "DRAWER",
+   "place": {
+    "type": "rack",
+    "rackId": "r7r00i1y",
+    "u": 3,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dhmsiwft",
+   "defId": "shure-ulxd4q",
+   "name": "ULX-D4Q 1",
+   "short": "ULXD1",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 1,
+    "side": "full"
+   },
+   "portNames": {
+    "rf:1": "VOX 1",
+    "dtx:1": "VOX 1",
+    "rf:2": "VOX 2",
+    "dtx:2": "VOX 2",
+    "rf:3": "VOX 3",
+    "dtx:3": "VOX 3",
+    "rf:4": "PRAYER MIC",
+    "dtx:4": "PRAYER MIC"
+   },
+   "labels": {}
+  },
+  {
+   "id": "d4gpycgj",
+   "defId": "shure-ulxd4q",
+   "name": "ULX-D4Q 2",
+   "short": "ULXD2",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 2,
+    "side": "full"
+   },
+   "portNames": {
+    "rf:1": "PREACH MIC",
+    "dtx:1": "PREACH MIC",
+    "rf:2": "HOST MIC",
+    "dtx:2": "HOST MIC"
+   },
+   "labels": {}
+  },
+  {
+   "id": "dlcg1576",
+   "defId": "shure-psm900-p9t",
+   "name": "PSM900 A",
+   "short": "PSM9 A",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 3,
+    "side": "L"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dgdgv95d",
+   "defId": "shure-psm900-p9t",
+   "name": "PSM900 B",
+   "short": "PSM9 B",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 3,
+    "side": "R"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "diy1b1l6",
+   "defId": "shure-psm300-p3t",
+   "name": "PSM300",
+   "short": "PSM3",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 4,
+    "side": "L"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "d19i6m9t",
+   "defId": "blank-half-1u",
+   "name": "Half blank",
+   "short": "BLANK",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 4,
+    "side": "R"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "d3ykspaj",
+   "defId": "sonnet-rackmac-mini",
+   "name": "Playback Mac",
+   "short": "MAC",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 5,
+    "side": "full"
+   },
+   "portNames": {
+    "dtx:1": "PLAYBACK CLICK",
+    "dtx:2": "PLAYBACK TRACKS"
+   },
+   "labels": {}
+  },
+  {
+   "id": "dlcsbolf",
+   "defId": "vent-1u",
+   "name": "Vent",
+   "short": "VENT",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 6,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dyn6o6g4",
+   "defId": "cyberpower-or500lcdrm1u",
+   "name": "UPS RF",
+   "short": "UPS RF",
+   "place": {
+    "type": "rack",
+    "rackId": "rpjlm49g",
+    "u": 7,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dqs18rxu",
+   "defId": "ah-ahm32",
+   "name": "AHM-32",
+   "short": "AHM",
+   "place": {
+    "type": "rack",
+    "rackId": "rwdw0bdm",
+    "u": 1,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "d4t2qel6",
+   "defId": "generic-amp-2ch",
+   "name": "Mains amp",
+   "short": "AMP 1",
+   "place": {
+    "type": "rack",
+    "rackId": "rwdw0bdm",
+    "u": 2,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "djie0g71",
+   "defId": "generic-amp-2ch",
+   "name": "Sub amp",
+   "short": "AMP 2",
+   "place": {
+    "type": "rack",
+    "rackId": "rwdw0bdm",
+    "u": 4,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "d8v74zo3",
+   "defId": "cyberpower-or500lcdrm1u",
+   "name": "UPS Amp",
+   "short": "UPS AMP",
+   "place": {
+    "type": "rack",
+    "rackId": "rwdw0bdm",
+    "u": 6,
+    "side": "full"
+   },
+   "portNames": {},
+   "labels": {}
+  },
+  {
+   "id": "dgg2a5s3",
+   "defId": "ah-avantis",
+   "name": "Avantis",
+   "short": "AVANTIS",
+   "place": {
+    "type": "loc",
+    "locId": "l5ykk4fo"
+   },
+   "portNames": {
+    "dtx:1": "MAIN L",
+    "dtx:2": "MAIN R",
+    "dtx:3": "SUB"
+   },
+   "labels": {}
+  },
+  {
+   "id": "dohjr0l0",
+   "defId": "floor-pocket-6",
+   "name": "Pocket DS-SR",
+   "short": "FP DS-SR",
+   "place": {
+    "type": "loc",
+    "locId": "lgr57ok3"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "RIO",
+     "start": 7
+    },
+    "tie": {
+     "prefix": "Line",
+     "start": 7
+    }
+   },
+   "zone": "Down-stage",
+   "position": "Stage Right"
+  },
+  {
+   "id": "dbhz8swr",
+   "defId": "floor-pocket-6",
+   "name": "Pocket DS-SC",
+   "short": "FP DS-SC",
+   "place": {
+    "type": "loc",
+    "locId": "lgr57ok3"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "RIO",
+     "start": 13
+    },
+    "tie": {
+     "prefix": "Line",
+     "start": 13
+    }
+   },
+   "zone": "Down-stage",
+   "position": "Stage Center"
+  },
+  {
+   "id": "d9qzsf1a",
+   "defId": "floor-pocket-6",
+   "name": "Pocket DS-SL",
+   "short": "FP DS-SL",
+   "place": {
+    "type": "loc",
+    "locId": "lgr57ok3"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "RIO",
+     "start": 19
+    },
+    "tie": {
+     "prefix": "Line",
+     "start": 19
+    }
+   },
+   "zone": "Down-stage",
+   "position": "Stage Left"
+  },
+  {
+   "id": "dvjelnjc",
+   "defId": "floor-pocket-6",
+   "name": "Pocket MS-SR",
+   "short": "FP MS-SR",
+   "place": {
+    "type": "loc",
+    "locId": "lgr57ok3"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "RIO",
+     "start": 1
+    },
+    "tie": {
+     "prefix": "Line",
+     "start": 1
+    }
+   },
+   "zone": "Mid-stage",
+   "position": "Stage Right"
+  },
+  {
+   "id": "dmdjwgi5",
+   "defId": "floor-pocket-6",
+   "name": "Pocket MS-SL",
+   "short": "FP MS-SL",
+   "place": {
+    "type": "loc",
+    "locId": "lgr57ok3"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "RIO",
+     "start": 25
+    },
+    "tie": {
+     "prefix": "Line",
+     "start": 25
+    }
+   },
+   "zone": "Mid-stage",
+   "position": "Stage Left"
+  },
+  {
+   "id": "dloshru5",
+   "defId": "floor-pocket-6",
+   "name": "Pocket US-SR",
+   "short": "FP US-SR",
+   "place": {
+    "type": "loc",
+    "locId": "lgr57ok3"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "RIO",
+     "start": 31
+    },
+    "tie": {
+     "prefix": "Line",
+     "start": 31
+    }
+   },
+   "zone": "Up-stage",
+   "position": "Stage Right"
+  },
+  {
+   "id": "die7lp42",
+   "defId": "floor-pocket-6",
+   "name": "Pocket US-SL",
+   "short": "FP US-SL",
+   "place": {
+    "type": "loc",
+    "locId": "lgr57ok3"
+   },
+   "portNames": {},
+   "labels": {
+    "in": {
+     "prefix": "RIO",
+     "start": 37
+    },
+    "tie": {
+     "prefix": "Line",
+     "start": 37
+    }
+   },
+   "zone": "Up-stage",
+   "position": "Stage Left"
+  }
+ ],
+ "connections": [
+  {
+   "id": "cu2n1gor",
+   "a": "dohjr0l0.tie:1",
+   "b": "ddknz1fc.in:7",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cdijnnad",
+   "a": "dohjr0l0.tie:2",
+   "b": "ddknz1fc.in:8",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c3mfuork",
+   "a": "dohjr0l0.tie:3",
+   "b": "ddknz1fc.in:9",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cs0o2h1h",
+   "a": "dohjr0l0.tie:4",
+   "b": "ddknz1fc.in:10",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "crmgf461",
+   "a": "dohjr0l0.tie:5",
+   "b": "ddknz1fc.in:11",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "clwj44rq",
+   "a": "dohjr0l0.tie:6",
+   "b": "ddknz1fc.in:12",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c4ie3gej",
+   "a": "dbhz8swr.tie:1",
+   "b": "ddknz1fc.in:13",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ceyhmi9b",
+   "a": "dbhz8swr.tie:2",
+   "b": "ddknz1fc.in:14",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cuakdg6g",
+   "a": "dbhz8swr.tie:3",
+   "b": "ddknz1fc.in:15",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c314mbx7",
+   "a": "dbhz8swr.tie:4",
+   "b": "ddknz1fc.in:16",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "coijavov",
+   "a": "dbhz8swr.tie:5",
+   "b": "ddknz1fc.in:17",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cqpnuzcf",
+   "a": "dbhz8swr.tie:6",
+   "b": "ddknz1fc.in:18",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c05pdpj2",
+   "a": "d9qzsf1a.tie:1",
+   "b": "ddknz1fc.in:19",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cxorz5w5",
+   "a": "d9qzsf1a.tie:2",
+   "b": "ddknz1fc.in:20",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c33g684i",
+   "a": "d9qzsf1a.tie:3",
+   "b": "ddknz1fc.in:21",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c7koxc0n",
+   "a": "d9qzsf1a.tie:4",
+   "b": "ddknz1fc.in:22",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cgkqg2tg",
+   "a": "d9qzsf1a.tie:5",
+   "b": "ddknz1fc.in:23",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cg8rl6a9",
+   "a": "d9qzsf1a.tie:6",
+   "b": "ddknz1fc.in:24",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cedytuxm",
+   "a": "dvjelnjc.tie:1",
+   "b": "ddknz1fc.in:1",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cizmktpo",
+   "a": "dvjelnjc.tie:2",
+   "b": "ddknz1fc.in:2",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cj78ekwi",
+   "a": "dvjelnjc.tie:3",
+   "b": "ddknz1fc.in:3",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cc8ks2qj",
+   "a": "dvjelnjc.tie:4",
+   "b": "ddknz1fc.in:4",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "coz4ztq1",
+   "a": "dvjelnjc.tie:5",
+   "b": "ddknz1fc.in:5",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cyofjmlc",
+   "a": "dvjelnjc.tie:6",
+   "b": "ddknz1fc.in:6",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cuz9rneh",
+   "a": "dmdjwgi5.tie:1",
+   "b": "ddknz1fc.in:25",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cz8xz15z",
+   "a": "dmdjwgi5.tie:2",
+   "b": "ddknz1fc.in:26",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "czoom9o9",
+   "a": "dmdjwgi5.tie:3",
+   "b": "ddknz1fc.in:27",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c61hfvf9",
+   "a": "dmdjwgi5.tie:4",
+   "b": "ddknz1fc.in:28",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c4bmr5tg",
+   "a": "dmdjwgi5.tie:5",
+   "b": "ddknz1fc.in:29",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cch035kv",
+   "a": "dmdjwgi5.tie:6",
+   "b": "ddknz1fc.in:30",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cbn2gqwl",
+   "a": "dloshru5.tie:1",
+   "b": "ddknz1fc.in:31",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cztvcil1",
+   "a": "dloshru5.tie:2",
+   "b": "ddknz1fc.in:32",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cr6lejnx",
+   "a": "dloshru5.tie:3",
+   "b": "d35d9f0c.in:1",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cdwpyah7",
+   "a": "dloshru5.tie:4",
+   "b": "d35d9f0c.in:2",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c5r5uaxj",
+   "a": "dloshru5.tie:5",
+   "b": "d35d9f0c.in:3",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c3onkon4",
+   "a": "dloshru5.tie:6",
+   "b": "d35d9f0c.in:4",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cioxsj6d",
+   "a": "die7lp42.tie:1",
+   "b": "d35d9f0c.in:5",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cdqq819s",
+   "a": "die7lp42.tie:2",
+   "b": "d35d9f0c.in:6",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c9fgznsg",
+   "a": "die7lp42.tie:3",
+   "b": "d35d9f0c.in:7",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "chxvaq1c",
+   "a": "die7lp42.tie:4",
+   "b": "d35d9f0c.in:8",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c0b1067e",
+   "a": "die7lp42.tie:5",
+   "b": "d35d9f0c.in:9",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cbn2lv46",
+   "a": "die7lp42.tie:6",
+   "b": "d35d9f0c.in:10",
+   "kind": "tie",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c2nlj304",
+   "a": "dia6g5en.dtx:1",
+   "b": "dgg2a5s3.drx:1",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c7tsdqhr",
+   "a": "dia6g5en.dtx:2",
+   "b": "dgg2a5s3.drx:2",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cuzc17c1",
+   "a": "dia6g5en.dtx:3",
+   "b": "dgg2a5s3.drx:3",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ctuah3fi",
+   "a": "dia6g5en.dtx:4",
+   "b": "dgg2a5s3.drx:4",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "celacau5",
+   "a": "dia6g5en.dtx:5",
+   "b": "dgg2a5s3.drx:5",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cpjxfofs",
+   "a": "dia6g5en.dtx:6",
+   "b": "dgg2a5s3.drx:6",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cybqdn5c",
+   "a": "dia6g5en.dtx:7",
+   "b": "dgg2a5s3.drx:7",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c4j81igh",
+   "a": "dia6g5en.dtx:8",
+   "b": "dgg2a5s3.drx:8",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "chjv1466",
+   "a": "dia6g5en.dtx:9",
+   "b": "dgg2a5s3.drx:9",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "crjmll9m",
+   "a": "dia6g5en.dtx:10",
+   "b": "dgg2a5s3.drx:10",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cpufibkh",
+   "a": "dia6g5en.dtx:11",
+   "b": "dgg2a5s3.drx:11",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cg3xu6xh",
+   "a": "dia6g5en.dtx:12",
+   "b": "dgg2a5s3.drx:12",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c9z8inwl",
+   "a": "dia6g5en.dtx:13",
+   "b": "dgg2a5s3.drx:13",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c6lw1oro",
+   "a": "dia6g5en.dtx:14",
+   "b": "dgg2a5s3.drx:14",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cm8zm45b",
+   "a": "dia6g5en.dtx:15",
+   "b": "dgg2a5s3.drx:15",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c5uc2e62",
+   "a": "dia6g5en.dtx:16",
+   "b": "dgg2a5s3.drx:16",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cz43exln",
+   "a": "ddknz1fc.dtx:1",
+   "b": "dgg2a5s3.drx:17",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c0laon15",
+   "a": "ddknz1fc.dtx:2",
+   "b": "dgg2a5s3.drx:18",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cx7f82d5",
+   "a": "ddknz1fc.dtx:3",
+   "b": "dgg2a5s3.drx:19",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c7cxf742",
+   "a": "ddknz1fc.dtx:4",
+   "b": "dgg2a5s3.drx:20",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cnqncf4l",
+   "a": "ddknz1fc.dtx:5",
+   "b": "dgg2a5s3.drx:21",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c8duv7y7",
+   "a": "ddknz1fc.dtx:6",
+   "b": "dgg2a5s3.drx:22",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "caihkqx9",
+   "a": "ddknz1fc.dtx:7",
+   "b": "dgg2a5s3.drx:23",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cmey5hk8",
+   "a": "ddknz1fc.dtx:8",
+   "b": "dgg2a5s3.drx:24",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cu10n6lw",
+   "a": "ddknz1fc.dtx:9",
+   "b": "dgg2a5s3.drx:25",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ciie7t5z",
+   "a": "ddknz1fc.dtx:10",
+   "b": "dgg2a5s3.drx:26",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ckose6ou",
+   "a": "ddknz1fc.dtx:11",
+   "b": "dgg2a5s3.drx:27",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ccub4vb0",
+   "a": "ddknz1fc.dtx:12",
+   "b": "dgg2a5s3.drx:28",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cb4uegrk",
+   "a": "ddknz1fc.dtx:13",
+   "b": "dgg2a5s3.drx:29",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cge35mqk",
+   "a": "ddknz1fc.dtx:14",
+   "b": "dgg2a5s3.drx:30",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ccdo9tqx",
+   "a": "ddknz1fc.dtx:15",
+   "b": "dgg2a5s3.drx:31",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ca67dnpx",
+   "a": "ddknz1fc.dtx:16",
+   "b": "dgg2a5s3.drx:32",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cn2bgb6g",
+   "a": "ddknz1fc.dtx:17",
+   "b": "dgg2a5s3.drx:33",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c20cnjfx",
+   "a": "ddknz1fc.dtx:18",
+   "b": "dgg2a5s3.drx:34",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "chhbvlxe",
+   "a": "ddknz1fc.dtx:19",
+   "b": "dgg2a5s3.drx:35",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cgrto8or",
+   "a": "ddknz1fc.dtx:20",
+   "b": "dgg2a5s3.drx:36",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ch2mpo1j",
+   "a": "ddknz1fc.dtx:21",
+   "b": "dgg2a5s3.drx:37",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cyd5523p",
+   "a": "ddknz1fc.dtx:22",
+   "b": "dgg2a5s3.drx:38",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cp5po5yr",
+   "a": "ddknz1fc.dtx:23",
+   "b": "dgg2a5s3.drx:39",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cnw27flx",
+   "a": "ddknz1fc.dtx:24",
+   "b": "dgg2a5s3.drx:40",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "crdr9wlp",
+   "a": "ddknz1fc.dtx:25",
+   "b": "dgg2a5s3.drx:41",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cbbsy7zf",
+   "a": "ddknz1fc.dtx:26",
+   "b": "dgg2a5s3.drx:42",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cycxs6ln",
+   "a": "ddknz1fc.dtx:27",
+   "b": "dgg2a5s3.drx:43",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c11bawa6",
+   "a": "ddknz1fc.dtx:28",
+   "b": "dgg2a5s3.drx:44",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cehy63cg",
+   "a": "ddknz1fc.dtx:29",
+   "b": "dgg2a5s3.drx:45",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cn5kn3z5",
+   "a": "ddknz1fc.dtx:30",
+   "b": "dgg2a5s3.drx:46",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cyr3kir7",
+   "a": "ddknz1fc.dtx:31",
+   "b": "dgg2a5s3.drx:47",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c31r1ipq",
+   "a": "ddknz1fc.dtx:32",
+   "b": "dgg2a5s3.drx:48",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cbozluk4",
+   "a": "d35d9f0c.dtx:1",
+   "b": "dgg2a5s3.drx:49",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cnbn6fak",
+   "a": "d35d9f0c.dtx:2",
+   "b": "dgg2a5s3.drx:50",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cyv60pal",
+   "a": "d35d9f0c.dtx:3",
+   "b": "dgg2a5s3.drx:51",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "csg4x0ks",
+   "a": "d35d9f0c.dtx:4",
+   "b": "dgg2a5s3.drx:52",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "crm3llon",
+   "a": "d35d9f0c.dtx:5",
+   "b": "dgg2a5s3.drx:53",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cxy3z6qu",
+   "a": "d35d9f0c.dtx:6",
+   "b": "dgg2a5s3.drx:54",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "co41qykz",
+   "a": "d35d9f0c.dtx:7",
+   "b": "dgg2a5s3.drx:55",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cra5uvnh",
+   "a": "d35d9f0c.dtx:8",
+   "b": "dgg2a5s3.drx:56",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cicsyn39",
+   "a": "dhmsiwft.dtx:1",
+   "b": "dgg2a5s3.drx:57",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cmqd65e3",
+   "a": "dhmsiwft.dtx:2",
+   "b": "dgg2a5s3.drx:58",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c8r69efx",
+   "a": "dhmsiwft.dtx:3",
+   "b": "dgg2a5s3.drx:59",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ch5rk6qj",
+   "a": "dhmsiwft.dtx:4",
+   "b": "dgg2a5s3.drx:60",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cnp7k1yw",
+   "a": "d4gpycgj.dtx:1",
+   "b": "dgg2a5s3.drx:61",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c384l8b4",
+   "a": "d4gpycgj.dtx:2",
+   "b": "dgg2a5s3.drx:62",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cwfqh8gm",
+   "a": "d3ykspaj.dtx:1",
+   "b": "dgg2a5s3.drx:63",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cifxhydl",
+   "a": "d3ykspaj.dtx:2",
+   "b": "dgg2a5s3.drx:64",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "cz4hzizk",
+   "a": "dgg2a5s3.dtx:1",
+   "b": "dqs18rxu.drx:1",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "ct1f9ca2",
+   "a": "dgg2a5s3.dtx:2",
+   "b": "dqs18rxu.drx:2",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c0addn5i",
+   "a": "dgg2a5s3.dtx:3",
+   "b": "dqs18rxu.drx:3",
+   "kind": "dante",
+   "layer": "rig",
+   "color": ""
+  },
+  {
+   "id": "c4hllwzt",
+   "a": "dqs18rxu.out:1",
+   "b": "d4t2qel6.in:1",
+   "kind": "cable",
+   "layer": "rig",
+   "color": "white"
+  },
+  {
+   "id": "cg9bwf5n",
+   "a": "dqs18rxu.out:2",
+   "b": "d4t2qel6.in:2",
+   "kind": "cable",
+   "layer": "rig",
+   "color": "white"
+  },
+  {
+   "id": "cuhyb88o",
+   "a": "dqs18rxu.out:3",
+   "b": "djie0g71.in:1",
+   "kind": "cable",
+   "layer": "rig",
+   "color": "white"
+  },
+  {
+   "id": "chwlow05",
+   "a": "dgg2a5s3.out:1",
+   "b": "dlcg1576.in:1",
+   "kind": "cable",
+   "layer": "rig",
+   "color": "purple"
+  },
+  {
+   "id": "c1x1e2n4",
+   "a": "dgg2a5s3.out:2",
+   "b": "dlcg1576.in:2",
+   "kind": "cable",
+   "layer": "rig",
+   "color": "purple"
+  },
+  {
+   "id": "cajl3s4j",
+   "a": "dgg2a5s3.out:3",
+   "b": "dgdgv95d.in:1",
+   "kind": "cable",
+   "layer": "rig",
+   "color": "purple"
+  },
+  {
+   "id": "c0g0h9ng",
+   "a": "dgg2a5s3.out:4",
+   "b": "diy1b1l6.in:1",
+   "kind": "cable",
+   "layer": "rig",
+   "color": "purple"
+  }
+ ],
+ "patches": [
+  {
+   "id": "p9alaffs",
+   "name": "Sunday Service",
+   "event": "Sunday Service",
+   "date": "2026-11-08",
+   "sources": [
+    {
+     "id": "shkn78ht",
+     "name": "Kick Out",
+     "groupId": "g3hg6cpr",
+     "mic": "Beta 52",
+     "ports": [
+      "dia6g5en.in:5"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "sl5sox08",
+     "name": "Kick In",
+     "groupId": "g3hg6cpr",
+     "mic": "Beta 91a",
+     "ports": [
+      "dia6g5en.in:1"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "spaxzf40",
+     "name": "Snare Top",
+     "groupId": "g3hg6cpr",
+     "mic": "Beta 57a",
+     "ports": [
+      "dia6g5en.in:2"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "s0hmpvhl",
+     "name": "Snare Bottom",
+     "groupId": "g3hg6cpr",
+     "mic": "SM 57",
+     "ports": [
+      "dia6g5en.in:6"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "s0dpldw1",
+     "name": "Tom 1",
+     "groupId": "g3hg6cpr",
+     "mic": "vBeat",
+     "ports": [
+      "dia6g5en.in:3"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "shp5s1kq",
+     "name": "Tom 2",
+     "groupId": "g3hg6cpr",
+     "mic": "vBeat",
+     "ports": [
+      "dia6g5en.in:4"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "srby6wq8",
+     "name": "Overheads L+R",
+     "groupId": "g3hg6cpr",
+     "mic": "451B",
+     "ports": [
+      "dia6g5en.in:7",
+      "dia6g5en.in:8"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "su0epstg",
+     "name": "Bass",
+     "groupId": "gn0hqv85",
+     "mic": "SANSAMP",
+     "ports": [
+      "dloshru5.in:6"
+     ],
+     "person": "Jacob",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "sa77xwbd",
+     "name": "Electric 1",
+     "groupId": "gf4ojk4w",
+     "mic": "ProD2",
+     "ports": [
+      "die7lp42.in:1",
+      "die7lp42.in:2"
+     ],
+     "person": "Lori",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "s98lkfoq",
+     "name": "Keys",
+     "groupId": "gozcww3t",
+     "mic": "Stereo JDI",
+     "ports": [
+      "d9qzsf1a.in:5",
+      "d9qzsf1a.in:6"
+     ],
+     "person": "Ramona",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "svubi482",
+     "name": "Acoustic 1",
+     "groupId": "gdgiqkpt",
+     "mic": "W/less + Session DI",
+     "ports": [
+      "dohjr0l0.in:6"
+     ],
+     "person": "Katie",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "stqk9zyl",
+     "name": "Vox 1",
+     "groupId": "g25pn980",
+     "mic": "ULX-D KSM11",
+     "ports": [
+      "dhmsiwft.rf:1"
+     ],
+     "person": "Katie",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "sffr180p",
+     "name": "Vox 2",
+     "groupId": "g25pn980",
+     "mic": "ULX-D KSM11",
+     "ports": [
+      "dhmsiwft.rf:2"
+     ],
+     "person": "Brian",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "szk4ekz2",
+     "name": "Vox 3",
+     "groupId": "g25pn980",
+     "mic": "ULX-D KSM11",
+     "ports": [
+      "dhmsiwft.rf:3"
+     ],
+     "person": "Katya",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "s9dvgmt5",
+     "name": "Vox 4",
+     "groupId": "g25pn980",
+     "mic": "ULX-D V7",
+     "ports": [
+      "dhmsiwft.rf:4"
+     ],
+     "person": "Ramona",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "sus385gv",
+     "name": "Click",
+     "groupId": "gv9vrus4",
+     "mic": "Dante Direct",
+     "ports": [
+      "d3ykspaj.dtx:1"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "sv2m7nh4",
+     "name": "Tracks",
+     "groupId": "gv9vrus4",
+     "mic": "Dante Direct",
+     "ports": [
+      "d3ykspaj.dtx:2"
+     ],
+     "person": "Tyler",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "smy2u23x",
+     "name": "Preacher",
+     "groupId": "gqqv0nde",
+     "mic": "ULX-D1 w/Headset",
+     "ports": [
+      "d4gpycgj.rf:1"
+     ],
+     "person": "Phil",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    },
+    {
+     "id": "scc46sex",
+     "name": "Service Host 1",
+     "groupId": "gqqv0nde",
+     "mic": "ULX-D2 sE V7",
+     "ports": [
+      "d4gpycgj.rf:2"
+     ],
+     "person": "Dave M",
+     "cable": "",
+     "notes": "",
+     "custom": {}
+    }
+   ],
+   "outputs": [
+    {
+     "id": "ozg51l4m",
+     "name": "IEM - Drums",
+     "mix": "Aux 1",
+     "port": "dgg2a5s3.out:1",
+     "person": "Tyler",
+     "notes": ""
+    },
+    {
+     "id": "ol0qfmfm",
+     "name": "IEM - Bass",
+     "mix": "Aux 2",
+     "port": "dgg2a5s3.out:2",
+     "person": "Jacob",
+     "notes": ""
+    },
+    {
+     "id": "oerh9j25",
+     "name": "IEM - Vocals",
+     "mix": "Aux 3",
+     "port": "dgg2a5s3.out:3",
+     "person": "Katie",
+     "notes": ""
+    },
+    {
+     "id": "oq0i4r1g",
+     "name": "IEM - Keys",
+     "mix": "Aux 4",
+     "port": "dgg2a5s3.out:4",
+     "person": "Ramona",
+     "notes": ""
+    }
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "id": "g3hg6cpr",
+   "name": "Drums",
+   "color": "#cfdcff"
+  },
+  {
+   "id": "gn0hqv85",
+   "name": "Bass",
+   "color": "#e6d6fb"
+  },
+  {
+   "id": "gf4ojk4w",
+   "name": "Electric",
+   "color": "#fbd1f1"
+  },
+  {
+   "id": "gozcww3t",
+   "name": "Keys",
+   "color": "#fdf3c2"
+  },
+  {
+   "id": "gdgiqkpt",
+   "name": "Acoustic",
+   "color": "#fde6c8"
+  },
+  {
+   "id": "g25pn980",
+   "name": "Vocals",
+   "color": "#d3f6da"
+  },
+  {
+   "id": "gv9vrus4",
+   "name": "Playback",
+   "color": "#e8e8e8"
+  },
+  {
+   "id": "gqqv0nde",
+   "name": "Spoken",
+   "color": "#fbdde1"
+  }
+ ],
+ "columns": [
+  {
+   "id": "col_stand",
+   "name": "Stand"
+  }
+ ],
+ "cableColors": [
+  {
+   "id": "white",
+   "name": "White",
+   "hex": "#f2f2f2",
+   "length": "3'"
+  },
+  {
+   "id": "yellow",
+   "name": "Yellow",
+   "hex": "#f4d03f",
+   "length": "5'"
+  },
+  {
+   "id": "orange",
+   "name": "Orange",
+   "hex": "#f08a24",
+   "length": "15'"
+  },
+  {
+   "id": "red",
+   "name": "Red",
+   "hex": "#d64541",
+   "length": "25'"
+  },
+  {
+   "id": "purple",
+   "name": "Purple",
+   "hex": "#8e5bd0",
+   "length": "50'"
+  }
+ ],
+ "print": {
+  "org": "Peace Portal Church",
+  "logo": "",
+  "headerColor": "#3a5068",
+  "title": "Sanctuary Patchlist",
+  "preset": "volunteer",
+  "fontSize": 11,
+  "orientation": "portrait",
+  "colorMode": "cells",
+  "mergePerson": true,
+  "columns": [
+   {
+    "key": "source",
+    "on": true
+   },
+   {
+    "key": "mic",
+    "on": true
+   },
+   {
+    "key": "input",
+    "on": true
+   },
+   {
+    "key": "person",
+    "on": true
+   },
+   {
+    "key": "consoleCh",
+    "on": false
+   },
+   {
+    "key": "cable",
+    "on": false
+   },
+   {
+    "key": "group",
+    "on": false
+   },
+   {
+    "key": "path",
+    "on": false
+   },
+   {
+    "key": "notes",
+    "on": false
+   }
+  ],
+  "include": {
+   "inputs": true,
+   "outputs": false,
+   "stageMap": true,
+   "pull": false
+  }
+ },
+ "history": []
+}

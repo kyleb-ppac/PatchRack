@@ -76,6 +76,7 @@ function newPatch(name) {
 }
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(project)); } catch { /* storage unavailable */ }
+  if (typeof ghMarkDirty === 'function' && project.modified) ghMarkDirty();
 }
 function load() {
   let p = null;
@@ -119,6 +120,8 @@ function redo() {
 function replaceProject(p, msg) {
   undoStack.push(JSON.stringify(project)); redoStack.length = 0;
   project = migrate(p); ui.patchId = null; fixUi();
+  // a different project is now open, so it's no longer linked to a GitHub file (ghOpen re-links it)
+  if (typeof gh !== 'undefined') { gh.file = null; ghStoreFile(); }
   project.history.unshift({ t: new Date().toISOString(), msg, patch: '' });
   save(); render(); toast(msg);
 }
@@ -1452,7 +1455,4 @@ $('#file-logo').addEventListener('change', (e) => {
   const r = new FileReader(); r.onload = () => { commit('Added logo', (p) => { p.print.logo = r.result; }); e.target.value = ''; }; r.readAsDataURL(f);
 });
 
-/* ---------- 14. start-up ---------- */
-try { const t = localStorage.getItem('patchrack.theme'); if (t) document.documentElement.dataset.theme = t; } catch { }
-load();
-render();
+/* start-up lives in main.js, which loads after github.js */

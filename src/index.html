@@ -21,11 +21,16 @@
     <button data-act="tab" data-tab="checks">Checks<span id="checks-badge" class="badge">0</span></button>
   </nav>
   <div class="top-actions">
+    <button id="gh-status" class="gh-status" data-act="ghSave">GitHub</button>
     <button data-act="undo" id="btn-undo" title="Undo (Ctrl/Cmd+Z)">Undo</button>
     <button data-act="redo" id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
     <details class="menu" id="file-menu">
       <summary>File</summary>
       <div class="menu-pop">
+        <button data-act="ghSave">Save to GitHub <span class="muted small">⌘S</span></button>
+        <button data-act="ghList">Open from GitHub…</button>
+        <button data-act="ghSettings">GitHub settings…</button>
+        <hr>
         <button data-act="saveFile">Save project file…</button>
         <button data-act="openFile">Open project file…</button>
         <hr>

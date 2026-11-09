@@ -12,7 +12,7 @@ dist.mkdir(exist_ok=True)
 
 page = (src / 'index.html').read_text()
 css = (src / 'styles.css').read_text()
-js = '\n'.join((src / f).read_text() for f in ['library.js', 'app.js'])
+js = '\n'.join((src / f).read_text() for f in ['library.js', 'app.js', 'github.js', 'main.js'])
 
 body = page.replace('/*@@STYLES@@*/', css).replace('/*@@SCRIPTS@@*/', js)
 (dist / 'patchrack.html').write_text(body)
