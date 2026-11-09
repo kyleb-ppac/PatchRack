@@ -1,0 +1,2269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>[hidden]{display:none!important} body{margin:0}</style>
+</head>
+<body>
+<title>PatchRack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Rack elevations and patchlists that stay in sync.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: app shell = top bar + one working view; the rack view is a scrolling
+   "stage" of rack elevations with an inspector beside it. Gear faceplates are
+   always dark metal (like the real thing) in both themes. */
+:root {
+  --bg: #eceff3;
+  --panel: #ffffff;
+  --panel-2: #f6f8fa;
+  --fg: #18202a;
+  --muted: #5a6776;
+  --line: #d3d9e0;
+  --accent: #3a5068;          /* Peace Portal slate */
+  --accent-fg: #ffffff;
+  --accent-soft: #dfe7ef;
+  --trace: #f2a900;
+  --err: #c2362f;
+  --warn: #b26a00;
+  --info: #2f6f9f;
+  --ok: #2f7d4f;
+
+  /* hardware (same in both themes) */
+  --metal: #23272c;
+  --metal-2: #2c3137;
+  --rail: #121417;
+  --silk: #d7dce1;
+  --silk-dim: #8c949c;
+  --jack: #0c0e10;
+  --ring-in: #c7ced6;
+  --ring-out: #e3a548;
+  --ring-io: #6fbf8e;
+  --ring-v: #9aa3ad;
+  --plug: #f4f6f8;
+
+  --f-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --f-ui: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151a; --panel: #192028; --panel-2: #1f2730; --fg: #e5eaf0; --muted: #95a2b0;
+    --line: #2c3540; --accent: #8db1d6; --accent-fg: #0f1720; --accent-soft: #24313f;
+    --err: #ff7a70; --warn: #f0b456; --info: #7fb6e6; --ok: #73c995;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151a; --panel: #192028; --panel-2: #1f2730; --fg: #e5eaf0; --muted: #95a2b0;
+  --line: #2c3540; --accent: #8db1d6; --accent-fg: #0f1720; --accent-soft: #24313f;
+  --err: #ff7a70; --warn: #f0b456; --info: #7fb6e6; --ok: #73c995;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font: 14px/1.4 var(--f-ui);
+  display: flex; flex-direction: column; min-height: 100%;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 5px 10px; cursor: pointer; white-space: nowrap;
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, .port:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button.danger { color: var(--err); }
+button.armed { background: var(--err); color: #fff; border-color: var(--err); }
+button:disabled { opacity: .45; cursor: default; }
+input[type=text], input[type=number], input[type=date], input:not([type]), select, textarea {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0;
+}
+input[type=color] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.spacer { flex: 1; }
+h2, h3 { font-family: var(--f-display); font-weight: 600; letter-spacing: .02em; margin: 0; text-wrap: balance; }
+h2 { font-size: 22px; } h3 { font-size: 17px; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+
+/* ---------- top bar ---------- */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+.brand { display: flex; align-items: center; gap: 8px; font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: .03em; }
+.brand-mark { width: 22px; height: 22px; border-radius: 3px; background:
+  radial-gradient(circle at 30% 35%, var(--accent-fg) 0 2.5px, transparent 3px),
+  radial-gradient(circle at 70% 35%, var(--accent-fg) 0 2.5px, transparent 3px),
+  radial-gradient(circle at 30% 70%, var(--accent-fg) 0 2.5px, transparent 3px),
+  radial-gradient(circle at 70% 70%, var(--accent-fg) 0 2.5px, transparent 3px), var(--accent); }
+.proj-name { font-weight: 600; width: 230px; max-width: 100%; }
+.patch-pick { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.patch-pick select { color: var(--fg); font-size: 14px; max-width: 200px; }
+.tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.tabs button { border: 0; background: none; border-radius: 4px; padding: 6px 10px; color: var(--muted); font-weight: 500; }
+.tabs button.on { background: var(--accent-soft); color: var(--fg); }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 18px; text-align: center; background: var(--err); color: #fff; margin-left: 4px; font-family: var(--f-mono); }
+.badge.warn { background: var(--warn); }
+.badge.zero { background: var(--ok); }
+.top-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.menu { position: relative; }
+.menu > summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r); padding: 5px 10px; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu-pop {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: 250px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 6px; display: grid; gap: 2px;
+}
+.menu-pop button { border: 0; text-align: left; }
+.menu-pop hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view { padding-block: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; align-content: start; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.tog { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; user-select: none; }
+.seg { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg > span { padding: 0 8px; font-size: 12px; color: var(--muted); }
+.seg button { border: 0; border-left: 1px solid var(--line); border-radius: 0; }
+.seg button.on { background: var(--accent); color: var(--accent-fg); }
+.note {
+  background: var(--accent-soft); border-radius: var(--r); padding: 8px 12px; font-size: 13px;
+  display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+}
+.note button { padding: 2px 8px; }
+
+/* ---------- rack view ---------- */
+.rack-split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .rack-split { grid-template-columns: minmax(0, 1fr); } }
+.stage {
+  overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2);
+  max-height: calc(100vh - 170px); min-height: 360px; user-select: none; -webkit-user-select: none;
+}
+.stage-inner { position: relative; display: flex; gap: 28px; padding: 18px; align-items: flex-start; width: max-content; }
+.cables { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 5; }
+.cables path.hit { pointer-events: stroke; cursor: pointer; }
+.rack { flex: none; }
+.rack-head, .loc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.rack-title { font-family: var(--f-display); font-size: 18px; font-weight: 600; letter-spacing: .03em; cursor: pointer; background: none; border: 0; padding: 0; }
+.rack-title:hover { color: var(--accent); }
+.face-btn { font-size: 11px; padding: 2px 8px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.rack-body { position: relative; display: grid; grid-template-columns: 22px auto 22px; background: var(--rail); border-radius: 4px; padding: 6px 0; }
+.rail { position: relative; }
+.rail span { position: absolute; left: 0; right: 0; text-align: center; font: 9px/1 var(--f-mono); color: #6f7880; }
+.rail i { position: absolute; left: 7px; width: 8px; height: 5px; border-radius: 2px; background: #2e3338; }
+.rack-bay { position: relative; background: repeating-linear-gradient(180deg, #181b1f 0 47px, #1d2126 47px 48px); }
+.slot {
+  position: absolute; border: 1px dashed transparent; color: transparent; font: 11px var(--f-mono);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.slot:hover, .slot.sel { border-color: #5d6670; color: #9aa3ad; }
+.slot.sel { border-style: solid; border-color: var(--trace); color: var(--trace); }
+
+.dev {
+  position: absolute; background: linear-gradient(180deg, var(--metal-2), var(--metal)); border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 1px 0 rgba(0,0,0,.6);
+  color: var(--silk); overflow: hidden;
+}
+.dev::before, .dev::after { /* rack ear screws */
+  content: ""; position: absolute; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: #4b5259; box-shadow: inset 0 0 0 1px #1a1d20;
+}
+.dev::before { left: 4px; } .dev::after { right: 4px; }
+.dev.half-L::after, .dev.half-R::before { display: none; }
+.dev.free::before, .dev.free::after { display: none; }
+.dev.sel { box-shadow: inset 0 0 0 2px var(--trace); }
+.dev-label {
+  position: absolute; left: 12px; right: 12px; top: 2px; height: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 600 10.5px/13px var(--f-display); letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+}
+.dev-label b { color: #fff; font-weight: 600; }
+.dev-label em { font-style: normal; color: var(--silk-dim); }
+.dev-label .unv { color: #e3a548; margin-left: 4px; }
+.dev-empty { position: absolute; left: 12px; bottom: 4px; font-size: 10px; color: var(--silk-dim); }
+.grp-label { position: absolute; font: 600 8.5px/10px var(--f-display); letter-spacing: .07em; text-transform: uppercase; color: var(--silk-dim); white-space: nowrap; }
+.dev.st-blank { background: linear-gradient(180deg, #2b3036, #24282d); }
+.dev.st-vent { background: repeating-linear-gradient(90deg, #2a2f35 0 10px, #111316 10px 13px); background-size: 100% 60%; background-position: center; background-repeat: no-repeat; background-color: #2a2f35; }
+.dev.st-drawer .dev-empty { left: 50%; transform: translateX(-50%); bottom: 50%; width: 90px; height: 7px; border-radius: 4px; background: #4a5057; font-size: 0; }
+
+.port {
+  position: absolute; border-radius: 50%; background: var(--fill, var(--jack));
+  box-shadow: inset 0 0 0 2px var(--ring, var(--ring-in)), 0 0 0 1px #000;
+  cursor: crosshair; touch-action: none;
+}
+.port.d-in { --ring: var(--ring-in); }
+.port.d-out { --ring: var(--ring-out); }
+.port.d-io { --ring: var(--ring-io); }
+.port.c-rj45, .port.c-sfp { border-radius: 2px; }
+.port.c-iec, .port.c-nema { border-radius: 3px; }
+.port.c-phoenix { border-radius: 1px; }
+.port.c-ethercon::before { content: ""; position: absolute; inset: 28% 24%; border-radius: 1px; background: rgba(255,255,255,.12); }
+.port.plugged::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: var(--plug); box-shadow: 0 0 0 1px #000; }
+.port.c-rj45.plugged::after, .port.c-sfp.plugged::after, .port.c-iec.plugged::after, .port.c-phoenix.plugged::after { border-radius: 1px; }
+.port.hl { box-shadow: inset 0 0 0 2px var(--trace), 0 0 0 2px var(--trace), 0 0 10px 2px rgba(242,169,0,.55); }
+.port.sel { box-shadow: inset 0 0 0 2px #fff, 0 0 0 3px var(--trace), 0 0 12px 3px rgba(242,169,0,.7); }
+.port.drop { box-shadow: 0 0 0 3px #6fbf8e; }
+.pn { position: absolute; font: 500 8px/1 var(--f-mono); color: var(--silk-dim); text-align: center; white-space: nowrap; pointer-events: none; }
+.pn.named { color: var(--silk); }
+
+.locs { display: flex; flex-direction: column; gap: 22px; flex: none; }
+.loc { flex: none; }
+.loc-body { display: flex; flex-wrap: wrap; gap: 10px; width: 540px; padding: 10px; border: 1px dashed #6b747d; border-radius: 6px; }
+.loc-body .dev { position: relative; }
+.loc-empty { color: var(--muted); font-size: 12px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--jack); box-shadow: inset 0 0 0 2px var(--ring); vertical-align: -2px; margin-right: 4px; }
+
+/* ---------- inspector ---------- */
+.inspector {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px;
+  display: grid; gap: 12px; max-height: calc(100vh - 170px); overflow: auto; position: sticky; top: 70px; min-width: 0;
+}
+.inspector .row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: center; }
+.inspector .row label { font-size: 12px; color: var(--muted); }
+.kv { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 2px 10px; font-size: 13px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 4px; padding: 1px 6px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.chip.ch { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+.arrow { color: var(--muted); font-size: 12px; }
+.pill { display: inline-block; border-radius: 3px; padding: 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .03em; }
+.pill.unv { background: #fbe8c8; color: #7a4a00; }
+.pill.ver { background: #d5efdf; color: #1d5a35; }
+.pill.rig { background: var(--accent-soft); color: var(--fg); }
+.pill.patch { background: #f4dff0; color: #6d2160; }
+.list { display: grid; gap: 2px; }
+.list button { text-align: left; display: flex; justify-content: space-between; gap: 8px; border-color: transparent; background: var(--panel-2); }
+.list button:hover { border-color: var(--accent); }
+.list button small { color: var(--muted); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); vertical-align: -2px; }
+
+/* ---------- tables (patchlist, dante, library) ---------- */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.tbl-wrap { overflow-x: auto; }
+table.grid { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.grid th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.grid td { padding: 3px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.grid td input, table.grid td select { width: 100%; }
+table.grid td.num { font-family: var(--f-mono); color: var(--muted); text-align: right; width: 28px; }
+table.grid td.comp { font-family: var(--f-mono); font-size: 12px; white-space: nowrap; }
+table.grid tr.sel td { background: var(--accent-soft); }
+.grpcell { display: flex; gap: 4px; align-items: center; min-width: 110px; }
+.inputcell { display: flex; gap: 4px; align-items: center; min-width: 210px; }
+.inputcell select { min-width: 0; }
+.st-tog { font-size: 11px; padding: 2px 5px; }
+.st-tog.on { background: var(--accent); color: var(--accent-fg); }
+.rowbtns { display: flex; gap: 2px; }
+.rowbtns button { padding: 2px 6px; font-size: 12px; }
+.path { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; font-size: 11.5px; }
+.editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.field { display: grid; gap: 3px; } .field > span { font-size: 12px; color: var(--muted); }
+.inline-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.inline-fields .field input, .inline-fields .field select { width: 180px; }
+
+/* dante */
+.dsub { width: 100%; text-align: left; border-style: dashed; font-family: var(--f-mono); font-size: 12px; padding: 3px 6px; }
+.dsub.set { border-style: solid; }
+details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
+
+/* library */
+.lib-split { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 800px) { .lib-split { grid-template-columns: minmax(0,1fr); } }
+.lib-list { max-height: calc(100vh - 220px); overflow: auto; }
+.lib-list button.on { border-color: var(--accent); background: var(--accent-soft); }
+
+/* checks */
+.check { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 4px; background: var(--panel-2); }
+.sev { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 1px 6px; border-radius: 3px; color: #fff; flex: none; }
+.sev.error { background: var(--err); } .sev.warn { background: var(--warn); } .sev.info { background: var(--info); }
+.check .msg { flex: 1; min-width: 0; }
+
+/* ---------- print ---------- */
+.print-split { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .print-split { grid-template-columns: minmax(0,1fr); } }
+.print-opts { display: grid; gap: 12px; }
+.colpick { display: grid; gap: 2px; }
+.colpick div { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; }
+.colpick div:hover { background: var(--panel-2); }
+.colpick label { flex: 1; display: flex; gap: 6px; align-items: center; }
+.colpick button { padding: 0 6px; font-size: 11px; }
+.paper-wrap { overflow: auto; background: #8a929b; border-radius: var(--r); padding: 20px; max-height: calc(100vh - 160px); }
+.paper {
+  width: 8.5in; min-height: 11in; margin: 0 auto; background: #fff; color: #111; box-shadow: 0 4px 20px rgba(0,0,0,.3);
+  font-family: var(--f-ui); font-size: var(--pfs, 11px); color-scheme: light;
+}
+.paper.landscape { width: 11in; min-height: 8.5in; }
+.paper .phead { display: flex; justify-content: flex-end; align-items: center; height: 0.95in; padding: 0 0.45in; color: #fff; }
+.paper .phead img { max-height: 0.62in; max-width: 3.2in; }
+.paper .phead .org { font-family: var(--f-display); font-size: 30px; font-weight: 600; letter-spacing: .01em; }
+.paper .pbody { padding: 0.3in 0.6in 0.5in; display: grid; gap: 10px; }
+.paper .ptitle { font-size: 1.6em; margin: 6px 0 2px; font-weight: 500; }
+.paper .pmeta { display: grid; gap: 4px; font-size: 1.15em; }
+.paper table { border-collapse: collapse; width: 100%; }
+.paper th { color: #fff; font-weight: 500; padding: 3px 6px; border: 1px solid #222; text-align: center; }
+.paper td { border: 1px solid #222; padding: 2px 6px; }
+.paper td.c { text-align: center; vertical-align: middle; }
+.paper h4 { font-size: 1.45em; font-weight: 500; margin: 8px 0 0; }
+.paper .map p { margin: 3px 0 0; font-size: 1.15em; }
+.paper .map .ind { padding-left: 1.6em; }
+.paper .pull { columns: 2; font-size: 1.05em; }
+.paper .pfoot { font-size: .85em; color: #666; margin-top: 8px; }
+.paper .pnote { font-size: .95em; color: #444; }
+
+/* ---------- modal & toast ---------- */
+.modal { position: fixed; inset: 0; z-index: 50; background: rgba(10,14,18,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-box { background: var(--panel); border-radius: 8px; max-width: 680px; width: 100%; max-height: 85vh; overflow: auto; padding: 18px; display: grid; gap: 12px; }
+.modal-box textarea { width: 100%; min-height: 240px; font: 12px var(--f-mono); }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+  background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 6px; font-size: 13px; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25);
+}
+.hist { display: grid; gap: 2px; font-size: 13px; }
+.hist div { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- printing ---------- */
+@media print {
+  body > *:not(#print-root) { display: none !important; }
+  body::before { display: none; }
+  body { background: #fff; }
+  #print-root { display: block !important; }
+  #print-root .paper { box-shadow: none; width: auto; min-height: 0; margin: 0; }
+  .paper .phead, .paper th, .paper td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .paper tr { break-inside: avoid; }
+}
+
+</style>
+
+<header class="top">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack</div>
+  <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
+  <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
+  <nav class="tabs" id="tabs" aria-label="Views">
+    <button data-act="tab" data-tab="rack">Rack</button>
+    <button data-act="tab" data-tab="list">Patchlist</button>
+    <button data-act="tab" data-tab="dante">Dante</button>
+    <button data-act="tab" data-tab="print">Print</button>
+    <button data-act="tab" data-tab="library">Library</button>
+    <button data-act="tab" data-tab="checks">Checks<span id="checks-badge" class="badge">0</span></button>
+  </nav>
+  <div class="top-actions">
+    <button data-act="undo" id="btn-undo" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+    <button data-act="redo" id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+    <details class="menu" id="file-menu">
+      <summary>File</summary>
+      <div class="menu-pop">
+        <button data-act="saveFile">Save project file…</button>
+        <button data-act="openFile">Open project file…</button>
+        <hr>
+        <button data-act="copyJson">Copy project as text</button>
+        <button data-act="pasteJson">Load project from text…</button>
+        <hr>
+        <button data-act="showHistory">Change history</button>
+        <button data-act="loadSample">Load Sanctuary sample</button>
+        <button data-act="newBlank">New blank project</button>
+        <hr>
+        <button data-act="theme">Switch light / dark</button>
+      </div>
+    </details>
+  </div>
+</header>
+<main id="main"></main>
+<div id="print-root" hidden></div>
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<input type="file" id="file-open" accept=".json,application/json" hidden>
+<input type="file" id="file-lib" accept=".json,application/json" hidden>
+<input type="file" id="file-logo" accept="image/*" hidden>
+
+<script>
+/* =====================================================================
+   Starter gear library + sample project
+   ---------------------------------------------------------------------
+   A "gear definition" describes one model of gear: its size and every
+   port it has. Ports are described in groups (e.g. "32 XLR inputs on the
+   front"). Port faces:
+     front / rear  -> drawn on the panel
+     dante         -> Dante channels (shown in the Dante tab)
+     virtual       -> things like wireless channels and console channels
+   "links" describe what happens inside the box: input 5 feeds Dante Tx 5.
+   Everything marked verified:false is a best guess - check it against
+   the real unit or its manual, then tick "Verified" in the Library tab.
+   ===================================================================== */
+
+const G = (id, label, count, conn, dir, face, extra = {}) =>
+  ({ id, label, count, conn, dir, face, start: 1, ...extra });
+
+const DEFAULT_LIBRARY = [
+  // ---------------- stage boxes / IO ----------------
+  {
+    id: 'yamaha-rio3224-d2', make: 'Yamaha', model: 'Rio3224-D2', short: 'RIO', category: 'stagebox',
+    form: 'rack', ru: 5, width: 'full', watts: 120, verified: false,
+    ref: 'Yamaha spec sheet: 5U, 32 analog in, 16 analog out, AES/EBU out 1-8, 120 W. Connector positions approximate.',
+    groups: [
+      G('in', 'In', 32, 'xlr', 'in', 'front', { rows: 4, src: true }),
+      G('out', 'Out', 16, 'xlr', 'out', 'front', { rows: 2 }),
+      G('aes', 'AES Out', 4, 'xlr', 'out', 'front', { rows: 1, names: ['1/2', '3/4', '5/6', '7/8'] }),
+      G('net', 'Dante', 2, 'ethercon', 'io', 'front', { names: ['Pri', 'Sec'] }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('dtx', 'Dante Tx', 32, 'dante', 'out', 'dante'),
+      G('drx', 'Dante Rx', 24, 'dante', 'in', 'dante'),
+    ],
+    links: [{ from: 'in', to: 'dtx' }, { from: 'drx', to: 'out', count: 16 }],
+  },
+  {
+    id: 'yamaha-tio1608-d', make: 'Yamaha', model: 'Tio1608-D', short: 'TIO', category: 'stagebox',
+    form: 'rack', ru: 2, width: 'full', watts: 75, verified: false,
+    ref: 'Yamaha datasheet: 480x88x364 mm (2U), 16 mic/line combo in, 8 XLR line out, Dante pri/sec etherCON.',
+    groups: [
+      G('in', 'In', 16, 'combo', 'in', 'front', { rows: 2, src: true }),
+      G('out', 'Out', 8, 'xlr', 'out', 'front', { rows: 1 }),
+      G('net', 'Dante', 2, 'ethercon', 'io', 'front', { names: ['Pri', 'Sec'] }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('dtx', 'Dante Tx', 16, 'dante', 'out', 'dante'),
+      G('drx', 'Dante Rx', 8, 'dante', 'in', 'dante'),
+    ],
+    links: [{ from: 'in', to: 'dtx' }, { from: 'drx', to: 'out' }],
+  },
+
+  // ---------------- wireless ----------------
+  {
+    id: 'shure-ulxd4q', make: 'Shure', model: 'ULX-D4Q', short: 'ULXD', category: 'wireless',
+    form: 'rack', ru: 1, width: 'full', watts: 30, verified: false,
+    ref: 'Quad receiver. 4 XLR outs, antenna in/cascade, Dante. Rear layout approximate.',
+    groups: [
+      G('rf', 'RF Ch', 4, 'rf', 'in', 'virtual', { src: true }),
+      G('out', 'Out', 4, 'xlr', 'out', 'rear'),
+      G('ant', 'Ant In', 2, 'bnc', 'in', 'rear', { names: ['A', 'B'] }),
+      G('cas', 'Cascade', 2, 'bnc', 'out', 'rear', { names: ['A', 'B'] }),
+      G('net', 'Network', 4, 'rj45', 'io', 'rear', { names: ['Dante P', 'Dante S', 'Ctl 1', 'Ctl 2'] }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('dtx', 'Dante Tx', 4, 'dante', 'out', 'dante'),
+    ],
+    links: [{ from: 'rf', to: 'out' }, { from: 'rf', to: 'dtx' }],
+  },
+  {
+    id: 'shure-psm900-p9t', make: 'Shure', model: 'PSM900 P9T', short: 'PSM9', category: 'iem',
+    form: 'rack', ru: 1, width: 'half', watts: 15, verified: false,
+    ref: 'Half-rack IEM transmitter. Line inputs only (L/R), loop outs, antenna out. Layout approximate.',
+    groups: [
+      G('in', 'In', 2, 'combo', 'in', 'rear', { names: ['L', 'R'] }),
+      G('loop', 'Loop', 2, 'trs', 'out', 'rear', { names: ['L', 'R'] }),
+      G('ant', 'RF', 1, 'bnc', 'out', 'rear'),
+      G('pwr', 'DC', 1, 'dc', 'in', 'rear'),
+    ],
+    links: [{ from: 'in', to: 'loop' }],
+  },
+  {
+    id: 'shure-psm300-p3t', make: 'Shure', model: 'PSM300 P3T', short: 'PSM3', category: 'iem',
+    form: 'rack', ru: 1, width: 'half', watts: 10, verified: false,
+    ref: 'Half-rack IEM transmitter. Line inputs only (L/R), loop outs, antenna out. Layout approximate.',
+    groups: [
+      G('in', 'In', 2, 'combo', 'in', 'rear', { names: ['L', 'R'] }),
+      G('loop', 'Loop', 2, 'trs', 'out', 'rear', { names: ['L', 'R'] }),
+      G('ant', 'RF', 1, 'bnc', 'out', 'rear'),
+      G('pwr', 'DC', 1, 'dc', 'in', 'rear'),
+    ],
+    links: [{ from: 'in', to: 'loop' }],
+  },
+
+  // ---------------- console & processing ----------------
+  {
+    id: 'ah-avantis', make: 'Allen & Heath', model: 'Avantis', short: 'AVANTIS', category: 'console',
+    form: 'desk', ru: 3, width: 'full', watts: 300, verified: false,
+    ref: 'Desk console. Rear I/O shown approximately. Assumes one 64x64 Dante card; Dante Rx n feeds input channel n.',
+    groups: [
+      G('in', 'Local In', 12, 'xlr', 'in', 'rear', { rows: 2, src: true }),
+      G('out', 'Local Out', 12, 'xlr', 'out', 'rear', { rows: 2 }),
+      G('aesi', 'AES In', 1, 'xlr', 'in', 'rear'),
+      G('aeso', 'AES Out', 1, 'xlr', 'out', 'rear'),
+      G('net', 'Dante card', 2, 'rj45', 'io', 'rear', { names: ['Pri', 'Sec'] }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('drx', 'Dante Rx', 64, 'dante', 'in', 'dante'),
+      G('dtx', 'Dante Tx', 64, 'dante', 'out', 'dante'),
+      G('ch', 'Ch', 64, 'channel', 'in', 'virtual'),
+    ],
+    links: [{ from: 'drx', to: 'ch' }],
+  },
+  {
+    id: 'ah-ahm32', make: 'Allen & Heath', model: 'AHM-32', short: 'AHM', category: 'processor',
+    form: 'rack', ru: 1, width: 'full', watts: 70, verified: false,
+    ref: '1U matrix processor, 12 in / 12 out on Phoenix. Dante via option card (32 ch shown).',
+    groups: [
+      G('in', 'In', 12, 'phoenix', 'in', 'rear', { rows: 1 }),
+      G('out', 'Out', 12, 'phoenix', 'out', 'rear', { rows: 1 }),
+      G('net', 'Network', 1, 'rj45', 'io', 'rear'),
+      G('card', 'Dante card', 2, 'rj45', 'io', 'rear', { names: ['Pri', 'Sec'] }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('drx', 'Dante Rx', 32, 'dante', 'in', 'dante'),
+      G('dtx', 'Dante Tx', 32, 'dante', 'out', 'dante'),
+    ],
+    links: [],
+  },
+  {
+    id: 'generic-amp-2ch', make: 'Generic', model: '2-ch power amp (2U)', short: 'AMP', category: 'amp',
+    form: 'rack', ru: 2, width: 'full', watts: 600, verified: false,
+    ref: 'Stand-in for amps you have not identified yet. Duplicate it in the Library and adjust.',
+    groups: [
+      G('in', 'In', 2, 'xlr', 'in', 'rear', { names: ['A', 'B'] }),
+      G('spk', 'Speaker', 2, 'speakon', 'out', 'rear', { names: ['A', 'B'] }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+    ],
+    links: [{ from: 'in', to: 'spk' }],
+  },
+  {
+    id: 'art-headamp6', make: 'ART', model: 'HeadAmp6', short: 'HA6', category: 'utility',
+    form: 'rack', ru: 1, width: 'full', watts: 10, verified: false,
+    ref: '6-channel headphone amp. Layout approximate.',
+    groups: [
+      G('hp', 'Phones', 6, 'headphone', 'out', 'front'),
+      G('in', 'In', 2, 'trs', 'in', 'rear', { names: ['L', 'R'] }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+    ],
+    links: [],
+  },
+
+  // ---------------- network / computer ----------------
+  {
+    id: 'luminex-gigacore30i', make: 'Luminex', model: 'GigaCore 30i', short: 'GC30', category: 'network',
+    form: 'rack', ru: 1, width: 'full', watts: 60, verified: false,
+    ref: 'Network switch. Port count/type approximate (24 RJ45 + 6 SFP shown).',
+    groups: [
+      G('eth', 'Port', 24, 'rj45', 'io', 'front', { rows: 2 }),
+      G('sfp', 'SFP', 6, 'sfp', 'io', 'front', { rows: 2 }),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+    ],
+    links: [],
+  },
+  {
+    id: 'sonnet-rackmac-mini', make: 'Sonnet', model: 'RackMac mini', short: 'MAC', category: 'computer',
+    form: 'rack', ru: 1, width: 'full', watts: 60, verified: false,
+    ref: 'Mac mini in a rack shelf. Dante channels assume Dante Virtual Soundcard (16x16 shown).',
+    groups: [
+      G('eth', 'Ethernet', 1, 'rj45', 'io', 'rear'),
+      G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('dtx', 'Dante Tx', 16, 'dante', 'out', 'dante', { src: true }),
+      G('drx', 'Dante Rx', 16, 'dante', 'in', 'dante'),
+    ],
+    links: [],
+  },
+
+  // ---------------- power ----------------
+  {
+    id: 'cyberpower-or500lcdrm1u', make: 'CyberPower', model: 'OR500LCDRM1U', short: 'UPS', category: 'power',
+    form: 'rack', ru: 1, width: 'full', watts: 300, verified: false,
+    ref: '1U UPS. Outlet count approximate.',
+    groups: [
+      G('out', 'Outlet', 6, 'nema', 'out', 'rear', { rows: 1 }),
+      G('ac', 'AC In', 1, 'nema', 'in', 'rear'),
+    ],
+    links: [],
+  },
+
+  // ---------------- patch bay ----------------
+  {
+    id: 'generic-patchbay-48', make: 'Generic', model: 'TRS patch bay 48-pt', short: 'PB', category: 'patchbay',
+    form: 'rack', ru: 1, width: 'full', watts: 0, verified: true,
+    ref: '24 pairs. Rear top = from a device output, rear bottom = to a device input. Normalling set per point in the gear inspector.',
+    groups: [
+      G('ft', 'Front Top', 24, 'trs', 'out', 'front', { rows: 1, nolabel: true }),
+      G('fb', 'Front Bottom', 24, 'trs', 'in', 'front', { rows: 1, nolabel: true }),
+      G('rt', 'Rear Top', 24, 'trs', 'in', 'rear', { rows: 1, nolabel: true }),
+      G('rb', 'Rear Bottom', 24, 'trs', 'out', 'rear', { rows: 1, nolabel: true }),
+    ],
+    links: [],
+    patchbay: { rt: 'rt', rb: 'rb', ft: 'ft', fb: 'fb', mode: 'half' },
+  },
+
+  // ---------------- hardware ----------------
+  { id: 'blank-1u', make: 'Generic', model: 'Blank panel 1U', short: 'BLANK', category: 'hardware', form: 'rack', ru: 1, width: 'full', style: 'blank', verified: true, groups: [], links: [] },
+  { id: 'blank-2u', make: 'Generic', model: 'Blank panel 2U', short: 'BLANK', category: 'hardware', form: 'rack', ru: 2, width: 'full', style: 'blank', verified: true, groups: [], links: [] },
+  { id: 'blank-half-1u', make: 'Generic', model: 'Half-rack blank 1U', short: 'BLANK', category: 'hardware', form: 'rack', ru: 1, width: 'half', style: 'blank', verified: true, groups: [], links: [] },
+  { id: 'vent-1u', make: 'Generic', model: 'Vent panel 1U', short: 'VENT', category: 'hardware', form: 'rack', ru: 1, width: 'full', style: 'vent', verified: true, groups: [], links: [] },
+  { id: 'vent-2u', make: 'Generic', model: 'Vent panel 2U', short: 'VENT', category: 'hardware', form: 'rack', ru: 2, width: 'full', style: 'vent', verified: true, groups: [], links: [] },
+  { id: 'drawer-2u', make: 'Generic', model: 'Rack drawer 2U', short: 'DRAWER', category: 'hardware', form: 'rack', ru: 2, width: 'full', style: 'drawer', verified: true, groups: [], links: [] },
+  { id: 'drawer-3u', make: 'Generic', model: 'Rack drawer 3U', short: 'DRAWER', category: 'hardware', form: 'rack', ru: 3, width: 'full', style: 'drawer', verified: true, groups: [], links: [] },
+  { id: 'drawer-4u', make: 'Generic', model: 'Rack drawer 4U', short: 'DRAWER', category: 'hardware', form: 'rack', ru: 4, width: 'full', style: 'drawer', verified: true, groups: [], links: [] },
+
+  // ---------------- off-rack locations ----------------
+  {
+    id: 'floor-pocket-6', make: 'Venue', model: 'Floor pocket (6 XLR)', short: 'FP', category: 'pocket',
+    form: 'pocket', ru: 1, width: 'half', verified: true,
+    ref: 'Six XLR inputs. The rear "Tie" jacks stand for the in-wall lines that run to a stage box.',
+    groups: [
+      G('in', 'In', 6, 'xlr', 'in', 'front', { src: true }),
+      G('tie', 'Tie', 6, 'xlr', 'out', 'rear'),
+    ],
+    links: [{ from: 'in', to: 'tie' }],
+  },
+];
+
+const CATEGORY_NAMES = {
+  stagebox: 'Stage boxes & I/O', wireless: 'Wireless', iem: 'In-ear monitors', console: 'Consoles',
+  processor: 'Processing', amp: 'Amplifiers', utility: 'Utility', network: 'Network', computer: 'Computers',
+  power: 'Power', patchbay: 'Patch bays', hardware: 'Panels, vents & drawers', pocket: 'Floor pockets & wall plates',
+  video: 'Video', lighting: 'Lighting', other: 'Other',
+};
+
+const CONN_NAMES = {
+  xlr: 'XLR', combo: 'XLR/TRS combo', trs: '1/4" TRS', headphone: 'Headphone', ethercon: 'etherCON', rj45: 'RJ45',
+  bnc: 'BNC', sfp: 'SFP', phoenix: 'Phoenix', speakon: 'speakON', iec: 'IEC', nema: 'NEMA 5-15', dc: 'DC',
+  powercon: 'powerCON', usb: 'USB', hdmi: 'HDMI', dmx5: 'DMX 5-pin', dmx3: 'DMX 3-pin',
+  dante: 'Dante channel', rf: 'Wireless channel', channel: 'Console channel',
+};
+
+const DEFAULT_CABLE_COLORS = [
+  { id: 'white', name: 'White', hex: '#f2f2f2', length: "3'" },
+  { id: 'yellow', name: 'Yellow', hex: '#f4d03f', length: "5'" },
+  { id: 'orange', name: 'Orange', hex: '#f08a24', length: "15'" },
+  { id: 'red', name: 'Red', hex: '#d64541', length: "25'" },
+  { id: 'purple', name: 'Purple', hex: '#8e5bd0', length: "50'" },
+];
+
+/* ------------------------------------------------------------------ */
+/* Sample project, built from the Sunday Nov 8 2026 patchlist          */
+/* ------------------------------------------------------------------ */
+function buildSample() {
+  const now = new Date().toISOString();
+  const p = {
+    schema: SCHEMA, name: 'Sanctuary', created: now, modified: now, sample: true,
+    library: JSON.parse(JSON.stringify(DEFAULT_LIBRARY)),
+    racks: [], locations: [], devices: [], connections: [], patches: [],
+    groups: [], columns: [{ id: 'col_stand', name: 'Stand' }],
+    cableColors: JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS)),
+    print: defaultPrint(), history: [],
+  };
+  const rack = (name, ru) => { const r = { id: uid('r'), name, ru }; p.racks.push(r); return r; };
+  const loc = (name) => { const l = { id: uid('l'), name }; p.locations.push(l); return l; };
+  const dev = (defId, name, short, place, extra = {}) => {
+    const d = { id: uid('d'), defId, name, short, place, portNames: {}, labels: {}, ...extra };
+    p.devices.push(d); return d;
+  };
+  const R = (r, u, side = 'full') => ({ type: 'rack', rackId: r.id, u, side });
+  const L = (l) => ({ type: 'loc', locId: l.id });
+  const con = (a, b, kind = 'cable', layer = 'rig', color = '') =>
+    p.connections.push({ id: uid('c'), a, b, kind, layer, color });
+  const ref = (d, g, n) => `${d.id}.${g}:${n}`;
+
+  // Racks (layouts are placeholders - move things to match the real racks)
+  const stA = rack('Stage Rack A', 8);
+  const stB = rack('Stage Rack B', 6);
+  const back = rack('Backstage', 4);
+  const rf = rack('RF / IEM', 8);
+  const amp = rack('Amp Rack', 7);
+
+  const rioA = dev('yamaha-rio3224-d2', 'Rio A', 'RIO A', R(stA, 1));
+  dev('luminex-gigacore30i', 'GigaCore 30i', 'GC30', R(stA, 6));
+  dev('vent-1u', 'Vent', 'VENT', R(stA, 7));
+  dev('cyberpower-or500lcdrm1u', 'UPS A', 'UPS A', R(stA, 8));
+
+  const rioB = dev('yamaha-rio3224-d2', 'Rio B', 'RIO B', R(stB, 1));
+  dev('blank-1u', 'Blank', 'BLANK', R(stB, 6));
+
+  const tio = dev('yamaha-tio1608-d', 'Tio', 'TIO', R(back, 1), {
+    labels: { in: { prefix: 'TIO', start: 1 } }, zone: 'Backstage', position: 'Tio',
+  });
+  dev('drawer-2u', 'Drawer', 'DRAWER', R(back, 3));
+
+  const ulx1 = dev('shure-ulxd4q', 'ULX-D4Q 1', 'ULXD1', R(rf, 1));
+  const ulx2 = dev('shure-ulxd4q', 'ULX-D4Q 2', 'ULXD2', R(rf, 2));
+  const psmA = dev('shure-psm900-p9t', 'PSM900 A', 'PSM9 A', R(rf, 3, 'L'));
+  const psmB = dev('shure-psm900-p9t', 'PSM900 B', 'PSM9 B', R(rf, 3, 'R'));
+  const psm3 = dev('shure-psm300-p3t', 'PSM300', 'PSM3', R(rf, 4, 'L'));
+  dev('blank-half-1u', 'Half blank', 'BLANK', R(rf, 4, 'R'));
+  const mac = dev('sonnet-rackmac-mini', 'Playback Mac', 'MAC', R(rf, 5));
+  dev('vent-1u', 'Vent', 'VENT', R(rf, 6));
+  dev('cyberpower-or500lcdrm1u', 'UPS RF', 'UPS RF', R(rf, 7));
+
+  const ahm = dev('ah-ahm32', 'AHM-32', 'AHM', R(amp, 1));
+  const amp1 = dev('generic-amp-2ch', 'Mains amp', 'AMP 1', R(amp, 2));
+  const amp2 = dev('generic-amp-2ch', 'Sub amp', 'AMP 2', R(amp, 4));
+  dev('cyberpower-or500lcdrm1u', 'UPS Amp', 'UPS AMP', R(amp, 6));
+
+  // Locations
+  const pockets = loc('Stage floor pockets');
+  const foh = loc('FOH');
+  const avantis = dev('ah-avantis', 'Avantis', 'AVANTIS', L(foh));
+
+  const pocketDefs = [
+    ['Down-stage', 'Stage Right', 7], ['Down-stage', 'Stage Center', 13], ['Down-stage', 'Stage Left', 19],
+    ['Mid-stage', 'Stage Right', 1], ['Mid-stage', 'Stage Left', 25],
+    ['Up-stage', 'Stage Right', 31], ['Up-stage', 'Stage Left', 37],
+  ];
+  const zoneShort = { 'Down-stage': 'DS', 'Mid-stage': 'MS', 'Up-stage': 'US' };
+  const posShort = { 'Stage Right': 'SR', 'Stage Center': 'SC', 'Stage Left': 'SL' };
+  const pocket = {};
+  for (const [zone, pos, start] of pocketDefs) {
+    const tag = `${zoneShort[zone]}-${posShort[pos]}`;
+    const d = dev('floor-pocket-6', `Pocket ${tag}`, `FP ${tag}`, L(pockets), {
+      zone, position: pos, labels: { in: { prefix: 'RIO', start }, tie: { prefix: 'Line', start } },
+    });
+    pocket[tag] = d;
+    // in-wall tie lines: line 1-32 -> Rio A in 1-32, line 33+ -> Rio B in 1+
+    for (let i = 1; i <= 6; i++) {
+      const line = start + i - 1;
+      con(ref(d, 'tie', i), line <= 32 ? ref(rioA, 'in', line) : ref(rioB, 'in', line - 32), 'tie');
+    }
+  }
+
+  // Wireless channel names
+  ['VOX 1', 'VOX 2', 'VOX 3', 'PRAYER MIC'].forEach((n, i) => { ulx1.portNames[`rf:${i + 1}`] = n; ulx1.portNames[`dtx:${i + 1}`] = n; });
+  ['PREACH MIC', 'HOST MIC'].forEach((n, i) => { ulx2.portNames[`rf:${i + 1}`] = n; ulx2.portNames[`dtx:${i + 1}`] = n; });
+  mac.portNames['dtx:1'] = 'PLAYBACK CLICK';
+  mac.portNames['dtx:2'] = 'PLAYBACK TRACKS';
+  avantis.portNames['dtx:1'] = 'MAIN L'; avantis.portNames['dtx:2'] = 'MAIN R'; avantis.portNames['dtx:3'] = 'SUB';
+
+  // Dante subscriptions (placeholder numbering - edit in the Dante tab)
+  const sub = (txDev, txN, rxDev, rxN) => con(ref(txDev, 'dtx', txN), ref(rxDev, 'drx', rxN), 'dante');
+  for (let i = 1; i <= 16; i++) sub(tio, i, avantis, i);
+  for (let i = 1; i <= 32; i++) sub(rioA, i, avantis, 16 + i);
+  for (let i = 1; i <= 8; i++) sub(rioB, i, avantis, 48 + i);
+  for (let i = 1; i <= 4; i++) sub(ulx1, i, avantis, 56 + i);
+  for (let i = 1; i <= 2; i++) sub(ulx2, i, avantis, 60 + i);
+  sub(mac, 1, avantis, 63); sub(mac, 2, avantis, 64);
+  for (let i = 1; i <= 3; i++) sub(avantis, i, ahm, i);
+
+  // Permanent cables
+  con(ref(ahm, 'out', 1), ref(amp1, 'in', 1), 'cable', 'rig', 'white');
+  con(ref(ahm, 'out', 2), ref(amp1, 'in', 2), 'cable', 'rig', 'white');
+  con(ref(ahm, 'out', 3), ref(amp2, 'in', 1), 'cable', 'rig', 'white');
+  con(ref(avantis, 'out', 1), ref(psmA, 'in', 1), 'cable', 'rig', 'purple');
+  con(ref(avantis, 'out', 2), ref(psmA, 'in', 2), 'cable', 'rig', 'purple');
+  con(ref(avantis, 'out', 3), ref(psmB, 'in', 1), 'cable', 'rig', 'purple');
+  con(ref(avantis, 'out', 4), ref(psm3, 'in', 1), 'cable', 'rig', 'purple');
+
+  // Instrument groups (row colours from the PDF)
+  const grp = (name, color) => { const g = { id: uid('g'), name, color }; p.groups.push(g); return g.id; };
+  const gDr = grp('Drums', '#cfdcff'), gBs = grp('Bass', '#e6d6fb'), gEl = grp('Electric', '#fbd1f1'),
+    gKy = grp('Keys', '#fdf3c2'), gAc = grp('Acoustic', '#fde6c8'), gVx = grp('Vocals', '#d3f6da'),
+    gPb = grp('Playback', '#e8e8e8'), gSp = grp('Spoken', '#fbdde1');
+
+  const src = (name, groupId, mic, ports, person, extra = {}) =>
+    ({ id: uid('s'), name, groupId, mic, ports, person, cable: '', notes: '', custom: {}, ...extra });
+  const fp = (tag, i) => ref(pocket[tag], 'in', i);
+
+  const patch = {
+    id: uid('p'), name: 'Sunday Service', event: 'Sunday Service', date: '2026-11-08',
+    sources: [
+      src('Kick Out', gDr, 'Beta 52', [ref(tio, 'in', 5)], 'Tyler'),
+      src('Kick In', gDr, 'Beta 91a', [ref(tio, 'in', 1)], 'Tyler'),
+      src('Snare Top', gDr, 'Beta 57a', [ref(tio, 'in', 2)], 'Tyler'),
+      src('Snare Bottom', gDr, 'SM 57', [ref(tio, 'in', 6)], 'Tyler'),
+      src('Tom 1', gDr, 'vBeat', [ref(tio, 'in', 3)], 'Tyler'),
+      src('Tom 2', gDr, 'vBeat', [ref(tio, 'in', 4)], 'Tyler'),
+      src('Overheads L+R', gDr, '451B', [ref(tio, 'in', 7), ref(tio, 'in', 8)], 'Tyler'),
+      src('Bass', gBs, 'SANSAMP', [fp('US-SR', 6)], 'Jacob'),
+      src('Electric 1', gEl, 'ProD2', [fp('US-SL', 1), fp('US-SL', 2)], 'Lori'),
+      src('Keys', gKy, 'Stereo JDI', [fp('DS-SL', 5), fp('DS-SL', 6)], 'Ramona'),
+      src('Acoustic 1', gAc, 'W/less + Session DI', [fp('DS-SR', 6)], 'Katie'),
+      src('Vox 1', gVx, 'ULX-D KSM11', [ref(ulx1, 'rf', 1)], 'Katie'),
+      src('Vox 2', gVx, 'ULX-D KSM11', [ref(ulx1, 'rf', 2)], 'Brian'),
+      src('Vox 3', gVx, 'ULX-D KSM11', [ref(ulx1, 'rf', 3)], 'Katya'),
+      src('Vox 4', gVx, 'ULX-D V7', [ref(ulx1, 'rf', 4)], 'Ramona'),
+      src('Click', gPb, 'Dante Direct', [ref(mac, 'dtx', 1)], 'Tyler'),
+      src('Tracks', gPb, 'Dante Direct', [ref(mac, 'dtx', 2)], 'Tyler'),
+      src('Preacher', gSp, 'ULX-D1 w/Headset', [ref(ulx2, 'rf', 1)], 'Phil'),
+      src('Service Host 1', gSp, 'ULX-D2 sE V7', [ref(ulx2, 'rf', 2)], 'Dave M'),
+    ],
+    outputs: [
+      { id: uid('o'), name: 'IEM - Drums', mix: 'Aux 1', port: ref(avantis, 'out', 1), person: 'Tyler', notes: '' },
+      { id: uid('o'), name: 'IEM - Bass', mix: 'Aux 2', port: ref(avantis, 'out', 2), person: 'Jacob', notes: '' },
+      { id: uid('o'), name: 'IEM - Vocals', mix: 'Aux 3', port: ref(avantis, 'out', 3), person: 'Katie', notes: '' },
+      { id: uid('o'), name: 'IEM - Keys', mix: 'Aux 4', port: ref(avantis, 'out', 4), person: 'Ramona', notes: '' },
+    ],
+  };
+  p.patches.push(patch);
+  return p;
+}
+
+function defaultPrint() {
+  return {
+    org: 'Peace Portal Church', logo: '', headerColor: '#3a5068', title: 'Sanctuary Patchlist',
+    preset: 'volunteer', fontSize: 11, orientation: 'portrait', colorMode: 'cells', mergePerson: true,
+    columns: [
+      { key: 'source', on: true }, { key: 'mic', on: true }, { key: 'input', on: true }, { key: 'person', on: true },
+      { key: 'consoleCh', on: false }, { key: 'cable', on: false }, { key: 'group', on: false },
+      { key: 'path', on: false }, { key: 'notes', on: false },
+    ],
+    include: { inputs: true, outputs: false, stageMap: true, pull: false },
+  };
+}
+
+/* =====================================================================
+   PatchRack - app logic
+   Sections: 1 utilities · 2 state & saving · 3 signal model · 4 checks
+             5 top bar · 6 rack view · 7 inspector · 8 patchlist
+             9 dante · 10 print · 11 library · 12 checks view
+             13 events · 14 start-up
+   ===================================================================== */
+
+/* ---------- 1. utilities ---------- */
+const SCHEMA = 1;
+const STORE_KEY = 'patchrack.project';
+const U = 48;      // pixels per rack unit
+const W = 520;     // pixels per 19" panel width
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = (p = 'x') => p + Math.random().toString(36).slice(2, 9);
+const push = (map, k, v) => { const a = map.get(k); a ? a.push(v) : map.set(k, [v]); };
+let inFrame = false;
+try { inFrame = window.top !== window.self; } catch { inFrame = true; }
+
+let toastTimer;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+}
+function download(name, text, mime = 'application/json') {
+  try {
+    const blob = new Blob([text], { type: mime });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  } catch { /* ignore */ }
+  if (inFrame) toast('Downloads are blocked in this preview. Use Copy instead, or open the app file on your Mac.', 5000);
+}
+async function copyText(text, what = 'Copied') {
+  try { await navigator.clipboard.writeText(text); toast(what); }
+  catch { openModal('Copy this text', `<textarea id="copy-area" readonly>${esc(text)}</textarea><p class="muted small">Select all, then copy.</p>`); }
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+/* ---------- 2. state & saving ---------- */
+let project;
+const ui = {
+  tab: 'rack', patchId: null, sel: null, faces: {}, showCables: true, showTies: false,
+  layer: 'patch', libSel: null, libQuery: '', addQuery: '', armed: null,
+};
+const undoStack = [], redoStack = [];
+
+function patch() { return project.patches.find((p) => p.id === ui.patchId) || project.patches[0]; }
+
+function migrate(p) {
+  // Every saved file carries a schema number. When the format changes,
+  // add a step here so older files keep opening.
+  if (!p.schema) p.schema = 1;
+  p.library ||= []; p.racks ||= []; p.locations ||= []; p.devices ||= []; p.connections ||= [];
+  p.patches ||= []; p.groups ||= []; p.columns ||= []; p.history ||= [];
+  p.cableColors ||= JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS));
+  p.print = { ...defaultPrint(), ...(p.print || {}) };
+  p.print.include = { ...defaultPrint().include, ...(p.print.include || {}) };
+  const have = new Set(p.library.map((d) => d.id));
+  for (const d of DEFAULT_LIBRARY) if (!have.has(d.id)) p.library.push(JSON.parse(JSON.stringify(d)));
+  if (!p.patches.length) p.patches.push(newPatch('Patch 1'));
+  for (const pt of p.patches) { pt.sources ||= []; pt.outputs ||= []; }
+  for (const d of p.devices) { d.portNames ||= {}; d.labels ||= {}; }
+  p.schema = SCHEMA;
+  return p;
+}
+function newPatch(name) {
+  return { id: uid('p'), name, event: name, date: new Date().toISOString().slice(0, 10), sources: [], outputs: [] };
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(project)); } catch { /* storage unavailable */ }
+}
+function load() {
+  let p = null;
+  try { const raw = localStorage.getItem(STORE_KEY); if (raw) p = JSON.parse(raw); } catch { p = null; }
+  project = migrate(p || buildSample());
+  fixUi();
+}
+function fixUi() {
+  if (!project.patches.some((p) => p.id === ui.patchId)) ui.patchId = project.patches[0]?.id;
+  ui.sel = null;
+}
+function commit(msg, fn, { quiet = false } = {}) {
+  undoStack.push(JSON.stringify(project)); if (undoStack.length > 80) undoStack.shift();
+  redoStack.length = 0;
+  fn(project);
+  if (msg) {
+    project.history.unshift({ t: new Date().toISOString(), msg, patch: patch()?.name || '' });
+    if (project.history.length > 500) project.history.length = 500;
+  }
+  project.modified = new Date().toISOString();
+  save();
+  if (!quiet) scheduleRender();
+}
+let renderPending = false;
+function scheduleRender() {
+  if (renderPending) return; renderPending = true;
+  setTimeout(() => { renderPending = false; render(); }, 0);
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(JSON.stringify(project)); project = JSON.parse(undoStack.pop());
+  if (!project.patches.some((p) => p.id === ui.patchId)) fixUi();
+  save(); render(); toast('Undone');
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(JSON.stringify(project)); project = JSON.parse(redoStack.pop());
+  if (!project.patches.some((p) => p.id === ui.patchId)) fixUi();
+  save(); render(); toast('Redone');
+}
+function replaceProject(p, msg) {
+  undoStack.push(JSON.stringify(project)); redoStack.length = 0;
+  project = migrate(p); ui.patchId = null; fixUi();
+  project.history.unshift({ t: new Date().toISOString(), msg, patch: '' });
+  save(); render(); toast(msg);
+}
+
+/* ---------- 3. signal model ---------- */
+let idx = {};
+const mkRef = (devId, gid, n) => `${devId}.${gid}:${n}`;
+function parseRef(ref) {
+  const m = /^([^.]+)\.([^:]+):(\d+)$/.exec(ref || '');
+  return m && { devId: m[1], gid: m[2], n: +m[3] };
+}
+function port(ref) {
+  const r = parseRef(ref); if (!r) return null;
+  const dev = idx.dev.get(r.devId); if (!dev) return null;
+  const def = idx.def.get(dev.defId); if (!def) return null;
+  const g = def.groups.find((x) => x.id === r.gid);
+  if (!g || r.n < 1 || r.n > g.count) return null;
+  return { ref, dev, def, g, n: r.n };
+}
+function portNum(p) {
+  const ov = p.dev.labels?.[p.g.id] || {};
+  if (p.g.names?.[p.n - 1]) return p.g.names[p.n - 1];
+  return String((+(ov.start ?? p.g.start ?? 1)) + p.n - 1);
+}
+function portParts(p) {
+  const custom = p.dev.portNames?.[`${p.g.id}:${p.n}`];
+  if (custom) return { custom };
+  const ov = p.dev.labels?.[p.g.id] || {};
+  return { prefix: ov.prefix ?? `${p.dev.short} ${p.g.label}`, num: portNum(p) };
+}
+function portLabel(ref) {
+  const p = port(ref); if (!p) return '(missing port)';
+  const x = portParts(p); return x.custom ?? `${x.prefix} ${x.num}`.trim();
+}
+function portShort(ref) {
+  const p = port(ref); if (!p) return '(missing port)';
+  const custom = p.dev.portNames?.[`${p.g.id}:${p.n}`];
+  const base = `${p.dev.short} ${p.g.label} ${p.g.names?.[p.n - 1] ?? ((p.g.start ?? 1) + p.n - 1)}`;
+  return custom ? `${base} “${custom}”` : base;
+}
+function portLong(ref) {
+  const p = port(ref); if (!p) return '(missing port)';
+  const custom = p.dev.portNames?.[`${p.g.id}:${p.n}`];
+  const base = `${p.dev.name} · ${p.g.label} ${p.g.names?.[p.n - 1] ?? ((p.g.start ?? 1) + p.n - 1)}`;
+  return custom ? `${base} “${custom}”` : base;
+}
+function stereoLabel(refs) {
+  refs = (refs || []).filter(Boolean);
+  if (!refs.length) return '';
+  if (refs.length === 1) return portLabel(refs[0]);
+  const a = port(refs[0]), b = port(refs[1]);
+  if (a && b) {
+    const pa = portParts(a), pb = portParts(b);
+    if (!pa.custom && !pb.custom && pa.prefix === pb.prefix) return `${pa.prefix} ${pa.num}/${pb.num}`;
+  }
+  return refs.map(portLabel).join(' + ');
+}
+const isPhysical = (g) => g.face === 'front' || g.face === 'rear';
+
+function buildIndex() {
+  idx = {
+    dev: new Map(project.devices.map((d) => [d.id, d])),
+    def: new Map(project.library.map((d) => [d.id, d])),
+    out: new Map(), in: new Map(), cables: new Map(), active: [], broken: [],
+    srcAt: new Map(), mark: new Map(), outMark: new Map(),
+  };
+  const pid = patch()?.id;
+  for (const c of project.connections) {
+    if (c.layer !== 'rig' && c.layer !== pid) continue;
+    if (!port(c.a) || !port(c.b)) { idx.broken.push(c); continue; }
+    idx.active.push(c); push(idx.out, c.a, c); push(idx.in, c.b, c);
+    if (c.kind !== 'dante') {
+      idx.cables.set(c.a, (idx.cables.get(c.a) || 0) + 1);
+      idx.cables.set(c.b, (idx.cables.get(c.b) || 0) + 1);
+    }
+  }
+  const pt = patch();
+  for (const s of pt.sources) for (const r of s.ports || []) {
+    if (!r) continue;
+    push(idx.srcAt, r, s);
+    for (const x of traceTree(r).parent.keys()) if (!idx.mark.has(x)) idx.mark.set(x, s);
+  }
+  for (const o of pt.outputs) if (o.port) for (const x of traceTree(o.port).parent.keys()) if (!idx.outMark.has(x)) idx.outMark.set(x, o);
+}
+
+// where does the signal at `ref` go next?
+function next(ref) {
+  const p = port(ref); if (!p) return [];
+  const res = [];
+  for (const c of idx.out.get(ref) || []) {
+    const b = port(c.b); if (!b) continue;
+    if (p.g.dir === 'io' || b.g.dir === 'io') continue;   // network links aren't audio paths
+    res.push(c.b);
+  }
+  for (const L of p.def.links || []) {
+    if (L.from !== p.g.id) continue;
+    const fs = L.fromStart || 1, ts = L.toStart || 1, cnt = L.count ?? 1e9;
+    if (p.n < fs || p.n >= fs + cnt) continue;
+    const tn = ts + (p.n - fs);
+    const tg = p.def.groups.find((g) => g.id === L.to);
+    if (tg && tn >= 1 && tn <= tg.count) res.push(mkRef(p.dev.id, L.to, tn));
+  }
+  const pb = p.def.patchbay;
+  if (pb) {
+    const mode = p.dev.normalling?.[p.n] || pb.mode || 'half';
+    const used = (g) => (idx.cables.get(mkRef(p.dev.id, g, p.n)) || 0) > 0;
+    if (p.g.id === pb.rt) {
+      if (used(pb.ft)) res.push(mkRef(p.dev.id, pb.ft, p.n));
+      const normalled = mode === 'normal' ? !used(pb.ft) && !used(pb.fb) : mode === 'half' ? !used(pb.fb) : false;
+      if (normalled) res.push(mkRef(p.dev.id, pb.rb, p.n));
+    }
+    if (p.g.id === pb.fb) res.push(mkRef(p.dev.id, pb.rb, p.n));
+  }
+  return res;
+}
+// where did the signal at `ref` come from?
+function prev(ref) {
+  const p = port(ref); if (!p) return [];
+  const res = [];
+  for (const c of idx.in.get(ref) || []) {
+    const a = port(c.a); if (!a) continue;
+    if (p.g.dir === 'io' || a.g.dir === 'io') continue;
+    res.push(c.a);
+  }
+  for (const L of p.def.links || []) {
+    if (L.to !== p.g.id) continue;
+    const fs = L.fromStart || 1, ts = L.toStart || 1, cnt = L.count ?? 1e9;
+    const fn = fs + (p.n - ts);
+    if (fn < fs || fn >= fs + cnt) continue;
+    const fg = p.def.groups.find((g) => g.id === L.from);
+    if (fg && fn >= 1 && fn <= fg.count) res.push(mkRef(p.dev.id, L.from, fn));
+  }
+  const pb = p.def.patchbay;
+  if (pb) {
+    const mode = p.dev.normalling?.[p.n] || pb.mode || 'half';
+    const used = (g) => (idx.cables.get(mkRef(p.dev.id, g, p.n)) || 0) > 0;
+    if (p.g.id === pb.ft) res.push(mkRef(p.dev.id, pb.rt, p.n));
+    if (p.g.id === pb.rb) {
+      if (used(pb.fb)) res.push(mkRef(p.dev.id, pb.fb, p.n));
+      const normalled = mode === 'normal' ? !used(pb.ft) && !used(pb.fb) : mode === 'half' ? !used(pb.fb) : false;
+      if (normalled) res.push(mkRef(p.dev.id, pb.rt, p.n));
+    }
+  }
+  return res;
+}
+function traceTree(start, step = next) {
+  const parent = new Map([[start, null]]); const q = [start]; const ends = [];
+  while (q.length) {
+    const r = q.shift();
+    const nx = step(r).filter((x) => !parent.has(x));
+    if (!nx.length) ends.push(r);
+    for (const x of nx) { parent.set(x, r); q.push(x); }
+    if (parent.size > 3000) break;
+  }
+  return { parent, ends };
+}
+function pathTo(tree, end) { const out = []; for (let r = end; r; r = tree.parent.get(r)) out.unshift(r); return out; }
+function consoleChannels(start) {
+  return [...traceTree(start).parent.keys()].filter((r) => port(r)?.g.conn === 'channel');
+}
+function chLabel(ref) {
+  const p = port(ref); if (!p) return '';
+  const consoles = project.devices.filter((d) => idx.def.get(d.defId)?.groups.some((g) => g.conn === 'channel')).length;
+  return `${consoles > 1 ? p.dev.short + ' ' : ''}Ch ${portNum(p)}`;
+}
+function sourceChannels(s) {
+  const out = [];
+  for (const r of s.ports || []) if (r && port(r)) out.push(...consoleChannels(r));
+  return out;
+}
+function sourcePaths(s) {
+  const paths = [];
+  for (const r of s.ports || []) {
+    if (!r || !port(r)) continue;
+    const t = traceTree(r);
+    const ends = t.ends.length ? t.ends : [r];
+    const pref = ends.filter((e) => port(e)?.g.conn === 'channel');
+    for (const e of (pref.length ? pref : ends).slice(0, 2)) paths.push(pathTo(t, e));
+  }
+  return paths;
+}
+
+const COMPAT = {
+  xlr: ['xlr', 'combo', 'dmx5'], combo: ['xlr', 'trs', 'combo'], trs: ['trs', 'combo', 'headphone'],
+  headphone: ['trs', 'headphone'], ethercon: ['ethercon', 'rj45'], rj45: ['rj45', 'ethercon'],
+  iec: ['iec', 'nema'], nema: ['nema', 'iec'],
+};
+const compatible = (a, b) => a === b || (COMPAT[a] || []).includes(b);
+
+/* ---------- 4. checks ---------- */
+function runChecks() {
+  const out = [];
+  const add = (sev, msg, sel) => out.push({ sev, msg, sel });
+  const pt = patch();
+  if (idx.broken.length) add('warn', `${idx.broken.length} cable(s) point at ports that no longer exist (the gear was changed or removed). Delete them from the Rig, or undo the gear change.`, null);
+  for (const [ref, n] of idx.cables) if (n > 1) add('error', `${portLong(ref)} has ${n} cables in one jack.`, { kind: 'port', ref });
+  for (const [ref, list] of idx.in) {
+    const d = list.filter((c) => c.kind === 'dante');
+    if (d.length > 1) add('error', `Dante receiver ${portLong(ref)} is subscribed ${d.length} times. A receive channel can only take one.`, { kind: 'port', ref });
+  }
+  for (const c of idx.active) {
+    if (c.kind === 'dante') continue;
+    const a = port(c.a), b = port(c.b);
+    if (a.g.dir === b.g.dir && a.g.dir !== 'io') add('error', `${portLong(c.a)} is cabled to ${portLong(c.b)}: that joins two ${a.g.dir === 'in' ? 'inputs' : 'outputs'}.`, { kind: 'conn', id: c.id });
+    else if (!compatible(a.g.conn, b.g.conn)) add('info', `${portLong(c.a)} (${CONN_NAMES[a.g.conn] || a.g.conn}) to ${portLong(c.b)} (${CONN_NAMES[b.g.conn] || b.g.conn}) needs an adapter or a different cable.`, { kind: 'conn', id: c.id });
+  }
+  const chUse = new Map();
+  for (const s of pt.sources) {
+    const nm = s.name || 'Untitled source';
+    const ports = (s.ports || []).filter(Boolean);
+    if (!ports.length) { add('warn', `“${nm}” has no stage input yet.`, { kind: 'source', id: s.id }); continue; }
+    for (const r of ports) {
+      const p = port(r);
+      if (!p) { add('warn', `“${nm}” is assigned to a port that no longer exists.`, { kind: 'source', id: s.id }); continue; }
+      if (p.g.dir === 'out' && p.g.conn !== 'dante') add('error', `“${nm}” is assigned to an output (${portLong(r)}).`, { kind: 'source', id: s.id });
+      const at = idx.srcAt.get(r) || [];
+      if (at.length > 1 && at[0] === s) add('error', `${portLabel(r)} has ${at.length} sources: ${at.map((x) => '“' + (x.name || '?') + '”').join(', ')}.`, { kind: 'port', ref: r });
+      const chs = consoleChannels(r);
+      if (!chs.length) add('warn', `“${nm}” (${portLabel(r)}) doesn't reach a console channel. Check the cable or Dante route after ${portShort(traceTree(r).ends[0] || r)}.`, { kind: 'source', id: s.id });
+      for (const ch of chs) push(chUse, ch, s);
+    }
+  }
+  for (const [ch, list] of chUse) {
+    const uniq = [...new Set(list)];
+    if (uniq.length > 1) add('error', `${portLong(ch)} receives ${uniq.map((s) => '“' + s.name + '”').join(' and ')}.`, { kind: 'port', ref: ch });
+  }
+  const order = { error: 0, warn: 1, info: 2 };
+  return out.sort((a, b) => order[a.sev] - order[b.sev]);
+}
+
+/* ---------- 5. top bar & render ---------- */
+let checks = [];
+function render() {
+  renderPending = false;
+  const focusId = document.activeElement?.closest?.('#main') ? document.activeElement.id : null;
+  const keep = $$('[data-keep-scroll]').map((el) => [el.id, el.scrollLeft, el.scrollTop]);
+  buildIndex();
+  checks = runChecks();
+  renderTop();
+  const main = $('#main');
+  const views = { rack: rackView, list: listView, dante: danteView, print: printView, library: libraryView, checks: checksView };
+  main.innerHTML = (views[ui.tab] || rackView)();
+  for (const [id, x, y] of keep) { const el = document.getElementById(id); if (el) { el.scrollLeft = x; el.scrollTop = y; } }
+  for (const s of $$('select[data-val]')) s.value = s.dataset.val;
+  if (focusId) { const f = document.getElementById(focusId); if (f) { f.focus({ preventScroll: true }); if (f.select && f.type === 'text') f.select(); } }
+  if (ui.tab === 'rack') requestAnimationFrame(drawCables);
+}
+function renderTop() {
+  const pn = $('#proj-name'); if (document.activeElement !== pn) pn.value = project.name || '';
+  $('#patch-select').innerHTML = project.patches.map((p) => `<option value="${p.id}" ${p.id === ui.patchId ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  for (const b of $$('#tabs button')) b.classList.toggle('on', b.dataset.tab === ui.tab);
+  const errs = checks.filter((c) => c.sev === 'error').length, warns = checks.filter((c) => c.sev === 'warn').length;
+  const badge = $('#checks-badge');
+  badge.textContent = errs || warns || '✓';
+  badge.className = 'badge ' + (errs ? '' : warns ? 'warn' : 'zero');
+  $('#btn-undo').disabled = !undoStack.length; $('#btn-redo').disabled = !redoStack.length;
+}
+
+/* ---------- 6. rack view ---------- */
+const PITCH = { xlr: 26, combo: 26, dmx5: 26, dmx3: 26, ethercon: 24, rj45: 19, trs: 18, headphone: 18, bnc: 17, sfp: 19, phoenix: 13, iec: 28, nema: 28, dc: 16, speakon: 28, powercon: 28, usb: 15, hdmi: 20 };
+const layoutCache = new Map();
+function layoutFace(def, face, w, h) {
+  const key = `${def.id}|${face}|${w}|${h}|${JSON.stringify(def.groups.map((g) => [g.id, g.label, g.count, g.conn, g.face, g.rows]))}`;
+  if (layoutCache.has(key)) return layoutCache.get(key);
+  const gs = def.groups.filter((g) => g.face === face);
+  let best = null;
+  for (let s = 1; s >= 0.3; s -= 0.06) {
+    const pad = 14, top = 14; let x = pad, y = top, bandH = 0, maxR = 0;
+    const ports = [], labels = [];
+    for (const g of gs) {
+      const p = (PITCH[g.conn] || 20) * s;
+      const lab = g.nolabel ? 0 : 10 * Math.max(s, 0.7);
+      const maxRows = Math.max(1, Math.floor((h - top - lab - 2) / p));
+      let rows = g.rows || (g.count <= 12 ? 1 : g.count <= 24 ? 2 : 4);
+      rows = Math.max(1, Math.min(rows, maxRows, g.count));
+      const cols = Math.ceil(g.count / rows);
+      const bw = cols * p, bh = rows * p + lab;
+      if (x + bw > w - pad && x > pad) { x = pad; y += bandH + 3; bandH = 0; }
+      if (!g.nolabel) labels.push({ x, y, text: g.label, s });
+      for (let i = 0; i < g.count; i++) {
+        const r = Math.floor(i / cols), c = i % cols;
+        ports.push({ gid: g.id, n: i + 1, x: x + c * p, y: y + lab + r * p, p, conn: g.conn, dir: g.dir });
+      }
+      x += bw + 12 * s; bandH = Math.max(bandH, bh); maxR = Math.max(maxR, x - 12 * s);
+    }
+    best = { ports, labels, s };
+    if (y + bandH <= h - 1 && maxR <= w - pad + 2) break;
+  }
+  layoutCache.set(key, best);
+  return best;
+}
+function portShape(conn, p) {
+  const d = p * 0.68;
+  if (conn === 'phoenix') return { w: p * 0.62, h: p * 0.5 };
+  if (conn === 'iec' || conn === 'nema') return { w: p * 0.7, h: p * 0.52 };
+  if (conn === 'rj45' || conn === 'sfp') return { w: p * 0.66, h: p * 0.56 };
+  return { w: d, h: d };
+}
+
+function occupancy(rack) {
+  const occ = {}; for (let u = 1; u <= rack.ru; u++) occ[u] = { L: null, R: null };
+  for (const d of project.devices) {
+    if (d.place?.type !== 'rack' || d.place.rackId !== rack.id) continue;
+    const def = idx.def.get(d.defId); const ru = def?.ru || 1;
+    for (let u = d.place.u; u < d.place.u + ru; u++) {
+      if (!occ[u]) continue;
+      if (d.place.side === 'full') { occ[u].L = d.id; occ[u].R = d.id; } else occ[u][d.place.side] = d.id;
+    }
+  }
+  return occ;
+}
+function canPlace(rack, u, ru, side, ignoreId) {
+  if (u < 1 || u + ru - 1 > rack.ru) return false;
+  const occ = occupancy(rack);
+  for (let x = u; x < u + ru; x++) {
+    const o = occ[x]; const L = o.L === ignoreId ? null : o.L, R = o.R === ignoreId ? null : o.R;
+    if (side === 'full' && (L || R)) return false;
+    if (side === 'L' && L) return false;
+    if (side === 'R' && R) return false;
+  }
+  return true;
+}
+
+function rackView() {
+  const pt = patch();
+  const layerBtn = (v, t) => `<button data-act="layer" data-layer="${v}" class="${ui.layer === v ? 'on' : ''}">${t}</button>`;
+  return `<section class="view">
+    ${project.sample ? `<div class="note"><span><b>Sample rig built from your Nov 8 patchlist.</b> The inputs match your PDF. Rack layouts, the pocket-to-Rio tie lines and the Dante numbering are placeholders, so move gear and fix routes to match the real thing. Gear marked <span class="pill unv">unverified</span> needs checking against the manual.</span><button data-act="dismissSample">Got it</button></div>` : ''}
+    <div class="toolbar">
+      <label class="tog"><input type="checkbox" id="tg-cables" data-chg="showCables" ${ui.showCables ? 'checked' : ''}> Show cables</label>
+      <label class="tog"><input type="checkbox" id="tg-ties" data-chg="showTies" ${ui.showTies ? 'checked' : ''}> Show in-wall tie lines</label>
+      <div class="seg"><span>New cables go in</span>${layerBtn('patch', esc(pt.name))}${layerBtn('rig', 'The rig (permanent)')}</div>
+      <span class="spacer"></span>
+      <button data-act="addRack">+ Rack</button><button data-act="addLoc">+ Location</button>
+    </div>
+    <div class="legend"><span><i style="--ring:var(--ring-in)"></i>Input</span><span><i style="--ring:var(--ring-out)"></i>Output</span><span><i style="--ring:var(--ring-io)"></i>Network / two-way</span><span>Filled jack = source colour · white dot = cable plugged in · drag from one jack to another to patch</span></div>
+    <div class="rack-split">
+      <div class="stage" id="stage" data-keep-scroll>
+        <div class="stage-inner" id="stage-inner">
+          ${project.racks.map(rackHTML).join('')}
+          <div class="locs">${project.locations.map(locHTML).join('')}</div>
+          <svg class="cables" id="cables"></svg>
+        </div>
+      </div>
+      <aside class="inspector" id="inspector">${inspectorHTML()}</aside>
+    </div>
+  </section>`;
+}
+function faceBtn(id) {
+  const f = ui.faces[id] || 'front';
+  return `<button class="face-btn" data-act="flip" data-id="${id}" title="Show the other side">${f === 'front' ? 'Front' : 'Rear'} ⇄</button>`;
+}
+function rackHTML(rack) {
+  const face = ui.faces[rack.id] || 'front';
+  const occ = occupancy(rack);
+  const H = rack.ru * U;
+  const selSlot = ui.sel?.kind === 'slot' && ui.sel.rackId === rack.id ? ui.sel : null;
+  let slots = '', rail = '';
+  for (let u = 1; u <= rack.ru; u++) {
+    const top = (u - 1) * U;
+    rail += `<span style="top:${top + U / 2 - 4}px">${u}</span><i style="top:${top + 6}px"></i><i style="top:${top + U - 11}px"></i>`;
+    const o = occ[u];
+    const slot = (side) => {
+      const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
+      const w = side === 'full' ? W : W / 2;
+      const on = selSlot && selSlot.u === u && selSlot.side === side;
+      return `<div class="slot ${on ? 'sel' : ''}" data-act="slot" data-rack="${rack.id}" data-u="${u}" data-side="${side}" style="top:${top}px;left:${left}px;width:${w}px;height:${U}px">+ add gear at U${u}${side === 'full' ? '' : ' ' + (side === 'L' ? 'left' : 'right')}</div>`;
+    };
+    if (!o.L && !o.R) slots += slot('full');
+    else { if (!o.L) slots += slot('L'); if (!o.R) slots += slot('R'); }
+  }
+  const devs = project.devices.filter((d) => d.place?.type === 'rack' && d.place.rackId === rack.id).map((d) => {
+    const def = idx.def.get(d.defId); if (!def) return '';
+    const side = d.place.side || 'full';
+    const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
+    return devHTML(d, def, face, { top: (d.place.u - 1) * U, left, w: side === 'full' ? W : W / 2, h: def.ru * U, cls: side === 'full' ? '' : 'half-' + side });
+  }).join('');
+  const sel = ui.sel?.kind === 'rack' && ui.sel.id === rack.id;
+  return `<div class="rack">
+    <div class="rack-head"><button class="rack-title" data-act="selRack" data-id="${rack.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(rack.name)}</button><span class="muted small mono">${rack.ru}U</span>${faceBtn(rack.id)}</div>
+    <div class="rack-body">
+      <div class="rail" style="height:${H}px">${rail}</div>
+      <div class="rack-bay" style="width:${W}px;height:${H}px">${slots}${devs}</div>
+      <div class="rail" style="height:${H}px">${rail}</div>
+    </div>
+  </div>`;
+}
+function locHTML(loc) {
+  const face = ui.faces[loc.id] || 'front';
+  const devs = project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === loc.id);
+  const body = devs.map((d) => {
+    const def = idx.def.get(d.defId); if (!def) return '';
+    const w = def.width === 'half' ? W / 2 - 5 : W;
+    return devHTML(d, def, face, { w, h: (def.ru || 1) * U, cls: 'free', free: true });
+  }).join('');
+  const sel = ui.sel?.kind === 'loc' && ui.sel.id === loc.id;
+  return `<div class="loc">
+    <div class="loc-head"><button class="rack-title" data-act="selLoc" data-id="${loc.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(loc.name)}</button>${faceBtn(loc.id)}<button class="face-btn" data-act="locAdd" data-id="${loc.id}">+ Gear</button></div>
+    <div class="loc-body">${body || '<span class="loc-empty">Nothing here yet. Use “+ Gear”.</span>'}</div>
+  </div>`;
+}
+function devHTML(d, def, face, box) {
+  const lay = layoutFace(def, face, box.w, box.h);
+  const selDev = ui.sel?.kind === 'device' && ui.sel.id === d.id;
+  const hl = highlightSet();
+  const sub = d.zone ? `${d.zone} · ${d.position || ''}` : `${def.make} ${def.model}`;
+  let html = `<div class="dev ${box.cls || ''} ${def.style ? 'st-' + def.style : ''} ${selDev ? 'sel' : ''}" data-dev="${d.id}" style="${box.free ? '' : `top:${box.top}px;left:${box.left}px;`}width:${box.w}px;height:${box.h}px">`;
+  html += `<div class="dev-label" data-act="selDev" data-id="${d.id}" title="${esc(def.make + ' ' + def.model)}"><b>${esc(d.name)}</b> <em>${esc(sub)}</em>${def.verified ? '' : '<span class="unv">· unverified</span>'}</div>`;
+  if (!lay.ports.length && !def.style) html += `<div class="dev-empty">No connectors on the ${face}</div>`;
+  if (def.style === 'drawer') html += `<div class="dev-empty"></div>`;
+  for (const l of lay.labels) html += `<div class="grp-label" style="left:${l.x}px;top:${l.y}px;font-size:${Math.max(7, 8.5 * l.s)}px">${esc(l.text)}</div>`;
+  for (const pp of lay.ports) {
+    const ref = mkRef(d.id, pp.gid, pp.n);
+    const sh = portShape(pp.conn, pp.p);
+    const x = pp.x + (pp.p - sh.w) / 2, y = pp.y + (pp.p * 0.72 - sh.h) / 2;
+    const src = idx.mark.get(ref);
+    const grp = src && project.groups.find((g) => g.id === src.groupId);
+    const fill = grp ? `--fill:${grp.color};` : idx.outMark.get(ref) ? '--fill:#5b6f86;' : '';
+    const cls = ['port', 'c-' + pp.conn, 'd-' + pp.dir];
+    if (idx.cables.get(ref)) cls.push('plugged');
+    if (ui.sel?.kind === 'port' && ui.sel.ref === ref) cls.push('sel');
+    else if (hl.has(ref)) cls.push('hl');
+    const p = port(ref);
+    const num = p ? portNum(p) : pp.n;
+    const tip = [portLong(ref), src ? `Source: ${src.name}` : '', ...(idx.out.get(ref) || []).concat(idx.in.get(ref) || []).filter((c) => c.kind !== 'dante').map((c) => '↔ ' + portLong(c.a === ref ? c.b : c.a))].filter(Boolean).join('\n');
+    html += `<div class="${cls.join(' ')}" data-ref="${ref}" title="${esc(tip)}" style="${fill}left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${sh.w.toFixed(1)}px;height:${sh.h.toFixed(1)}px"></div>`;
+    if (lay.s > 0.45) html += `<div class="pn" style="left:${pp.x.toFixed(1)}px;width:${pp.p.toFixed(1)}px;top:${(pp.y + pp.p * 0.72).toFixed(1)}px;font-size:${Math.max(6.5, 8 * lay.s).toFixed(1)}px">${esc(num)}</div>`;
+  }
+  return html + '</div>';
+}
+let hlCache = null;
+function highlightSet() {
+  if (hlCache && hlCache.key === JSON.stringify(ui.sel) + project.modified + ui.patchId) return hlCache.set;
+  const set = new Set();
+  const addRef = (r) => { for (const x of traceTree(r).parent.keys()) set.add(x); for (const x of traceTree(r, prev).parent.keys()) set.add(x); };
+  if (ui.sel?.kind === 'port') addRef(ui.sel.ref);
+  if (ui.sel?.kind === 'source') { const s = patch().sources.find((x) => x.id === ui.sel.id); for (const r of s?.ports || []) if (r && port(r)) for (const x of traceTree(r).parent.keys()) set.add(x); }
+  if (ui.sel?.kind === 'output') { const o = patch().outputs.find((x) => x.id === ui.sel.id); if (o?.port && port(o.port)) addRef(o.port); }
+  if (ui.sel?.kind === 'conn') { const c = project.connections.find((x) => x.id === ui.sel.id); if (c) { set.add(c.a); set.add(c.b); } }
+  hlCache = { key: JSON.stringify(ui.sel) + project.modified + ui.patchId, set };
+  return set;
+}
+
+function drawCables() {
+  const svg = $('#cables'), inner = $('#stage-inner'); if (!svg || !inner) return;
+  svg.setAttribute('width', inner.scrollWidth); svg.setAttribute('height', inner.scrollHeight);
+  if (!ui.showCables) { svg.innerHTML = ''; return; }
+  const box = inner.getBoundingClientRect();
+  const pos = new Map();
+  for (const el of $$('.port', inner)) {
+    const r = el.getBoundingClientRect();
+    pos.set(el.dataset.ref, [r.left - box.left + r.width / 2, r.top - box.top + r.height / 2]);
+  }
+  let html = '';
+  const selConn = ui.sel?.kind === 'conn' ? ui.sel.id : null;
+  for (const c of idx.active) {
+    if (c.kind === 'dante') continue;
+    if (c.kind === 'tie' && !ui.showTies) continue;
+    const proxy = (r) => pos.get(r) || (c.kind === 'tie' ? [...prev(r), ...next(r)].filter((x) => parseRef(x).devId === parseRef(r).devId).map((x) => pos.get(x)).find(Boolean) : null);
+    const a = proxy(c.a), b = proxy(c.b); if (!a || !b) continue;
+    const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const sag = Math.min(140, 24 + dist * 0.22);
+    const d = `M${a[0]},${a[1]} C${a[0]},${a[1] + sag} ${b[0]},${b[1] + sag} ${b[0]},${b[1]}`;
+    const col = project.cableColors.find((x) => x.id === c.color)?.hex || (c.kind === 'tie' ? '#7b8590' : c.layer === 'rig' ? '#9fb3c8' : '#e07bd0');
+    const dash = c.kind === 'tie' ? 'stroke-dasharray="3 4"' : c.layer !== 'rig' ? '' : '';
+    const sel = c.id === selConn;
+    html += `<path d="${d}" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="${sel ? 7 : 5}" stroke-linecap="round"/>`;
+    html += `<path d="${d}" fill="none" stroke="${sel ? '#f2a900' : col}" stroke-width="${sel ? 4 : 2.6}" stroke-linecap="round" ${dash}/>`;
+    html += `<path class="hit" data-conn="${c.id}" d="${d}" fill="none" stroke="transparent" stroke-width="12"><title>${esc(portLong(c.a) + ' → ' + portLong(c.b))}</title></path>`;
+  }
+  html += `<path id="cable-temp" fill="none" stroke="#6fbf8e" stroke-width="3" stroke-dasharray="6 4" d=""/>`;
+  svg.innerHTML = html;
+}
+
+// drag-to-patch
+let drag = null;
+function onPointerDown(e) {
+  const el = e.target.closest('.port'); if (!el || e.button > 0 || !el.closest('#stage-inner')) return;
+  e.preventDefault();
+  const inner = $('#stage-inner').getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  drag = { from: el.dataset.ref, x0: e.clientX, y0: e.clientY, moved: false, ax: r.left - inner.left + r.width / 2, ay: r.top - inner.top + r.height / 2 };
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp, { once: true });
+}
+function onPointerMove(e) {
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+  drag.moved = true;
+  const inner = $('#stage-inner').getBoundingClientRect();
+  const x = e.clientX - inner.left, y = e.clientY - inner.top;
+  const t = $('#cable-temp');
+  if (t) t.setAttribute('d', `M${drag.ax},${drag.ay} C${drag.ax},${drag.ay + 60} ${x},${y + 60} ${x},${y}`);
+  for (const p of $$('.port.drop')) p.classList.remove('drop');
+  const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.port');
+  if (over && over.dataset.ref !== drag.from) over.classList.add('drop');
+}
+function onPointerUp(e) {
+  window.removeEventListener('pointermove', onPointerMove);
+  const d = drag; drag = null; if (!d) return;
+  if (!d.moved) { select({ kind: 'port', ref: d.from }); return; }
+  const t = $('#cable-temp'); if (t) t.setAttribute('d', '');
+  const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.port');
+  if (over && over.dataset.ref !== d.from) connect(d.from, over.dataset.ref);
+}
+function connect(a, b, kind = 'cable') {
+  let pa = port(a), pb = port(b); if (!pa || !pb) return;
+  if ((pa.g.dir === 'in' && pb.g.dir !== 'in') || (pb.g.dir === 'out' && pa.g.dir !== 'out')) { [a, b] = [b, a]; [pa, pb] = [pb, pa]; }
+  if (idx.active.some((c) => (c.a === a && c.b === b) || (c.a === b && c.b === a))) { toast('Those two jacks are already connected.'); return; }
+  const layer = ui.layer === 'rig' ? 'rig' : patch().id;
+  const id = uid('c');
+  commit(`Cabled ${portLong(a)} → ${portLong(b)}${layer === 'rig' ? ' (rig)' : ''}`, (p) => p.connections.push({ id, a, b, kind, layer, color: '' }), { quiet: true });
+  ui.sel = { kind: 'conn', id };
+  render();
+  const mine = checks.filter((c) => c.sev !== 'info' && c.sel && ((c.sel.kind === 'conn' && c.sel.id === id) || (c.sel.kind === 'port' && (c.sel.ref === a || c.sel.ref === b))));
+  if (mine.length) toast('⚠ ' + mine[0].msg, 5000); else toast(`Patched ${portLabel(a)} → ${portLabel(b)}`);
+}
+function select(sel) { ui.sel = sel; ui.addQuery = ''; render(); }
+
+/* ---------- 7. inspector ---------- */
+function confirmBtn(act, label, attrs = '') {
+  const armed = ui.armed === act + attrs;
+  return `<button class="danger ${armed ? 'armed' : ''}" data-act="${armed ? act : 'arm'}" data-arm="${esc(act + attrs)}" ${attrs}>${armed ? 'Click again to confirm' : label}</button>`;
+}
+function inspectorHTML() {
+  const s = ui.sel;
+  if (!s) return inspectorHome();
+  if (s.kind === 'slot') return addGearHTML(`Add gear to ${esc(project.racks.find((r) => r.id === s.rackId)?.name)} at U${s.u}`, s);
+  if (s.kind === 'locAdd') return addGearHTML(`Add gear to ${esc(project.locations.find((l) => l.id === s.id)?.name)}`, s);
+  if (s.kind === 'device') return deviceInspector(idx.dev.get(s.id));
+  if (s.kind === 'port') return portInspector(s.ref);
+  if (s.kind === 'conn') return connInspector(project.connections.find((c) => c.id === s.id));
+  if (s.kind === 'rack') return rackInspector(project.racks.find((r) => r.id === s.id));
+  if (s.kind === 'loc') return locInspector(project.locations.find((l) => l.id === s.id));
+  if (s.kind === 'source') return sourceInspector(patch().sources.find((x) => x.id === s.id));
+  if (s.kind === 'output') return outputInspector(patch().outputs.find((x) => x.id === s.id));
+  return inspectorHome();
+}
+function inspectorHome() {
+  const errs = checks.filter((c) => c.sev !== 'info').slice(0, 4);
+  return `<div class="eyebrow">How it works</div>
+  <ul class="small" style="margin:0;padding-left:18px;display:grid;gap:4px">
+    <li><b>Drag</b> from one jack to another to run a cable.</li>
+    <li><b>Click a jack</b> to see what's plugged in and trace the signal to the console.</li>
+    <li><b>Click a gear name</b> to rename, move or relabel it.</li>
+    <li><b>Click an empty rack space</b> to install gear. Half-rack gear can sit side by side.</li>
+    <li><b>Front/Rear</b> flips a rack. Half-rack items swap sides, just like walking around the back.</li>
+    <li>Cables go in <b>this patch</b> or <b>the rig</b>. Rig cables stay in every patch.</li>
+  </ul>
+  <div class="eyebrow">Checks</div>
+  ${errs.length ? errs.map(checkHTML).join('') + (checks.length > 4 ? `<button data-act="tab" data-tab="checks">See all ${checks.length}</button>` : '') : '<p class="small muted" style="margin:0">No problems found in this patch.</p>'}`;
+}
+function addGearHTML(title, s) {
+  const q = ui.addQuery.toLowerCase();
+  let defs = project.library.filter((d) => !q || `${d.make} ${d.model} ${d.category}`.toLowerCase().includes(q));
+  let fits = (d) => true;
+  if (s.kind === 'slot') {
+    const rack = project.racks.find((r) => r.id === s.rackId);
+    defs = defs.filter((d) => d.form === 'rack');
+    fits = (d) => s.side === 'full'
+      ? canPlace(rack, s.u, d.ru, d.width === 'half' ? 'L' : 'full')
+      : d.width === 'half' && canPlace(rack, s.u, d.ru, s.side);
+  } else defs.sort((a, b) => (a.form === 'rack') - (b.form === 'rack'));
+  const byCat = new Map();
+  for (const d of defs) push(byCat, d.category || 'other', d);
+  let list = '';
+  for (const [cat, ds] of byCat) {
+    list += `<div class="eyebrow" style="margin-top:6px">${esc(CATEGORY_NAMES[cat] || cat)}</div><div class="list">`;
+    for (const d of ds) {
+      const ok = fits(d);
+      list += `<button data-act="install" data-def="${d.id}" ${ok ? '' : 'disabled title="Does not fit here"'}><span>${esc(d.make)} ${esc(d.model)}</span><small>${d.form === 'rack' ? `${d.ru}U${d.width === 'half' ? ' ½' : ''}` : d.form}</small></button>`;
+    }
+    list += '</div>';
+  }
+  return `<h3>${title}</h3>
+    <input id="add-q" data-inp="addQuery" placeholder="Search gear…" value="${esc(ui.addQuery)}">
+    <div id="add-list">${list || '<p class="muted small">No matching gear. Add it in the Library tab.</p>'}</div>
+    <button data-act="newGearFromAdd">+ Define new gear…</button>`;
+}
+function deviceInspector(d) {
+  if (!d) return inspectorHome();
+  const def = idx.def.get(d.defId);
+  const containers = [...project.racks.map((r) => `<option value="r:${r.id}">Rack: ${esc(r.name)}</option>`), ...project.locations.map((l) => `<option value="l:${l.id}">Location: ${esc(l.name)}</option>`)].join('');
+  const cur = d.place.type === 'rack' ? 'r:' + d.place.rackId : 'l:' + d.place.locId;
+  const srcGroups = def.groups.filter((g) => g.src || g.id === 'tie');
+  const labelRows = srcGroups.filter(isPhysical).map((g) => {
+    const ov = d.labels?.[g.id] || {};
+    return `<div class="row"><label>${esc(g.label)} label</label><div class="inline-fields" style="gap:4px;flex-wrap:nowrap"><input id="lp-${g.id}" style="width:90px" placeholder="${esc(d.short + ' ' + g.label)}" value="${esc(ov.prefix ?? '')}" data-chg="devLabel" data-g="${g.id}" data-f="prefix"><input id="ls-${g.id}" type="number" style="width:64px" placeholder="1" value="${esc(ov.start ?? '')}" data-chg="devLabel" data-g="${g.id}" data-f="start"></div></div>`;
+  }).join('');
+  let pb = '';
+  if (def.patchbay) {
+    const n = def.groups.find((g) => g.id === def.patchbay.rt)?.count || 0;
+    pb = `<div class="eyebrow">Normalling per point</div><div class="tbl-wrap"><table class="grid"><tr><th>Pt</th><th>Mode</th></tr>${Array.from({ length: n }, (_, i) => `<tr><td class="num">${i + 1}</td><td><select id="nm-${i + 1}" data-chg="normal" data-n="${i + 1}" data-val="${d.normalling?.[i + 1] || def.patchbay.mode || 'half'}"><option value="normal">Full normal</option><option value="half">Half normal</option><option value="thru">Isolated (no normal)</option></select></td></tr>`).join('')}</table></div>`;
+  }
+  return `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${def.form === 'rack' ? def.ru + 'U' + (def.width === 'half' ? ' half-width' : '') : def.form}</div>
+    <h3>${esc(d.name)}</h3> ${def.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified gear definition</span>'}</div>
+    <div class="row"><label for="dv-name">Name</label><input id="dv-name" value="${esc(d.name)}" data-chg="devField" data-f="name"></div>
+    <div class="row"><label for="dv-short">Short label</label><input id="dv-short" value="${esc(d.short)}" data-chg="devField" data-f="short"></div>
+    <div class="row"><label for="dv-where">Where</label><select id="dv-where" data-chg="devMove" data-val="${cur}">${containers}</select></div>
+    ${d.place.type === 'rack' ? `<div class="row"><label for="dv-u">Top U</label><div class="inline-fields" style="gap:4px;flex-wrap:nowrap"><input id="dv-u" type="number" min="1" style="width:70px" value="${d.place.u}" data-chg="devU">${def.width === 'half' ? `<select id="dv-side" data-chg="devSide" data-val="${d.place.side}"><option value="L">Left half</option><option value="R">Right half</option></select>` : ''}</div></div>` : ''}
+    ${def.category === 'pocket' || d.zone ? `<div class="row"><label for="dv-zone">Stage zone</label><input id="dv-zone" value="${esc(d.zone || '')}" placeholder="Down-stage" data-chg="devField" data-f="zone"></div><div class="row"><label for="dv-pos">Position</label><input id="dv-pos" value="${esc(d.position || '')}" placeholder="Stage Right" data-chg="devField" data-f="position"></div>` : `<div class="row"><label for="dv-zone">Stage zone</label><input id="dv-zone" value="" placeholder="optional, for the stage map" data-chg="devField" data-f="zone"></div>`}
+    ${labelRows ? `<div class="eyebrow">Jack labels</div><p class="small muted" style="margin:0">What volunteers see printed. For example, prefix “RIO” and start 31 makes these jacks RIO 31–36.</p>${labelRows}` : ''}
+    ${pb}
+    ${def.ref ? `<p class="small muted" style="margin:0">${esc(def.ref)}</p>` : ''}
+    <div class="toolbar"><button data-act="dupDev" data-id="${d.id}">Duplicate</button><button data-act="editDef" data-def="${def.id}">Edit gear definition</button>${confirmBtn('delDev', 'Remove', `data-id="${d.id}"`)}</div>`;
+}
+function traceHTML(paths) {
+  if (!paths.length) return '<p class="small muted" style="margin:0">Nothing connected.</p>';
+  return paths.map((pth) => `<div class="path">${pth.map((r, i) => {
+    const p = port(r); const ch = p?.g.conn === 'channel';
+    return `${i ? '<span class="arrow">→</span>' : ''}<span class="chip ${ch ? 'ch' : ''}" data-act="selPort" data-ref="${r}" style="cursor:pointer">${esc(ch ? (p.dev.short + ' Ch ' + portNum(p)) : portShort(r))}</span>`;
+  }).join('')}</div>`).join('');
+}
+function portInspector(ref) {
+  const p = port(ref); if (!p) return inspectorHome();
+  const conns = project.connections.filter((c) => (c.a === ref || c.b === ref) && (c.layer === 'rig' || c.layer === patch().id));
+  const srcs = idx.srcAt.get(ref) || [];
+  const fw = traceTree(ref), bw = traceTree(ref, prev);
+  const fpaths = fw.ends.filter((e) => e !== ref).slice(0, 4).map((e) => pathTo(fw, e));
+  const bpaths = bw.ends.filter((e) => e !== ref).slice(0, 3).map((e) => pathTo(bw, e).reverse());
+  const key = `${p.g.id}:${p.n}`;
+  const canSrc = p.g.dir === 'in' || p.g.conn === 'dante';
+  const srcOpts = patch().sources.map((s) => `<option value="${s.id}">${esc(s.name || 'Untitled')}${(s.ports || []).some(Boolean) ? ' · ' + esc(stereoLabel(s.ports)) : ''}</option>`).join('');
+  return `<div><div class="eyebrow">${esc(p.dev.name)} · ${esc(CONN_NAMES[p.g.conn] || p.g.conn)} ${p.g.dir === 'in' ? 'input' : p.g.dir === 'out' ? 'output' : 'two-way'}</div>
+    <h3>${esc(portLabel(ref))}</h3><div class="small muted">${esc(portLong(ref))}</div></div>
+    <div class="row"><label for="pt-name">Custom name</label><input id="pt-name" value="${esc(p.dev.portNames?.[key] || '')}" placeholder="e.g. PREACH MIC" data-chg="portName" data-ref="${ref}"></div>
+    ${canSrc ? `<div class="eyebrow">Source plugged in here</div>
+      ${srcs.length ? srcs.map((s) => `<div class="chips"><span class="chip"><span class="sw" style="background:${project.groups.find((g) => g.id === s.groupId)?.color || '#ccc'}"></span>${esc(s.name)}</span><span class="small muted">${esc(s.mic || '')}</span><button data-act="unassign" data-src="${s.id}" data-ref="${ref}" style="padding:1px 6px">Remove</button></div>`).join('') : '<p class="small muted" style="margin:0">None in this patch.</p>'}
+      <div class="inline-fields" style="gap:4px"><select id="pt-assign" style="flex:1"><option value="">Assign a source…</option>${srcOpts}</select><button data-act="assign" data-ref="${ref}">Assign</button></div>
+      <button data-act="newSrcHere" data-ref="${ref}">+ New source on this jack</button>` : ''}
+    <div class="eyebrow">Cables</div>
+    ${conns.length ? conns.map((c) => `<div class="chips"><span class="pill ${c.layer === 'rig' ? 'rig' : 'patch'}">${c.kind === 'dante' ? 'Dante' : c.kind === 'tie' ? 'Tie line' : c.layer === 'rig' ? 'Rig' : 'Patch'}</span><span class="chip" data-act="selConn" data-id="${c.id}" style="cursor:pointer">${c.a === ref ? '→' : '←'} ${esc(portLong(c.a === ref ? c.b : c.a))}</span></div>`).join('') : '<p class="small muted" style="margin:0">Nothing plugged in.</p>'}
+    <div class="eyebrow">Signal comes from</div>${traceHTML(bpaths)}
+    <div class="eyebrow">Signal goes to</div>${traceHTML(fpaths)}`;
+}
+function connInspector(c) {
+  if (!c) return inspectorHome();
+  const colors = project.cableColors.map((x) => `<option value="${x.id}">${esc(x.name)}${x.length ? ' · ' + esc(x.length) : ''}</option>`).join('');
+  return `<div><div class="eyebrow">${c.kind === 'dante' ? 'Dante subscription' : c.kind === 'tie' ? 'In-wall tie line' : 'Cable'}</div>
+    <h3>${esc(portLabel(c.a))} → ${esc(portLabel(c.b))}</h3></div>
+    <dl class="kv"><dt>From</dt><dd><a href="#" data-act="selPort" data-ref="${c.a}">${esc(portLong(c.a))}</a></dd><dt>To</dt><dd><a href="#" data-act="selPort" data-ref="${c.b}">${esc(portLong(c.b))}</a></dd></dl>
+    ${c.kind === 'cable' ? `<div class="row"><label for="cn-col">Cable</label><select id="cn-col" data-chg="connColor" data-id="${c.id}" data-val="${c.color || ''}"><option value="">Not set</option>${colors}</select></div>` : ''}
+    <div class="row"><label for="cn-layer">Belongs to</label><select id="cn-layer" data-chg="connLayer" data-id="${c.id}" data-val="${c.layer === 'rig' ? 'rig' : 'patch'}"><option value="patch">${esc(patch().name)} only</option><option value="rig">The rig (every patch)</option></select></div>
+    <div class="toolbar">${confirmBtn('delConn', 'Remove cable', `data-id="${c.id}"`)}</div>`;
+}
+function rackInspector(r) {
+  if (!r) return inspectorHome();
+  const n = project.devices.filter((d) => d.place?.type === 'rack' && d.place.rackId === r.id).length;
+  return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3>
+    <div class="row"><label for="rk-name">Name</label><input id="rk-name" value="${esc(r.name)}" data-chg="rackField" data-f="name" data-id="${r.id}"></div>
+    <div class="row"><label for="rk-ru">Size (U)</label><input id="rk-ru" type="number" min="1" max="60" value="${r.ru}" data-chg="rackField" data-f="ru" data-id="${r.id}"></div>
+    <div class="toolbar">${confirmBtn('delRack', n ? `Delete rack and its ${n} items` : 'Delete rack', `data-id="${r.id}"`)}</div>`;
+}
+function locInspector(l) {
+  if (!l) return inspectorHome();
+  const n = project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === l.id).length;
+  return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3>
+    <p class="small muted" style="margin:0">Locations hold gear that isn't in a rack: floor pockets, wall plates, the console, a stage-box on a shelf.</p>
+    <div class="row"><label for="lc-name">Name</label><input id="lc-name" value="${esc(l.name)}" data-chg="locField" data-id="${l.id}"></div>
+    <div class="toolbar"><button data-act="locAdd" data-id="${l.id}">+ Gear</button>${confirmBtn('delLoc', n ? `Delete location and its ${n} items` : 'Delete location', `data-id="${l.id}"`)}</div>`;
+}
+function sourceInspector(s) {
+  if (!s) return inspectorHome();
+  const g = project.groups.find((x) => x.id === s.groupId);
+  return `<div class="eyebrow">Source · ${esc(g?.name || 'No group')}</div><h3>${esc(s.name)}</h3>
+    <dl class="kv"><dt>Mic/DI</dt><dd>${esc(s.mic)}</dd><dt>Stage input</dt><dd>${esc(stereoLabel(s.ports)) || '—'}</dd><dt>Person</dt><dd>${esc(s.person)}</dd><dt>Console</dt><dd>${esc(sourceChannels(s).map(chLabel).join(', ') || '—')}</dd></dl>
+    <div class="eyebrow">Signal path</div>${traceHTML(sourcePaths(s))}
+    <button data-act="tab" data-tab="list">Edit in patchlist</button>`;
+}
+function outputInspector(o) {
+  if (!o) return inspectorHome();
+  const t = o.port && port(o.port) ? traceTree(o.port) : null;
+  return `<div class="eyebrow">Output</div><h3>${esc(o.name)}</h3>
+    <dl class="kv"><dt>Mix</dt><dd>${esc(o.mix)}</dd><dt>Leaves on</dt><dd>${esc(o.port ? portLong(o.port) : '—')}</dd><dt>Person</dt><dd>${esc(o.person)}</dd></dl>
+    <div class="eyebrow">Signal goes to</div>${t ? traceHTML(t.ends.filter((e) => e !== o.port).map((e) => pathTo(t, e))) : ''}
+    <button data-act="tab" data-tab="list">Edit in patchlist</button>`;
+}
+
+/* ---------- 8. patchlist ---------- */
+const BUILTIN_COLS = {
+  group: 'Group', source: 'Source', mic: 'Mic/DI', input: 'Stage Input(s)', person: 'Person',
+  cable: 'Cable', consoleCh: 'Console Ch', path: 'Signal path', notes: 'Notes',
+};
+function sourcePortOptions() {
+  let html = '<option value="">—</option>';
+  const devs = [...project.devices].sort((a, b) => (a.place.type === 'loc' ? 0 : 1) - (b.place.type === 'loc' ? 0 : 1));
+  for (const d of devs) {
+    const def = idx.def.get(d.defId); if (!def) continue;
+    const gs = def.groups.filter((g) => g.src); if (!gs.length) continue;
+    html += `<optgroup label="${esc(d.name)}">`;
+    for (const g of gs) for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); html += `<option value="${r}">${esc(portLabel(r))}</option>`; }
+    html += '</optgroup>';
+  }
+  return html;
+}
+function outputPortOptions() {
+  let html = '<option value="">—</option>';
+  for (const d of project.devices) {
+    const def = idx.def.get(d.defId); if (!def || !['console', 'processor'].includes(def.category)) continue;
+    const gs = def.groups.filter((g) => g.dir === 'out' && isPhysical(g) && !['iec', 'nema', 'dc'].includes(g.conn)); if (!gs.length) continue;
+    html += `<optgroup label="${esc(d.name)}">`;
+    for (const g of gs) for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); html += `<option value="${r}">${esc(portShort(r))}</option>`; }
+    html += '</optgroup>';
+  }
+  return html;
+}
+function listView() {
+  const pt = patch();
+  const portOpts = sourcePortOptions();
+  const grpOpts = '<option value="">—</option>' + project.groups.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  const colOpts = '<option value="">—</option>' + project.cableColors.map((c) => `<option value="${c.id}">${esc(c.name)}${c.length ? ' ' + esc(c.length) : ''}</option>`).join('');
+  const cust = project.columns;
+  const rows = pt.sources.map((s, i) => {
+    const g = project.groups.find((x) => x.id === s.groupId);
+    const st = (s.ports || []).length > 1;
+    const chs = sourceChannels(s);
+    const sel = ui.sel?.kind === 'source' && ui.sel.id === s.id;
+    return `<tr class="${sel ? 'sel' : ''}">
+      <td class="num">${i + 1}</td>
+      <td><div class="grpcell"><span class="sw" style="background:${g?.color || 'transparent'}"></span><select id="sg-${s.id}" data-chg="src" data-id="${s.id}" data-f="groupId" data-val="${s.groupId || ''}">${grpOpts}</select></div></td>
+      <td><input id="sn-${s.id}" value="${esc(s.name)}" data-chg="src" data-id="${s.id}" data-f="name" style="min-width:120px"></td>
+      <td><input id="sm-${s.id}" value="${esc(s.mic)}" data-chg="src" data-id="${s.id}" data-f="mic" style="min-width:110px"></td>
+      <td><div class="inputcell"><select id="sp0-${s.id}" data-chg="srcPort" data-id="${s.id}" data-i="0" data-val="${s.ports?.[0] || ''}">${portOpts}</select>${st ? `<select id="sp1-${s.id}" data-chg="srcPort" data-id="${s.id}" data-i="1" data-val="${s.ports?.[1] || ''}">${portOpts}</select>` : ''}<button class="st-tog ${st ? 'on' : ''}" data-act="stereo" data-id="${s.id}" title="Stereo (two inputs)">ST</button></div></td>
+      <td><input id="spn-${s.id}" value="${esc(s.person)}" data-chg="src" data-id="${s.id}" data-f="person" style="min-width:80px"></td>
+      <td><select id="sc-${s.id}" data-chg="src" data-id="${s.id}" data-f="cable" data-val="${s.cable || ''}">${colOpts}</select></td>
+      ${cust.map((c) => `<td><input id="cu-${c.id}-${s.id}" value="${esc(s.custom?.[c.id] || '')}" data-chg="srcCustom" data-id="${s.id}" data-c="${c.id}" style="min-width:80px"></td>`).join('')}
+      <td class="comp" title="Worked out from the cables and Dante routes">${chs.length ? esc(chs.map(chLabel).join(', ')) : '<span style="color:var(--warn)">none</span>'}</td>
+      <td><input id="snt-${s.id}" value="${esc(s.notes)}" data-chg="src" data-id="${s.id}" data-f="notes" style="min-width:100px"></td>
+      <td><div class="rowbtns"><button data-act="showSrc" data-id="${s.id}" title="Trace in rack">Trace</button><button data-act="moveSrc" data-id="${s.id}" data-d="-1" title="Move up">↑</button><button data-act="moveSrc" data-id="${s.id}" data-d="1" title="Move down">↓</button>${confirmBtn('delSrc', '✕', `data-id="${s.id}"`)}</div></td>
+    </tr>`;
+  }).join('');
+  const outOpts = outputPortOptions();
+  const orows = pt.outputs.map((o, i) => {
+    const goes = o.port && port(o.port) ? next(o.port).map(portShort).join(', ') : '';
+    return `<tr><td class="num">${i + 1}</td>
+      <td><input id="on-${o.id}" value="${esc(o.name)}" data-chg="out" data-id="${o.id}" data-f="name"></td>
+      <td><input id="om-${o.id}" value="${esc(o.mix)}" data-chg="out" data-id="${o.id}" data-f="mix" style="min-width:70px"></td>
+      <td><select id="op-${o.id}" data-chg="out" data-id="${o.id}" data-f="port" data-val="${o.port || ''}">${outOpts}</select></td>
+      <td class="comp">${esc(goes) || '<span class="muted">—</span>'}</td>
+      <td><input id="opn-${o.id}" value="${esc(o.person)}" data-chg="out" data-id="${o.id}" data-f="person"></td>
+      <td><input id="ont-${o.id}" value="${esc(o.notes)}" data-chg="out" data-id="${o.id}" data-f="notes"></td>
+      <td><div class="rowbtns"><button data-act="showOut" data-id="${o.id}">Trace</button><button data-act="moveOut" data-id="${o.id}" data-d="-1">↑</button><button data-act="moveOut" data-id="${o.id}" data-d="1">↓</button>${confirmBtn('delOut', '✕', `data-id="${o.id}"`)}</div></td></tr>`;
+  }).join('');
+  return `<section class="view">
+    <div class="card"><div class="card-head"><h2>${esc(pt.name)}</h2><span class="spacer"></span><button data-act="dupPatch">Save a copy as new patch</button><button data-act="newPatch">New empty patch</button>${project.patches.length > 1 ? confirmBtn('delPatch', 'Delete this patch') : ''}</div>
+      <div class="inline-fields">
+        <label class="field"><span>Patch name</span><input id="pt-nm" value="${esc(pt.name)}" data-chg="patchField" data-f="name"></label>
+        <label class="field"><span>Event</span><input id="pt-ev" value="${esc(pt.event)}" data-chg="patchField" data-f="event"></label>
+        <label class="field"><span>Date</span><input id="pt-dt" type="date" value="${esc(pt.date)}" data-chg="patchField" data-f="date"></label>
+      </div>
+      <p class="small muted" style="margin:0">Templates: keep a patch called “Template – Full Band” and use “Save a copy as new patch” each week, then fine-tune.</p>
+    </div>
+    <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources · Console Ch is worked out from your cables and Dante routes</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Stage input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>
+    <div class="card"><div class="card-head"><h3>Outputs</h3><span class="muted small">Monitor mixes, mains, stream feeds…</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Leaves on</th><th>Goes to</th><th>Person</th><th>Notes</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="8" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
+    </div>
+    <div class="editor-grid">
+      <div class="card"><div class="card-head"><h3>Groups &amp; row colours</h3><span class="spacer"></span><button data-act="addGroup">+ Group</button></div>
+        ${project.groups.map((g) => `<div class="inline-fields" style="gap:6px;align-items:center"><input type="color" id="gc-${g.id}" value="${esc(g.color)}" data-chg="groupField" data-id="${g.id}" data-f="color"><input id="gn-${g.id}" value="${esc(g.name)}" data-chg="groupField" data-id="${g.id}" data-f="name" style="flex:1">${confirmBtn('delGroup', '✕', `data-id="${g.id}"`)}</div>`).join('')}
+      </div>
+      <div class="card"><div class="card-head"><h3>Custom columns</h3><span class="spacer"></span><button data-act="addCol">+ Column</button></div>
+        ${cust.length ? cust.map((c) => `<div class="inline-fields" style="gap:6px;align-items:center"><input id="cn-${c.id}" value="${esc(c.name)}" data-chg="colName" data-id="${c.id}" style="flex:1">${confirmBtn('delCol', '✕', `data-id="${c.id}"`)}</div>`).join('') : '<p class="muted small" style="margin:0">None yet.</p>'}
+      </div>
+      <div class="card"><div class="card-head"><h3>Cable colours</h3><span class="spacer"></span><button data-act="addCableColor">+ Colour</button></div>
+        ${project.cableColors.map((c) => `<div class="inline-fields" style="gap:6px;align-items:center;flex-wrap:nowrap"><input type="color" id="cc-${c.id}" value="${esc(c.hex)}" data-chg="ccField" data-id="${c.id}" data-f="hex"><input id="ccn-${c.id}" value="${esc(c.name)}" data-chg="ccField" data-id="${c.id}" data-f="name" style="flex:1;min-width:0"><input id="ccl-${c.id}" value="${esc(c.length)}" data-chg="ccField" data-id="${c.id}" data-f="length" style="width:60px" placeholder="length">${confirmBtn('delCC', '✕', `data-id="${c.id}"`)}</div>`).join('')}
+      </div>
+    </div>
+  </section>`;
+}
+
+/* ---------- 9. dante ---------- */
+function danteView() {
+  const txDevs = [], rxDevs = [];
+  for (const d of project.devices) {
+    const def = idx.def.get(d.defId); if (!def) continue;
+    const tx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'out');
+    const rx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in');
+    if (tx) txDevs.push([d, tx]); if (rx) rxDevs.push([d, rx]);
+  }
+  const subOf = (ref) => (idx.in.get(ref) || []).filter((c) => c.kind === 'dante');
+  const layerBtn = (v, t) => `<button data-act="layer" data-layer="${v}" class="${ui.layer === v ? 'on' : ''}">${t}</button>`;
+  const rxHTML = rxDevs.map(([d, g]) => {
+    let used = 0;
+    const rows = Array.from({ length: g.count }, (_, i) => {
+      const r = mkRef(d.id, g.id, i + 1); const subs = subOf(r); if (subs.length) used++;
+      const src = idx.mark.get(r);
+      const editing = ui.danteEdit === r;
+      const cell = editing
+        ? `<select id="dsel" data-chg="danteSub" data-ref="${r}" data-val="${subs[0]?.a || ''}">${danteTxOptions(txDevs)}</select>`
+        : `<button class="dsub ${subs.length ? 'set' : ''}" data-act="danteEdit" data-ref="${r}">${subs.length ? subs.map((c) => esc(portShort(c.a))).join(' + ') : '—'}</button>`;
+      return `<tr><td class="num">${i + 1}</td><td><input id="dn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}"></td><td>${cell}</td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
+    }).join('');
+    return `<details class="dgrp card" ${ui.danteOpen?.[d.id] ?? (g.count <= 64) ? 'open' : ''} data-dev="${d.id}"><summary>${esc(d.name)} <span class="muted small">· receives ${used}/${g.count}</span></summary>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th>Rx</th><th>Channel name</th><th>Subscribed to</th><th>Source</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  }).join('');
+  const txHTML = txDevs.map(([d, g]) => `<details class="dgrp card"><summary>${esc(d.name)} <span class="muted small">· ${g.count} transmit channels</span></summary>
+    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Tx</th><th>Channel name</th><th>Source</th></tr></thead><tbody>${Array.from({ length: g.count }, (_, i) => {
+      const r = mkRef(d.id, g.id, i + 1); const src = idx.mark.get(r);
+      return `<tr><td class="num">${i + 1}</td><td><input id="tn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}"></td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
+    }).join('')}</tbody></table></div></details>`).join('');
+  return `<section class="view">
+    <div class="card"><div class="card-head"><h2>Dante routing</h2><span class="spacer"></span><div class="seg"><span>Changes go in</span>${layerBtn('patch', esc(patch().name))}${layerBtn('rig', 'The rig (permanent)')}</div></div>
+      <p class="small muted" style="margin:0">Click a “Subscribed to” cell to choose which transmitter feeds that receive channel. The signal trace and Console Ch columns follow these routes. Importing and exporting Dante Controller preset files is planned for a later phase.</p></div>
+    <h3>Receivers</h3>${rxHTML}
+    <h3>Transmitters</h3>${txHTML}
+  </section>`;
+}
+let txOptCache = null;
+function danteTxOptions(txDevs) {
+  let html = '<option value="">— none —</option>';
+  for (const [d, g] of txDevs) {
+    html += `<optgroup label="${esc(d.name)}">`;
+    for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); const nm = d.portNames?.[`${g.id}:${n}`]; html += `<option value="${r}">${esc(d.short)} ${n}${nm ? ' · ' + esc(nm) : ''}</option>`; }
+    html += '</optgroup>';
+  }
+  return html;
+}
+
+/* ---------- 10. print ---------- */
+function colLabel(key) {
+  if (key.startsWith('custom:')) return project.columns.find((c) => 'custom:' + c.id === key)?.name || '';
+  return BUILTIN_COLS[key] || key;
+}
+function printColumns() {
+  const pr = project.print;
+  const keys = new Set(pr.columns.map((c) => c.key));
+  for (const c of project.columns) if (!keys.has('custom:' + c.id)) pr.columns.push({ key: 'custom:' + c.id, on: false });
+  pr.columns = pr.columns.filter((c) => !c.key.startsWith('custom:') || project.columns.some((x) => 'custom:' + x.id === c.key));
+  return pr.columns;
+}
+function cellValue(s, key) {
+  switch (key) {
+    case 'group': return project.groups.find((g) => g.id === s.groupId)?.name || '';
+    case 'source': return s.name;
+    case 'mic': return s.mic;
+    case 'input': return stereoLabel(s.ports);
+    case 'person': return s.person;
+    case 'cable': { const c = project.cableColors.find((x) => x.id === s.cable); return c ? `${c.name}${c.length ? ' ' + c.length : ''}` : ''; }
+    case 'consoleCh': return sourceChannels(s).map(chLabel).join(', ');
+    case 'path': return sourcePaths(s).map((p) => p.map((r) => { const pp = port(r); return pp?.g.conn === 'channel' ? 'Ch ' + portNum(pp) : portShort(r); }).join(' → ')).join(' | ');
+    case 'notes': return s.notes;
+    default: if (key.startsWith('custom:')) return s.custom?.[key.slice(7)] || ''; return '';
+  }
+}
+function paperHTML() {
+  const pr = project.print, pt = patch();
+  const cols = printColumns().filter((c) => c.on).map((c) => c.key);
+  const hc = pr.headerColor || '#3a5068';
+  let body = '';
+  if (pr.include.inputs && cols.length) {
+    const srcs = pt.sources;
+    const span = new Map();
+    if (pr.mergePerson && cols.includes('person')) {
+      for (let i = 0; i < srcs.length;) {
+        let j = i + 1; while (j < srcs.length && srcs[i].person && srcs[j].person === srcs[i].person && srcs[j].groupId === srcs[i].groupId) j++;
+        span.set(i, j - i); for (let k = i + 1; k < j; k++) span.set(k, 0); i = j;
+      }
+    }
+    const colored = (k) => pr.colorMode === 'row' || (pr.colorMode === 'cells' && (k === 'source' || k === 'mic' || k === 'group'));
+    body += `<table><thead><tr>${cols.map((k) => `<th style="background:${esc(hc)}">${esc(colLabel(k))}</th>`).join('')}</tr></thead><tbody>`;
+    srcs.forEach((s, i) => {
+      const bg = project.groups.find((g) => g.id === s.groupId)?.color || '';
+      body += '<tr>' + cols.map((k) => {
+        if (k === 'person' && span.has(i)) { const n = span.get(i); if (!n) return ''; return `<td class="c" rowspan="${n}">${esc(s.person)}</td>`; }
+        const center = k === 'person' || k === 'consoleCh' || k === 'cable';
+        let v = esc(cellValue(s, k));
+        if (k === 'cable' && s.cable) { const c = project.cableColors.find((x) => x.id === s.cable); if (c) v = `<span style="display:inline-block;width:10px;height:10px;border:1px solid #333;background:${esc(c.hex)};vertical-align:-1px;margin-right:4px"></span>${v}`; }
+        return `<td class="${center ? 'c' : ''}" style="${bg && colored(k) ? `background:${esc(bg)}` : ''}">${v}</td>`;
+      }).join('') + '</tr>';
+    });
+    body += '</tbody></table>';
+  }
+  if (pr.include.outputs && pt.outputs.length) {
+    body += `<h4>Outputs</h4><table><thead><tr>${['Output', 'Mix', 'Leaves on', 'Goes to', 'Person'].map((h) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>`;
+    for (const o of pt.outputs) {
+      const goes = o.port && port(o.port) ? next(o.port).map(portShort).join(', ') : '';
+      body += `<tr><td>${esc(o.name)}</td><td class="c">${esc(o.mix)}</td><td>${esc(o.port ? portShort(o.port) : '')}</td><td>${esc(goes)}</td><td class="c">${esc(o.person)}</td></tr>`;
+    }
+    body += '</tbody></table>';
+  }
+  if (pr.include.stageMap) {
+    const zones = new Map();
+    for (const d of project.devices) {
+      if (!d.zone) continue;
+      const def = idx.def.get(d.defId); const g = def?.groups.find((x) => x.src && isPhysical(x)); if (!g) continue;
+      const a = port(mkRef(d.id, g.id, 1)), b = port(mkRef(d.id, g.id, g.count));
+      push(zones, d.zone, `${d.position || d.name}: ${portNum(a)}-${portNum(b)}`);
+    }
+    if (zones.size) {
+      body += `<div class="map"><h4>Stage Box’s Inputs:</h4>`;
+      const rank = (z) => /down/i.test(z) ? 0 : /mid/i.test(z) ? 1 : /up/i.test(z) ? 2 : 3;
+      for (const [z, items] of [...zones].sort((a, b) => rank(a[0]) - rank(b[0]))) body += `<p>${esc(z)}:</p><p class="ind">${esc(items.join(', '))}</p>`;
+      body += '</div>';
+    }
+  }
+  if (pr.include.pull) {
+    const mics = new Map(), cables = new Map();
+    for (const s of pt.sources) {
+      const n = (s.ports || []).filter(Boolean).length > 1 && /L\s*[+/&]\s*R/i.test(s.name + ' ' + s.mic) ? 2 : 1;
+      for (const part of (s.mic || '').split(/\s*\+\s*/)) {
+        const k = part.trim(); if (!k || /dante|direct/i.test(k)) continue;
+        mics.set(k, (mics.get(k) || 0) + n);
+      }
+      if (s.cable) cables.set(s.cable, (cables.get(s.cable) || 0) + Math.max(1, (s.ports || []).filter(Boolean).length));
+    }
+    body += `<h4>Equipment needed</h4><div class="pull">${[...mics].map(([k, n]) => `<div>${n} × ${esc(k)}</div>`).join('')}${[...cables].map(([k, n]) => { const c = project.cableColors.find((x) => x.id === k); return `<div>${n} × ${esc(c?.name || k)} cable${c?.length ? ' (' + esc(c.length) + ')' : ''}</div>`; }).join('')}</div>
+      <p class="pnote">Stereo rows count as two mics only when the name says L+R.</p>`;
+  }
+  return `<div class="paper ${pr.orientation === 'landscape' ? 'landscape' : ''}" style="--pfs:${+pr.fontSize || 11}px">
+    <div class="phead" style="background:${esc(hc)}">${pr.logo ? `<img src="${esc(pr.logo)}" alt="${esc(pr.org)}">` : `<span class="org">${esc(pr.org)}</span>`}</div>
+    <div class="pbody">
+      <div class="ptitle">${esc(pr.title)}</div>
+      <div class="pmeta"><div>Event: ${esc(pt.event)}</div><div>Date: ${esc(fmtDate(pt.date))}</div></div>
+      ${body}
+    </div>
+  </div>`;
+}
+function printView() {
+  const pr = project.print;
+  const cols = printColumns();
+  const inc = (k, t) => `<label class="tog"><input type="checkbox" id="inc-${k}" data-chg="printInc" data-k="${k}" ${pr.include[k] ? 'checked' : ''}> ${t}</label>`;
+  return `<section class="view">
+    <div class="print-split">
+      <div class="print-opts card">
+        <div class="card-head"><h3>Layout</h3></div>
+        <div class="seg"><span>Preset</span><button data-act="preset" data-p="volunteer" class="${pr.preset === 'volunteer' ? 'on' : ''}">Volunteer</button><button data-act="preset" data-p="tech" class="${pr.preset === 'tech' ? 'on' : ''}">Technical</button></div>
+        <div class="eyebrow">Columns (order top to bottom)</div>
+        <div class="colpick">${cols.map((c, i) => `<div><label><input type="checkbox" id="pc-${i}" data-chg="printCol" data-k="${esc(c.key)}" ${c.on ? 'checked' : ''}> ${esc(colLabel(c.key))}</label><button data-act="printColMove" data-k="${esc(c.key)}" data-d="-1" aria-label="Move up">↑</button><button data-act="printColMove" data-k="${esc(c.key)}" data-d="1" aria-label="Move down">↓</button></div>`).join('')}</div>
+        <div class="eyebrow">Include</div>
+        <div style="display:grid;gap:4px">${inc('inputs', 'Input list')}${inc('outputs', 'Output list')}${inc('stageMap', 'Stage box map')}${inc('pull', 'Equipment pull list')}</div>
+        <div class="eyebrow">Look</div>
+        <label class="field"><span>Title</span><input id="pr-title" value="${esc(pr.title)}" data-chg="printField" data-f="title"></label>
+        <label class="field"><span>Header name (shown when there's no logo)</span><input id="pr-org" value="${esc(pr.org)}" data-chg="printField" data-f="org"></label>
+        <div class="inline-fields"><label class="field"><span>Header colour</span><input type="color" id="pr-hc" value="${esc(pr.headerColor)}" data-chg="printField" data-f="headerColor"></label>
+          <label class="field"><span>Text size</span><select id="pr-fs" data-chg="printField" data-f="fontSize" data-val="${pr.fontSize}" style="width:90px"><option value="9">Small</option><option value="11">Normal</option><option value="13">Large</option><option value="15">Extra large</option></select></label></div>
+        <div class="inline-fields"><label class="field"><span>Paper</span><select id="pr-or" data-chg="printField" data-f="orientation" data-val="${pr.orientation}" style="width:130px"><option value="portrait">Letter portrait</option><option value="landscape">Letter landscape</option></select></label>
+          <label class="field"><span>Row colours</span><select id="pr-cm" data-chg="printField" data-f="colorMode" data-val="${pr.colorMode}" style="width:150px"><option value="cells">Source &amp; Mic cells</option><option value="row">Whole row</option><option value="none">None</option></select></label></div>
+        <label class="tog"><input type="checkbox" id="pr-merge" data-chg="printField" data-f="mergePerson" ${pr.mergePerson ? 'checked' : ''}> Merge repeated names in Person</label>
+        <div class="toolbar"><button data-act="pickLogo">${pr.logo ? 'Replace logo' : 'Add logo'}</button>${pr.logo ? '<button data-act="clearLogo">Remove logo</button>' : ''}</div>
+        <div class="eyebrow">Output</div>
+        <div class="toolbar"><button class="primary" data-act="print">Print / Save as PDF</button><button data-act="csv">Download CSV</button><button data-act="copyCsv">Copy CSV</button></div>
+        ${inFrame ? '<p class="small muted" style="margin:0">This preview inside Claude blocks printing and downloads. They work when the app runs in its own browser tab or from the file on your Mac.</p>' : '<p class="small muted" style="margin:0">To make a PDF, choose “Save as PDF” in the print dialog.</p>'}
+      </div>
+      <div class="paper-wrap" id="paper-wrap" data-keep-scroll>${paperHTML()}</div>
+    </div>
+  </section>`;
+}
+function csvText() {
+  const cols = printColumns().filter((c) => c.on).map((c) => c.key);
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  return [cols.map((k) => q(colLabel(k))).join(','), ...patch().sources.map((s) => cols.map((k) => q(cellValue(s, k))).join(','))].join('\n');
+}
+
+/* ---------- 11. library ---------- */
+function libraryView() {
+  const q = ui.libQuery.toLowerCase();
+  const defs = project.library.filter((d) => !q || `${d.make} ${d.model} ${d.category}`.toLowerCase().includes(q))
+    .sort((a, b) => (a.category || '').localeCompare(b.category || '') || `${a.make} ${a.model}`.localeCompare(`${b.make} ${b.model}`));
+  const sel = project.library.find((d) => d.id === ui.libSel) || null;
+  let cat = '';
+  const list = defs.map((d) => {
+    const h = d.category !== cat ? `<div class="eyebrow" style="margin-top:8px">${esc(CATEGORY_NAMES[d.category] || d.category)}</div>` : '';
+    cat = d.category;
+    const used = project.devices.filter((x) => x.defId === d.id).length;
+    return `${h}<button class="${d.id === ui.libSel ? 'on' : ''}" data-act="libSel" data-def="${d.id}"><span>${esc(d.make)} ${esc(d.model)} ${d.verified ? '' : '<span class="pill unv">?</span>'}</span><small>${used ? used + ' in use' : ''}</small></button>`;
+  }).join('');
+  return `<section class="view">
+    <div class="card-head"><h2>Gear library</h2><span class="muted small">${project.library.length} definitions</span><span class="spacer"></span>
+      <button class="primary" data-act="newDef">+ New gear</button><button data-act="exportLib">Export library</button><button data-act="importLib">Import library</button></div>
+    <div class="lib-split">
+      <div class="card"><input id="lib-q" data-inp="libQuery" placeholder="Search…" value="${esc(ui.libQuery)}"><div class="list lib-list" id="lib-list">${list}</div></div>
+      <div class="card">${sel ? defEditor(sel) : '<p class="muted">Pick a piece of gear to see or edit its definition. A definition is the template for one model: its size and every connector. Change it once and every unit of that model updates.</p>'}</div>
+    </div>
+  </section>`;
+}
+function defEditor(d) {
+  const used = project.devices.filter((x) => x.defId === d.id).length;
+  const opt = (obj, v) => Object.entries(obj).map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  const f = (key, label, type = 'text', extra = '') => `<label class="field"><span>${label}</span><input id="df-${key}" type="${type}" value="${esc(d[key] ?? '')}" data-chg="defField" data-f="${key}" ${extra}></label>`;
+  const groupRows = d.groups.map((g, i) => `<tr>
+    <td><input id="gl-${i}" value="${esc(g.label)}" data-chg="grpField" data-i="${i}" data-f="label" style="min-width:90px"></td>
+    <td><input id="gcnt-${i}" type="number" min="1" max="256" value="${g.count}" data-chg="grpField" data-i="${i}" data-f="count" style="width:64px"></td>
+    <td><select id="gconn-${i}" data-chg="grpField" data-i="${i}" data-f="conn">${opt(CONN_NAMES, g.conn)}</select></td>
+    <td><select id="gdir-${i}" data-chg="grpField" data-i="${i}" data-f="dir">${opt({ in: 'Input', out: 'Output', io: 'Two-way / network' }, g.dir)}</select></td>
+    <td><select id="gface-${i}" data-chg="grpField" data-i="${i}" data-f="face">${opt({ front: 'Front', rear: 'Rear', dante: 'Dante', virtual: 'Virtual' }, g.face)}</select></td>
+    <td><input id="grows-${i}" type="number" min="0" max="8" value="${g.rows || ''}" placeholder="auto" data-chg="grpField" data-i="${i}" data-f="rows" style="width:56px"></td>
+    <td><input id="gnames-${i}" value="${esc((g.names || []).join(', '))}" placeholder="1, 2, 3…" data-chg="grpField" data-i="${i}" data-f="names" style="min-width:90px"></td>
+    <td style="text-align:center"><input type="checkbox" id="gsrc-${i}" data-chg="grpField" data-i="${i}" data-f="src" ${g.src ? 'checked' : ''}></td>
+    <td><div class="rowbtns"><button data-act="grpMove" data-i="${i}" data-d="-1">↑</button><button data-act="grpMove" data-i="${i}" data-d="1">↓</button>${confirmBtn('grpDel', '✕', `data-i="${i}"`)}</div></td></tr>`).join('');
+  const gopt = (v) => d.groups.map((g) => `<option value="${g.id}" ${g.id === v ? 'selected' : ''}>${esc(g.label)}</option>`).join('');
+  const linkRows = (d.links || []).map((L, i) => `<tr><td><select id="lf-${i}" data-chg="linkField" data-i="${i}" data-f="from">${gopt(L.from)}</select></td><td><input id="lfs-${i}" type="number" min="1" value="${L.fromStart || 1}" data-chg="linkField" data-i="${i}" data-f="fromStart" style="width:60px"></td><td>→</td><td><select id="lt-${i}" data-chg="linkField" data-i="${i}" data-f="to">${gopt(L.to)}</select></td><td><input id="lts-${i}" type="number" min="1" value="${L.toStart || 1}" data-chg="linkField" data-i="${i}" data-f="toStart" style="width:60px"></td><td><input id="lc-${i}" type="number" min="1" value="${L.count ?? ''}" placeholder="all" data-chg="linkField" data-i="${i}" data-f="count" style="width:60px"></td><td>${confirmBtn('linkDel', '✕', `data-i="${i}"`)}</td></tr>`).join('');
+  return `<div class="card-head"><h3>${esc(d.make)} ${esc(d.model)}</h3>${d.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified</span>'}<span class="muted small">${used} in use</span><span class="spacer"></span>
+      <button data-act="dupDef" data-def="${d.id}">Duplicate</button>${used ? '' : confirmBtn('delDef', 'Delete', `data-def="${d.id}"`)}</div>
+    <div class="inline-fields">${f('make', 'Make')}${f('model', 'Model')}${f('short', 'Short label')}
+      <label class="field"><span>Category</span><select id="df-category" data-chg="defField" data-f="category">${opt(CATEGORY_NAMES, d.category)}</select></label>
+      <label class="field"><span>Mounting</span><select id="df-form" data-chg="defField" data-f="form">${opt({ rack: '19" rack', desk: 'Desk / free-standing', pocket: 'Floor pocket / wall plate' }, d.form)}</select></label>
+      ${f('ru', 'Height (U)', 'number', 'min="1" max="20" style="width:80px"')}
+      <label class="field"><span>Width</span><select id="df-width" data-chg="defField" data-f="width">${opt({ full: 'Full rack width', half: 'Half rack width' }, d.width)}</select></label>
+      ${f('watts', 'Power (W)', 'number', 'min="0" style="width:90px"')}
+      <label class="tog"><input type="checkbox" id="df-verified" data-chg="defField" data-f="verified" ${d.verified ? 'checked' : ''}> Verified against the real unit</label>
+    </div>
+    <label class="field"><span>Reference / notes</span><input id="df-ref" value="${esc(d.ref || '')}" data-chg="defField" data-f="ref"></label>
+    <div class="card-head"><h3>Connectors &amp; channels</h3><span class="spacer"></span><button data-act="grpAdd">+ Port group</button></div>
+    <p class="small muted" style="margin:0">One row per set of identical jacks. “Sources” marks jacks a mic or instrument can be assigned to in the patchlist. “Dante” and “Virtual” groups aren't drawn on the panel.</p>
+    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Label</th><th>Count</th><th>Connector</th><th>Direction</th><th>Side</th><th>Rows</th><th>Names</th><th>Sources</th><th></th></tr></thead><tbody>${groupRows}</tbody></table></div>
+    <div class="card-head"><h3>Internal routing</h3><span class="spacer"></span><button data-act="linkAdd" ${d.groups.length < 2 ? 'disabled' : ''}>+ Route</button></div>
+    <p class="small muted" style="margin:0">What feeds what inside the box, number for number. Example: In 1 → Dante Tx 1 means input 5 comes out on Dante Tx 5.</p>
+    <div class="tbl-wrap"><table class="grid"><thead><tr><th>From</th><th>Start</th><th></th><th>To</th><th>Start</th><th>How many</th><th></th></tr></thead><tbody>${linkRows || '<tr><td colspan="7" class="muted small">No internal routing.</td></tr>'}</tbody></table></div>
+    <div class="card-head"><h3>Preview</h3></div>
+    <div style="overflow-x:auto"><div style="display:flex;gap:16px;flex-wrap:wrap">${['front', 'rear'].map((face) => `<div><div class="eyebrow">${face}</div><div style="position:relative;width:${d.width === 'half' ? W / 2 : W}px;height:${(d.ru || 1) * U}px">${previewDev(d, face)}</div></div>`).join('')}</div></div>`;
+}
+function previewDev(def, face) {
+  const fake = { id: '__pv', defId: def.id, name: def.model, short: def.short || '', place: {}, portNames: {}, labels: {} };
+  idx.dev.set('__pv', fake);
+  const html = devHTML(fake, def, face, { top: 0, left: 0, w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U, cls: 'free' });
+  idx.dev.delete('__pv');
+  return html;
+}
+
+/* ---------- 12. checks view ---------- */
+function checkHTML(c) {
+  const sel = c.sel ? `data-act="goCheck" data-sel="${esc(JSON.stringify(c.sel))}"` : '';
+  return `<div class="check"><span class="sev ${c.sev}">${c.sev === 'error' ? 'Error' : c.sev === 'warn' ? 'Check' : 'Note'}</span><span class="msg small">${esc(c.msg)}</span>${sel ? `<button ${sel} style="padding:1px 8px">Show</button>` : ''}</div>`;
+}
+function checksView() {
+  return `<section class="view"><div class="card"><div class="card-head"><h2>Checks for “${esc(patch().name)}”</h2><span class="muted small">${checks.length} found</span></div>
+    <p class="small muted" style="margin:0">Errors are things that can't work (two cables in one jack, output into output). Checks are things that are probably wrong (a source that never reaches the console). Notes are things to look at (an XLR into a Phoenix input needs a pigtail).</p>
+    ${checks.length ? checks.map(checkHTML).join('') : '<p>No problems found.</p>'}</div></section>`;
+}
+
+/* ---------- 13. events ---------- */
+function openModal(title, html) {
+  const m = $('#modal');
+  m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="card-head"><h3>${esc(title)}</h3><span class="spacer"></span><button data-act="closeModal">Close</button></div>${html}</div>`;
+  m.hidden = false;
+}
+function closeModal() { $('#modal').hidden = true; $('#modal').innerHTML = ''; }
+const findSrc = (id) => patch().sources.find((s) => s.id === id);
+const defaultsFor = (def) => {
+  const same = project.devices.filter((d) => d.defId === def.id).length;
+  return { name: same ? `${def.model} ${same + 1}` : def.model, short: same ? `${def.short || 'DEV'} ${same + 1}` : (def.short || 'DEV') };
+};
+function moveIn(arr, id, d) { const i = arr.findIndex((x) => x.id === id), j = i + d; if (i < 0 || j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; }
+function libDef() { return project.library.find((d) => d.id === ui.libSel); }
+
+const actions = {
+  tab: (el) => { ui.tab = el.dataset.tab; ui.danteEdit = null; render(); window.scrollTo(0, 0); },
+  undo, redo,
+  arm: (el) => { ui.armed = el.dataset.arm; render(); setTimeout(() => { if (ui.armed === el.dataset.arm) { ui.armed = null; render(); } }, 3500); },
+  closeModal,
+  dismissSample: () => commit('', (p) => { p.sample = false; }),
+  layer: (el) => { ui.layer = el.dataset.layer; render(); },
+  flip: (el) => { ui.faces[el.dataset.id] = (ui.faces[el.dataset.id] || 'front') === 'front' ? 'rear' : 'front'; render(); },
+  addRack: () => { const id = uid('r'); commit('Added a rack', (p) => p.racks.push({ id, name: `Rack ${p.racks.length + 1}`, ru: 12 })); select({ kind: 'rack', id }); },
+  addLoc: () => { const id = uid('l'); commit('Added a location', (p) => p.locations.push({ id, name: `Location ${p.locations.length + 1}` })); select({ kind: 'loc', id }); },
+  slot: (el) => select({ kind: 'slot', rackId: el.dataset.rack, u: +el.dataset.u, side: el.dataset.side }),
+  locAdd: (el) => { ui.tab = 'rack'; select({ kind: 'locAdd', id: el.dataset.id }); },
+  selRack: (el) => select({ kind: 'rack', id: el.dataset.id }),
+  selLoc: (el) => select({ kind: 'loc', id: el.dataset.id }),
+  selDev: (el) => select({ kind: 'device', id: el.dataset.id }),
+  selPort: (el, e) => { e.preventDefault(); ui.tab = 'rack'; const p = port(el.dataset.ref); if (p) revealFace(p); select({ kind: 'port', ref: el.dataset.ref }); },
+  selConn: (el) => select({ kind: 'conn', id: el.dataset.id }),
+  install: (el) => {
+    const def = project.library.find((d) => d.id === el.dataset.def); const s = ui.sel;
+    const id = uid('d'); const nm = defaultsFor(def);
+    let place;
+    if (s.kind === 'slot') place = { type: 'rack', rackId: s.rackId, u: s.u, side: def.width === 'half' ? (s.side === 'full' ? 'L' : s.side) : 'full' };
+    else place = { type: 'loc', locId: s.id };
+    commit(`Installed ${def.make} ${def.model}`, (p) => p.devices.push({ id, defId: def.id, name: nm.name, short: nm.short, place, portNames: {}, labels: {} }));
+    select({ kind: 'device', id });
+  },
+  newGearFromAdd: () => { ui.tab = 'library'; actions.newDef(); },
+  dupDev: (el) => {
+    const d = idx.dev.get(el.dataset.id); const def = idx.def.get(d.defId);
+    const id = uid('d'); const copy = { ...JSON.parse(JSON.stringify(d)), id, name: d.name + ' copy' };
+    if (copy.place.type === 'rack') {
+      const rack = project.racks.find((r) => r.id === copy.place.rackId); let found = false;
+      for (let u = 1; u <= rack.ru && !found; u++) for (const side of def.width === 'half' ? ['L', 'R'] : ['full']) if (!found && canPlace(rack, u, def.ru, side)) { copy.place = { ...copy.place, u, side }; found = true; }
+      if (!found) { toast('No room in this rack for a copy. Add rack space or move it to a location.'); return; }
+    }
+    commit(`Duplicated ${d.name}`, (p) => p.devices.push(copy)); select({ kind: 'device', id });
+  },
+  delDev: (el) => { const d = idx.dev.get(el.dataset.id); ui.armed = null; commit(`Removed ${d.name}`, (p) => { p.devices = p.devices.filter((x) => x.id !== d.id); p.connections = p.connections.filter((c) => !c.a.startsWith(d.id + '.') && !c.b.startsWith(d.id + '.')); }); select(null); },
+  delConn: (el) => { ui.armed = null; commit('Removed a cable', (p) => { p.connections = p.connections.filter((c) => c.id !== el.dataset.id); }); select(null); },
+  delRack: (el) => { ui.armed = null; const id = el.dataset.id; commit('Deleted a rack', (p) => { const gone = new Set(p.devices.filter((d) => d.place.type === 'rack' && d.place.rackId === id).map((d) => d.id)); p.racks = p.racks.filter((r) => r.id !== id); p.devices = p.devices.filter((d) => !gone.has(d.id)); p.connections = p.connections.filter((c) => !gone.has(parseRef(c.a)?.devId) && !gone.has(parseRef(c.b)?.devId)); }); select(null); },
+  delLoc: (el) => { ui.armed = null; const id = el.dataset.id; commit('Deleted a location', (p) => { const gone = new Set(p.devices.filter((d) => d.place.type === 'loc' && d.place.locId === id).map((d) => d.id)); p.locations = p.locations.filter((r) => r.id !== id); p.devices = p.devices.filter((d) => !gone.has(d.id)); p.connections = p.connections.filter((c) => !gone.has(parseRef(c.a)?.devId) && !gone.has(parseRef(c.b)?.devId)); }); select(null); },
+  assign: (el) => {
+    const sid = $('#pt-assign').value; if (!sid) return; const ref = el.dataset.ref;
+    commit(`Assigned ${findSrc(sid)?.name} to ${portLabel(ref)}`, () => { const s = findSrc(sid); s.ports = (s.ports || []).filter(Boolean); if (s.ports.length >= 2) s.ports[1] = ref; else if (s.ports.length === 1 && s.ports[0] !== ref) s.ports[0] = ref; else s.ports = [ref]; });
+  },
+  unassign: (el) => commit(`Unassigned ${findSrc(el.dataset.src)?.name}`, () => { const s = findSrc(el.dataset.src); s.ports = (s.ports || []).filter((r) => r !== el.dataset.ref); }),
+  newSrcHere: (el) => { const ref = el.dataset.ref; commit(`New source on ${portLabel(ref)}`, () => patch().sources.push({ id: uid('s'), name: 'New source', groupId: '', mic: '', ports: [ref], person: '', cable: '', notes: '', custom: {} })); ui.tab = 'list'; render(); },
+  showSrc: (el) => { ui.tab = 'rack'; const s = findSrc(el.dataset.id); const p = s?.ports?.[0] && port(s.ports[0]); if (p) revealFace(p); select({ kind: 'source', id: el.dataset.id }); },
+  showOut: (el) => { ui.tab = 'rack'; const o = patch().outputs.find((x) => x.id === el.dataset.id); const p = o?.port && port(o.port); if (p) revealFace(p); select({ kind: 'output', id: el.dataset.id }); },
+  addSrc: () => commit('Added a source', () => patch().sources.push({ id: uid('s'), name: '', groupId: '', mic: '', ports: [], person: '', cable: '', notes: '', custom: {} })),
+  delSrc: (el) => { ui.armed = null; commit(`Deleted ${findSrc(el.dataset.id)?.name || 'a source'}`, () => { patch().sources = patch().sources.filter((s) => s.id !== el.dataset.id); }); },
+  moveSrc: (el) => commit('', () => moveIn(patch().sources, el.dataset.id, +el.dataset.d)),
+  stereo: (el) => commit('', () => { const s = findSrc(el.dataset.id); s.ports ||= []; if (s.ports.length > 1) s.ports = s.ports.slice(0, 1); else s.ports = [s.ports[0] || '', '']; }),
+  addOut: () => commit('Added an output', () => patch().outputs.push({ id: uid('o'), name: '', mix: '', port: '', person: '', notes: '' })),
+  delOut: (el) => { ui.armed = null; commit('Deleted an output', () => { patch().outputs = patch().outputs.filter((o) => o.id !== el.dataset.id); }); },
+  moveOut: (el) => commit('', () => moveIn(patch().outputs, el.dataset.id, +el.dataset.d)),
+  addGroup: () => commit('Added a group', (p) => p.groups.push({ id: uid('g'), name: 'New group', color: '#dde3ea' })),
+  delGroup: (el) => { ui.armed = null; commit('Deleted a group', (p) => { p.groups = p.groups.filter((g) => g.id !== el.dataset.id); }); },
+  addCol: () => commit('Added a column', (p) => p.columns.push({ id: uid('col'), name: 'New column' })),
+  delCol: (el) => { ui.armed = null; commit('Deleted a column', (p) => { p.columns = p.columns.filter((c) => c.id !== el.dataset.id); }); },
+  addCableColor: () => commit('Added a cable colour', (p) => p.cableColors.push({ id: uid('cc'), name: 'New', hex: '#55aa55', length: '' })),
+  delCC: (el) => { ui.armed = null; commit('Deleted a cable colour', (p) => { p.cableColors = p.cableColors.filter((c) => c.id !== el.dataset.id); }); },
+  dupPatch: () => {
+    const src = patch(); const id = uid('p');
+    commit(`Copied patch ${src.name}`, (p) => {
+      const copy = JSON.parse(JSON.stringify(src)); copy.id = id; copy.name = src.name + ' copy';
+      copy.sources.forEach((s) => { s.id = uid('s'); }); copy.outputs.forEach((o) => { o.id = uid('o'); });
+      p.patches.push(copy);
+      for (const c of p.connections.filter((c) => c.layer === src.id)) p.connections.push({ ...c, id: uid('c'), layer: id });
+    }, { quiet: true });
+    ui.patchId = id; render(); toast('Copied. You are now editing the copy.');
+  },
+  newPatch: () => { const np = newPatch('New patch'); commit('Created a patch', (p) => p.patches.push(np), { quiet: true }); ui.patchId = np.id; render(); },
+  delPatch: () => { ui.armed = null; const id = patch().id; commit(`Deleted patch ${patch().name}`, (p) => { p.patches = p.patches.filter((x) => x.id !== id); p.connections = p.connections.filter((c) => c.layer !== id); }, { quiet: true }); ui.patchId = project.patches[0].id; render(); },
+  danteEdit: (el) => { ui.danteEdit = el.dataset.ref; render(); const s = $('#dsel'); if (s) s.focus(); },
+  preset: (el) => commit('', (p) => {
+    const on = el.dataset.p === 'tech' ? ['source', 'mic', 'input', 'consoleCh', 'cable', 'person', 'notes'] : ['source', 'mic', 'input', 'person'];
+    p.print.preset = el.dataset.p;
+    const cols = printColumns();
+    const ordered = [...on.map((k) => cols.find((c) => c.key === k)).filter(Boolean), ...cols.filter((c) => !on.includes(c.key))];
+    p.print.columns = ordered.map((c) => ({ ...c, on: on.includes(c.key) }));
+    p.print.include.outputs = el.dataset.p === 'tech'; p.print.include.pull = el.dataset.p === 'tech';
+  }),
+  printColMove: (el) => commit('', (p) => { const cols = printColumns(); const i = cols.findIndex((c) => c.key === el.dataset.k), j = i + +el.dataset.d; if (j < 0 || j >= cols.length) return; [cols[i], cols[j]] = [cols[j], cols[i]]; }),
+  pickLogo: () => $('#file-logo').click(),
+  clearLogo: () => commit('Removed logo', (p) => { p.print.logo = ''; }),
+  print: () => {
+    const root = $('#print-root'); root.innerHTML = paperHTML();
+    let st = $('#page-style'); if (!st) { st = document.createElement('style'); st.id = 'page-style'; document.head.appendChild(st); }
+    st.textContent = `@page { size: letter ${project.print.orientation}; margin: 0.25in; }`;
+    try { window.print(); } catch { /* blocked */ }
+    if (inFrame) toast('Printing is blocked in this preview. Open the app in its own tab or from the file on your Mac.', 5000);
+  },
+  csv: () => download(`${patch().name || 'patchlist'}.csv`, csvText(), 'text/csv'),
+  copyCsv: () => copyText(csvText(), 'CSV copied. Paste it into Numbers, Excel or Google Sheets.'),
+  // library
+  libSel: (el) => { ui.libSel = el.dataset.def; render(); },
+  editDef: (el) => { ui.tab = 'library'; ui.libSel = el.dataset.def; render(); },
+  newDef: () => { const id = uid('def'); commit('Created a gear definition', (p) => p.library.push({ id, make: 'New', model: 'Gear', short: 'NEW', category: 'other', form: 'rack', ru: 1, width: 'full', watts: 0, verified: false, ref: '', groups: [{ id: 'in', label: 'In', count: 8, start: 1, conn: 'xlr', dir: 'in', face: 'rear', src: true }], links: [] }), { quiet: true }); ui.tab = 'library'; ui.libSel = id; render(); },
+  dupDef: (el) => { const src = project.library.find((d) => d.id === el.dataset.def); const id = uid('def'); commit(`Duplicated ${src.model}`, (p) => p.library.push({ ...JSON.parse(JSON.stringify(src)), id, model: src.model + ' copy', verified: false }), { quiet: true }); ui.libSel = id; render(); },
+  delDef: (el) => { ui.armed = null; commit('Deleted a gear definition', (p) => { p.library = p.library.filter((d) => d.id !== el.dataset.def); }, { quiet: true }); ui.libSel = null; render(); },
+  grpAdd: () => commit('Edited gear', () => { const d = libDef(); d.groups.push({ id: uid('g'), label: 'Port', count: 1, start: 1, conn: 'xlr', dir: 'in', face: 'rear' }); }),
+  grpDel: (el) => { ui.armed = null; commit('Edited gear', () => { const d = libDef(); const g = d.groups[+el.dataset.i]; d.groups.splice(+el.dataset.i, 1); d.links = (d.links || []).filter((L) => L.from !== g.id && L.to !== g.id); }); },
+  grpMove: (el) => commit('', () => { const d = libDef(); const i = +el.dataset.i, j = i + +el.dataset.d; if (j < 0 || j >= d.groups.length) return; [d.groups[i], d.groups[j]] = [d.groups[j], d.groups[i]]; }),
+  linkAdd: () => commit('Edited gear', () => { const d = libDef(); (d.links ||= []).push({ from: d.groups[0].id, to: d.groups[1].id }); }),
+  linkDel: (el) => { ui.armed = null; commit('Edited gear', () => { libDef().links.splice(+el.dataset.i, 1); }); },
+  exportLib: () => download('patchrack-library.json', JSON.stringify({ patchrackLibrary: 1, gear: project.library }, null, 2)),
+  importLib: () => $('#file-lib').click(),
+  goCheck: (el) => {
+    const s = JSON.parse(el.dataset.sel);
+    ui.tab = 'rack';
+    const r = s.ref || (s.kind === 'conn' && project.connections.find((c) => c.id === s.id)?.a) || (s.kind === 'source' && findSrc(s.id)?.ports?.[0]);
+    const p = r && port(r); if (p) revealFace(p);
+    select(s);
+  },
+  // file menu
+  saveFile: () => { closeMenu(); download(`${(project.name || 'project').replace(/[^\w -]/g, '')}.patchrack.json`, JSON.stringify(project, null, 2)); },
+  openFile: () => { closeMenu(); $('#file-open').click(); },
+  copyJson: () => { closeMenu(); copyText(JSON.stringify(project), 'Project copied as text.'); },
+  pasteJson: () => { closeMenu(); openModal('Load project from text', '<textarea id="paste-area" placeholder="Paste a copied project here"></textarea><div class="toolbar"><button class="primary" data-act="loadPasted">Load project</button></div>'); },
+  loadPasted: () => { try { const p = JSON.parse($('#paste-area').value); if (!p.devices || !p.library) throw 0; closeModal(); replaceProject(p, 'Project loaded'); } catch { toast("That text isn't a PatchRack project."); } },
+  loadSample: () => { closeMenu(); replaceProject(buildSample(), 'Loaded the Sanctuary sample'); },
+  newBlank: () => {
+    closeMenu();
+    const p = { schema: SCHEMA, name: 'New project', library: JSON.parse(JSON.stringify(DEFAULT_LIBRARY)), racks: [{ id: uid('r'), name: 'Rack 1', ru: 12 }], locations: [], devices: [], connections: [], patches: [newPatch('Patch 1')], groups: [], columns: [], cableColors: JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS)), print: defaultPrint(), history: [] };
+    replaceProject(p, 'Started a new project (Undo brings the old one back)');
+  },
+  showHistory: () => { closeMenu(); openModal('Change history', `<div class="hist">${project.history.slice(0, 300).map((h) => `<div><span class="mono small muted">${esc(new Date(h.t).toLocaleString('en-CA'))}</span><span>${esc(h.msg)}${h.patch ? ` <span class="muted small">· ${esc(h.patch)}</span>` : ''}</span></div>`).join('') || '<p class="muted">No changes yet.</p>'}</div>`); },
+  theme: () => { closeMenu(); const r = document.documentElement; const cur = r.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); r.dataset.theme = cur === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('patchrack.theme', r.dataset.theme); } catch { } requestAnimationFrame(drawCables); },
+};
+function closeMenu() { $('#file-menu').open = false; }
+function revealFace(p) {
+  const id = p.dev.place.type === 'rack' ? p.dev.place.rackId : p.dev.place.locId;
+  if (p.g.face === 'front' || p.g.face === 'rear') ui.faces[id] = p.g.face;
+}
+
+const changes = {
+  projName: (el) => commit('Renamed project', (p) => { p.name = el.value; }),
+  pickPatch: (el) => { ui.patchId = el.value; ui.sel = null; render(); toast(`Now editing ${patch().name}`); },
+  showCables: (el) => { ui.showCables = el.checked; render(); },
+  showTies: (el) => { ui.showTies = el.checked; render(); },
+  devField: (el) => { const d = idx.dev.get(ui.sel.id); commit(`Edited ${d.name}`, () => { const x = project.devices.find((y) => y.id === d.id); x[el.dataset.f] = el.value; }); },
+  devLabel: (el) => commit('Edited jack labels', () => { const d = project.devices.find((y) => y.id === ui.sel.id); const L = (d.labels[el.dataset.g] ||= {}); if (el.value === '') delete L[el.dataset.f]; else L[el.dataset.f] = el.dataset.f === 'start' ? +el.value : el.value; }),
+  devMove: (el) => {
+    const d = project.devices.find((y) => y.id === ui.sel.id); const def = idx.def.get(d.defId);
+    const [t, id] = el.value.split(':');
+    if (t === 'l') { commit(`Moved ${d.name}`, () => { d.place = { type: 'loc', locId: id }; }); return; }
+    if (def.form !== 'rack') { toast(`${def.model} isn't rack-mountable. Change its mounting in the Library first.`); render(); return; }
+    const rack = project.racks.find((r) => r.id === id);
+    for (let u = 1; u <= rack.ru; u++) for (const side of def.width === 'half' ? ['L', 'R'] : ['full']) if (canPlace(rack, u, def.ru, side, d.id)) { commit(`Moved ${d.name} to ${rack.name}`, () => { d.place = { type: 'rack', rackId: id, u, side }; }); return; }
+    toast(`No room in ${rack.name} for ${def.ru}U.`); render();
+  },
+  devU: (el) => {
+    const d = project.devices.find((y) => y.id === ui.sel.id); const def = idx.def.get(d.defId); const rack = project.racks.find((r) => r.id === d.place.rackId);
+    const u = +el.value; if (!canPlace(rack, u, def.ru, d.place.side, d.id)) { toast(`Something is already at U${u}, or it runs off the rack.`); render(); return; }
+    commit(`Moved ${d.name} to U${u}`, () => { d.place.u = u; });
+  },
+  devSide: (el) => {
+    const d = project.devices.find((y) => y.id === ui.sel.id); const def = idx.def.get(d.defId); const rack = project.racks.find((r) => r.id === d.place.rackId);
+    if (!canPlace(rack, d.place.u, def.ru, el.value, d.id)) { toast('That half is taken.'); render(); return; }
+    commit(`Moved ${d.name}`, () => { d.place.side = el.value; });
+  },
+  normal: (el) => commit('Changed normalling', () => { const d = project.devices.find((y) => y.id === ui.sel.id); (d.normalling ||= {})[el.dataset.n] = el.value; }),
+  portName: (el) => { const p = port(el.dataset.ref); commit(`Renamed ${portShort(el.dataset.ref)}`, () => { const d = project.devices.find((y) => y.id === p.dev.id); const k = `${p.g.id}:${p.n}`; if (el.value.trim()) d.portNames[k] = el.value.trim(); else delete d.portNames[k]; }); },
+  connColor: (el) => commit('Changed cable colour', (p) => { p.connections.find((c) => c.id === el.dataset.id).color = el.value; }),
+  connLayer: (el) => commit('Moved a cable', (p) => { p.connections.find((c) => c.id === el.dataset.id).layer = el.value === 'rig' ? 'rig' : patch().id; }),
+  rackField: (el) => {
+    const r = project.racks.find((x) => x.id === el.dataset.id);
+    if (el.dataset.f === 'ru') {
+      const ru = Math.max(1, Math.min(60, +el.value || 1));
+      const low = project.devices.filter((d) => d.place.type === 'rack' && d.place.rackId === r.id).some((d) => d.place.u + (idx.def.get(d.defId)?.ru || 1) - 1 > ru);
+      if (low) { toast('Some gear sits below that height. Move it first.'); render(); return; }
+      commit(`Resized ${r.name}`, () => { r.ru = ru; });
+    } else commit('Renamed rack', () => { r.name = el.value; });
+  },
+  locField: (el) => commit('Renamed location', (p) => { p.locations.find((l) => l.id === el.dataset.id).name = el.value; }),
+  src: (el) => commit(`Edited ${findSrc(el.dataset.id)?.name || 'source'}`, () => { findSrc(el.dataset.id)[el.dataset.f] = el.value; }),
+  srcCustom: (el) => commit('Edited a custom column', () => { const s = findSrc(el.dataset.id); (s.custom ||= {})[el.dataset.c] = el.value; }),
+  srcPort: (el) => commit(`Patched ${findSrc(el.dataset.id)?.name}`, () => { const s = findSrc(el.dataset.id); s.ports ||= []; s.ports[+el.dataset.i] = el.value; }),
+  out: (el) => commit('Edited an output', () => { patch().outputs.find((o) => o.id === el.dataset.id)[el.dataset.f] = el.value; }),
+  patchField: (el) => commit('Edited patch details', () => { patch()[el.dataset.f] = el.value; }),
+  groupField: (el) => commit('Edited a group', (p) => { p.groups.find((g) => g.id === el.dataset.id)[el.dataset.f] = el.value; }),
+  colName: (el) => commit('Renamed a column', (p) => { p.columns.find((c) => c.id === el.dataset.id).name = el.value; }),
+  ccField: (el) => commit('Edited a cable colour', (p) => { p.cableColors.find((c) => c.id === el.dataset.id)[el.dataset.f] = el.value; }),
+  danteSub: (el) => {
+    const rx = el.dataset.ref, tx = el.value; const layer = ui.layer === 'rig' ? 'rig' : patch().id;
+    ui.danteEdit = null;
+    commit(tx ? `Dante: ${portShort(tx)} → ${portShort(rx)}` : `Dante: cleared ${portShort(rx)}`, (p) => {
+      p.connections = p.connections.filter((c) => !(c.kind === 'dante' && c.b === rx && (c.layer === layer || c.layer === 'rig' || c.layer === patch().id)));
+      if (tx) p.connections.push({ id: uid('c'), a: tx, b: rx, kind: 'dante', layer, color: '' });
+    });
+  },
+  printField: (el) => commit('', (p) => { const f = el.dataset.f; p.print[f] = el.type === 'checkbox' ? el.checked : f === 'fontSize' ? +el.value : el.value; }),
+  printInc: (el) => commit('', (p) => { p.print.include[el.dataset.k] = el.checked; }),
+  printCol: (el) => commit('', () => { printColumns().find((c) => c.key === el.dataset.k).on = el.checked; }),
+  defField: (el) => commit('Edited gear', () => {
+    const d = libDef(); const f = el.dataset.f;
+    if (f === 'verified') d.verified = el.checked;
+    else if (f === 'ru' || f === 'watts') d[f] = Math.max(f === 'ru' ? 1 : 0, +el.value || 0);
+    else d[f] = el.value;
+  }),
+  grpField: (el) => commit('Edited gear', () => {
+    const g = libDef().groups[+el.dataset.i]; const f = el.dataset.f;
+    if (f === 'count') g.count = Math.max(1, Math.min(256, +el.value || 1));
+    else if (f === 'rows') { if (+el.value > 0) g.rows = +el.value; else delete g.rows; }
+    else if (f === 'names') { const n = el.value.split(',').map((x) => x.trim()).filter(Boolean); if (n.length) g.names = n; else delete g.names; }
+    else if (f === 'src') g.src = el.checked;
+    else g[f] = el.value;
+    layoutCache.clear();
+  }),
+  linkField: (el) => commit('Edited gear', () => {
+    const L = libDef().links[+el.dataset.i]; const f = el.dataset.f;
+    if (f === 'count') { if (+el.value > 0) L.count = +el.value; else delete L.count; }
+    else if (f === 'fromStart' || f === 'toStart') L[f] = Math.max(1, +el.value || 1);
+    else L[f] = el.value;
+  }),
+};
+const inputs = {
+  addQuery: (el) => {
+    ui.addQuery = el.value;
+    const tmp = document.createElement('div'); tmp.innerHTML = inspectorHTML();
+    $('#add-list').innerHTML = $('#add-list', tmp).innerHTML;
+  },
+  libQuery: (el) => {
+    ui.libQuery = el.value;
+    const tmp = document.createElement('div'); tmp.innerHTML = libraryView();
+    $('#lib-list').innerHTML = $('#lib-list', tmp).innerHTML;
+  },
+};
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (el && !el.disabled) { const fn = actions[el.dataset.act]; if (fn) { fn(el, e); return; } }
+  const hit = e.target.closest('path.hit');
+  if (hit) { select({ kind: 'conn', id: hit.dataset.conn }); return; }
+  if (!e.target.closest('.menu')) closeMenu();
+  if (ui.armed && !el) { ui.armed = null; render(); }
+});
+document.addEventListener('change', (e) => {
+  const el = e.target.closest('[data-chg]');
+  if (el && changes[el.dataset.chg]) changes[el.dataset.chg](el, e);
+});
+document.addEventListener('input', (e) => {
+  const el = e.target.closest('[data-inp]');
+  if (el && inputs[el.dataset.inp]) inputs[el.dataset.inp](el, e);
+});
+document.addEventListener('pointerdown', onPointerDown);
+document.addEventListener('toggle', (e) => {
+  const d = e.target; if (d.classList?.contains('dgrp') && d.dataset.dev) (ui.danteOpen ||= {})[d.dataset.dev] = d.open;
+}, true);
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '');
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (ui.sel) select(null); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && ui.sel?.kind === 'conn') { const id = ui.sel.id; commit('Removed a cable', (p) => { p.connections = p.connections.filter((c) => c.id !== id); }); select(null); }
+});
+window.addEventListener('resize', () => { if (ui.tab === 'rack') drawCables(); });
+
+function readFile(input, cb) {
+  const f = input.files?.[0]; if (!f) return;
+  const r = new FileReader(); r.onload = () => { cb(r.result, f); input.value = ''; }; r.readAsText(f);
+}
+$('#file-open').addEventListener('change', (e) => readFile(e.target, (txt) => {
+  try { const p = JSON.parse(txt); if (!p.devices || !p.library) throw 0; replaceProject(p, 'Project opened'); }
+  catch { toast("That file isn't a PatchRack project."); }
+}));
+$('#file-lib').addEventListener('change', (e) => readFile(e.target, (txt) => {
+  try {
+    const j = JSON.parse(txt); const gear = j.gear || j.library || (Array.isArray(j) ? j : null); if (!gear) throw 0;
+    let added = 0, updated = 0;
+    commit('Imported gear library', (p) => {
+      for (const g of gear) {
+        if (!g.id || !g.groups) continue;
+        const i = p.library.findIndex((d) => d.id === g.id);
+        if (i >= 0) { p.library[i] = g; updated++; } else { p.library.push(g); added++; }
+      }
+    });
+    layoutCache.clear(); toast(`Library imported: ${added} new, ${updated} updated.`);
+  } catch { toast("That file isn't a gear library."); }
+}));
+$('#file-logo').addEventListener('change', (e) => {
+  const f = e.target.files?.[0]; if (!f) return;
+  if (f.size > 1.5e6) { toast('Please use a logo image under 1.5 MB.'); return; }
+  const r = new FileReader(); r.onload = () => { commit('Added logo', (p) => { p.print.logo = r.result; }); e.target.value = ''; }; r.readAsDataURL(f);
+});
+
+/* ---------- 14. start-up ---------- */
+try { const t = localStorage.getItem('patchrack.theme'); if (t) document.documentElement.dataset.theme = t; } catch { }
+load();
+render();
+
+</script>
+
+</body>
+</html>

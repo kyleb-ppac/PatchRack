@@ -1,0 +1,54 @@
+<title>PatchRack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Rack elevations and patchlists that stay in sync.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/*@@STYLES@@*/
+</style>
+
+<header class="top">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack</div>
+  <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
+  <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
+  <nav class="tabs" id="tabs" aria-label="Views">
+    <button data-act="tab" data-tab="rack">Rack</button>
+    <button data-act="tab" data-tab="list">Patchlist</button>
+    <button data-act="tab" data-tab="dante">Dante</button>
+    <button data-act="tab" data-tab="print">Print</button>
+    <button data-act="tab" data-tab="library">Library</button>
+    <button data-act="tab" data-tab="checks">Checks<span id="checks-badge" class="badge">0</span></button>
+  </nav>
+  <div class="top-actions">
+    <button data-act="undo" id="btn-undo" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+    <button data-act="redo" id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+    <details class="menu" id="file-menu">
+      <summary>File</summary>
+      <div class="menu-pop">
+        <button data-act="saveFile">Save project file…</button>
+        <button data-act="openFile">Open project file…</button>
+        <hr>
+        <button data-act="copyJson">Copy project as text</button>
+        <button data-act="pasteJson">Load project from text…</button>
+        <hr>
+        <button data-act="showHistory">Change history</button>
+        <button data-act="loadSample">Load Sanctuary sample</button>
+        <button data-act="newBlank">New blank project</button>
+        <hr>
+        <button data-act="theme">Switch light / dark</button>
+      </div>
+    </details>
+  </div>
+</header>
+<main id="main"></main>
+<div id="print-root" hidden></div>
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<input type="file" id="file-open" accept=".json,application/json" hidden>
+<input type="file" id="file-lib" accept=".json,application/json" hidden>
+<input type="file" id="file-logo" accept="image/*" hidden>
+
+<script>
+/*@@SCRIPTS@@*/
+</script>
