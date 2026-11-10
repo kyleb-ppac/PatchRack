@@ -3,6 +3,13 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.8 (2026-11-10)
+- **Rig sheet tab:** every location and rack written out top to bottom: what's in each space (and which spaces are empty), IP addresses, details and notes, every cable and tie line, and Dante routes. Matching runs of connections are grouped (e.g. "In 1–6 ← Pocket MS-SR · Tie 1–6"). Show the whole rig, one location or one rack; choose what to include; print/PDF or copy as text.
+- **Details & notes on every unit:** free-form detail fields (firmware, serial, settings…) and a notes box in the unit's panel (rig mode). Shown on the Rig sheet.
+- **Photo editor:** choosing a photo opens a window shaped exactly like that unit's faceplate. Drag to move, zoom, rotate 90°, straighten ±15°, with the jacks outlined to line up against. Nothing is stretched. "Adjust" reopens it with the same framing.
+- **IP addresses per gear definition:** Library → IP addresses sets how many each model has and what each is for (Dante primary, Control…), optionally tied to a jack. Units only show those. Addresses already entered carry over.
+- **Dante outputs in the patchlist:** "Leaves on" now includes Dante Tx channels; a new "Dante to" column picks the receiving channel and creates the route. "Goes to" follows the whole path (e.g. TIO Dante Rx 1 → PSM9 A In L).
+
 ## v0.0.7 (2026-11-10)
 - Fix: tie lines are drawn only from the jacks they're really connected to. Before, when a tie's own jack was on the hidden side, the line was drawn from the matching front jack instead, so floor-pocket ties looked like they came out of the jacks you plug into. View the Rear or Front + Rear to see tie lines. Signal tracing is unchanged.
 

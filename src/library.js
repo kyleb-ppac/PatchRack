@@ -221,6 +221,20 @@ const DEFAULT_LIBRARY = [
   },
 ];
 
+// How many IP addresses each starter gear definition has, and what each is
+// for. [id, label, jack it belongs to]. Edit these per definition in the
+// Library (IP addresses section).
+const DEFAULT_IP_SLOTS = {
+  'yamaha-rio3224-d2': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2']],
+  'yamaha-tio1608-d': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2']],
+  'shure-ulxd4q': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2'], ['net:3', 'Control', 'net:3']],
+  'ah-avantis': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2'], ['ctl:1', 'Control', 'ctl:1']],
+  'ah-ahm32': [['net:1', 'Control', 'net:1'], ['card:1', 'Dante primary', 'card:1'], ['card:2', 'Dante secondary', 'card:2']],
+  'luminex-gigacore30i': [['mgmt:1', 'Management', '']],
+  'sonnet-rackmac-mini': [['eth:1', 'Ethernet (Dante Virtual Soundcard)', 'eth:1']],
+};
+for (const d of DEFAULT_LIBRARY) d.ipSlots = (DEFAULT_IP_SLOTS[d.id] || []).map(([id, label, port]) => ({ id, label, port }));
+
 const CATEGORY_NAMES = {
   stagebox: 'Stage boxes & I/O', wireless: 'Wireless', iem: 'In-ear monitors', console: 'Consoles',
   processor: 'Processing', amp: 'Amplifiers', utility: 'Utility', network: 'Network', computer: 'Computers',

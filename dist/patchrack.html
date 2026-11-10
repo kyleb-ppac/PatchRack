@@ -139,7 +139,34 @@ details.sec > summary:hover { color: var(--fg); }
 input.bad, span.bad { color: var(--err); border-color: var(--err); }
 .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .photo-slot { display: grid; gap: 4px; align-content: start; }
-.photo-slot img { width: 100%; border-radius: 3px; border: 1px solid var(--line); display: block; }
+.photo-slot img { width: 100%; border-radius: 3px; border: 1px solid var(--line); display: block; object-fit: cover; }
+.photo-empty { min-height: 0; }
+.kvrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 4px; }
+.kvrow button { padding: 2px 8px; }
+.field textarea { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+.pe-wrap { overflow: auto; background: repeating-conic-gradient(var(--panel-2) 0 25%, var(--bg) 0 50%) 0 0 / 16px 16px; padding: 14px; border-radius: 6px; display: flex; justify-content: center; }
+#pe-canvas { display: block; cursor: grab; touch-action: none; box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0,0,0,.35); }
+#pe-canvas:active { cursor: grabbing; }
+.pe-controls { align-items: center; }
+.pe-controls input[type=range] { width: 150px; }
+/* rig sheet */
+.paper.sheet h4 { margin-top: 14px; }
+.paper.sheet .s-rack { margin-top: 8px; break-inside: auto; }
+.paper.sheet .s-rack-h { color: #fff; padding: 3px 8px; font-weight: 600; font-size: 1.05em; }
+.paper.sheet table.s-tbl { width: 100%; border-collapse: collapse; }
+.paper.sheet table.s-tbl td { border: 0; border-bottom: 1px solid #d5d5d5; padding: 4px 6px; vertical-align: top; }
+.paper.sheet td.s-u { width: 62px; font-family: var(--f-mono); color: #333; white-space: nowrap; }
+.paper.sheet .s-side { font-size: .85em; color: #777; }
+.paper.sheet .s-model { color: #555; }
+.paper.sheet .s-meta { color: #333; font-size: .95em; margin-top: 1px; }
+.paper.sheet .s-mono { font-family: var(--f-mono); }
+.paper.sheet .s-notes { white-space: pre-wrap; font-size: .95em; color: #333; border-left: 2px solid #ccc; padding-left: 6px; margin-top: 2px; }
+.paper.sheet .s-conns { margin: 3px 0 0; padding-left: 16px; font-size: .95em; }
+.paper.sheet .s-conns li { margin: 1px 0; }
+.paper.sheet .s-mine { font-weight: 600; }
+.paper.sheet .s-tag { font-size: .82em; color: #555; border: 1px solid #bbb; border-radius: 3px; padding: 0 3px; white-space: nowrap; }
+.paper.sheet .s-empty { color: #999; font-style: italic; }
+.paper.sheet tr { break-inside: avoid; }
 .photo-empty { height: 40px; border: 1px dashed var(--line); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted); }
 .dev.photo { background-size: 100% 100%; background-repeat: no-repeat; background-color: #202327; --jack: rgba(0, 0, 0, .15); }
 .dev.photo::before, .dev.photo::after { display: none; }
@@ -416,12 +443,13 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.7</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.8</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
     <button data-act="tab" data-tab="rack">Rack</button>
     <button data-act="tab" data-tab="list">Patchlist</button>
+    <button data-act="tab" data-tab="sheet">Rig sheet</button>
     <button data-act="tab" data-tab="dante">Dante &amp; IP</button>
     <button data-act="tab" data-tab="print">Print</button>
     <button data-act="tab" data-tab="library">Library</button>
@@ -463,7 +491,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 <input type="file" id="file-photo" accept="image/*" hidden>
 
 <script>
-const APP_VERSION = '0.0.7';
+const APP_VERSION = '0.0.8';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -686,6 +714,20 @@ const DEFAULT_LIBRARY = [
     links: [{ from: 'in', to: 'tie' }],
   },
 ];
+
+// How many IP addresses each starter gear definition has, and what each is
+// for. [id, label, jack it belongs to]. Edit these per definition in the
+// Library (IP addresses section).
+const DEFAULT_IP_SLOTS = {
+  'yamaha-rio3224-d2': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2']],
+  'yamaha-tio1608-d': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2']],
+  'shure-ulxd4q': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2'], ['net:3', 'Control', 'net:3']],
+  'ah-avantis': [['net:1', 'Dante primary', 'net:1'], ['net:2', 'Dante secondary', 'net:2'], ['ctl:1', 'Control', 'ctl:1']],
+  'ah-ahm32': [['net:1', 'Control', 'net:1'], ['card:1', 'Dante primary', 'card:1'], ['card:2', 'Dante secondary', 'card:2']],
+  'luminex-gigacore30i': [['mgmt:1', 'Management', '']],
+  'sonnet-rackmac-mini': [['eth:1', 'Ethernet (Dante Virtual Soundcard)', 'eth:1']],
+};
+for (const d of DEFAULT_LIBRARY) d.ipSlots = (DEFAULT_IP_SLOTS[d.id] || []).map(([id, label, port]) => ({ id, label, port }));
 
 const CATEGORY_NAMES = {
   stagebox: 'Stage boxes & I/O', wireless: 'Wireless', iem: 'In-ear monitors', console: 'Consoles',
@@ -919,7 +961,7 @@ function defaultPrint() {
    ===================================================================== */
 
 /* ---------- 1. utilities ---------- */
-const SCHEMA = 2;
+const SCHEMA = 3;
 const STORE_KEY = 'patchrack.project';
 const U = 48;      // pixels per rack unit
 const W = 520;     // pixels per 19" panel width
@@ -995,7 +1037,24 @@ function migrate(p) {
   for (const d of DEFAULT_LIBRARY) if (!have.has(d.id)) p.library.push(JSON.parse(JSON.stringify(d)));
   if (!p.patches.length) p.patches.push(newPatch('Patch 1'));
   for (const pt of p.patches) { pt.sources ||= []; pt.outputs ||= []; }
-  for (const d of p.devices) { d.portNames ||= {}; d.labels ||= {}; d.ips ||= {}; }
+  if ((p.schema || 1) < 3) {
+    // v0.0.8: each gear definition lists its own IP addresses (instead of one per network jack).
+    // Slot ids match the old per-jack keys, so addresses already typed in carry over.
+    for (const def of p.library) {
+      if (def.ipSlots) continue;
+      const dflt = DEFAULT_LIBRARY.find((x) => x.id === def.id);
+      if (dflt?.ipSlots) { def.ipSlots = JSON.parse(JSON.stringify(dflt.ipSlots)); continue; }
+      def.ipSlots = [];
+      for (const g of def.groups) {
+        if (!((isPhysical(g) || g.face === 'virtual') && g.dir === 'io' && NET_CONNS.includes(g.conn) && g.ip !== false)) continue;
+        for (let n = 1; n <= g.count; n++) def.ipSlots.push({ id: `${g.id}:${n}`, label: g.count > 1 ? `${g.label} ${g.names?.[n - 1] ?? n}` : g.label, port: `${g.id}:${n}` });
+      }
+    }
+  }
+  for (const def of p.library) def.ipSlots ||= [];
+  for (const d of p.devices) { d.portNames ||= {}; d.labels ||= {}; d.ips ||= {}; d.fields ||= []; }
+  p.sheet = { scope: 'all', ...(p.sheet || {}) };
+  p.sheet.include = { empty: true, ips: true, details: true, cables: true, ties: true, dante: true, patch: false, ...(p.sheet.include || {}) };
   p.schema = SCHEMA;
   return p;
 }
@@ -1256,16 +1315,17 @@ const sigName = (t) => (SIGNALS[t] || SIGNALS.other).name;
 
 // ----- network jacks & IP addresses -----
 const NET_CONNS = ['rj45', 'ethercon', 'sfp', 'lc', 'opticalcon'];
-// network jacks that can have an IP address (a switch's ports can't: it gets one virtual "Management" entry)
-const isNetGroup = (g) => (isPhysical(g) || g.face === 'virtual') && g.dir === 'io' && NET_CONNS.includes(g.conn) && g.ip !== false;
-function netPorts(d) {
-  const def = idx.def.get(d.defId); if (!def) return [];
+const ipSlots = (def) => def?.ipSlots || [];
+// every IP address slot in the rig: { d (device), sl (slot), v ({ip, note}) }
+function ipEntries() {
   const out = [];
-  for (const g of def.groups) if (isNetGroup(g)) for (let n = 1; n <= g.count; n++) out.push(mkRef(d.id, g.id, n));
+  for (const d of project.devices) for (const sl of ipSlots(idx.def.get(d.defId))) out.push({ d, sl, v: d.ips?.[sl.id] || {} });
   return out;
 }
+const slotFor = (p) => ipSlots(p.def).find((s) => s.port === `${p.g.id}:${p.n}`);
+const safeId = (x) => String(x).replace(/[^\w-]/g, '_');
 const IP_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(\/([0-9]|[12]\d|3[0-2]))?$/;
-const ipOf = (ref) => { const p = port(ref); return p ? p.dev.ips?.[`${p.g.id}:${p.n}`]?.ip || '' : ''; };
+const ipOf = (ref) => { const p = port(ref); const sl = p && slotFor(p); return sl ? p.dev.ips?.[sl.id]?.ip || '' : ''; };
 
 // ----- fold-open sections (open/closed state remembered in this browser) -----
 const secState = (() => { try { return JSON.parse(localStorage.getItem('patchrack.sections') || '{}'); } catch { return {}; } })();
@@ -1301,10 +1361,83 @@ function resizeImage(file, maxW = 1040) {
   });
 }
 function photoHTML(def, editable = true) {
+  const sz = devSize(def);
   return `<div class="photos">${['front', 'rear'].map((f) => `<div class="photo-slot"><div class="eyebrow">${f}</div>
-    ${def.images?.[f] ? `<img src="${def.images[f]}" alt="${esc(def.model)} ${f} panel">` : '<div class="photo-empty">No photo</div>'}
-    ${editable ? `<div class="toolbar"><button data-act="addPhoto" data-def="${def.id}" data-face="${f}">${def.images?.[f] ? 'Replace' : 'Add photo'}</button>${def.images?.[f] ? `<button data-act="removePhoto" data-def="${def.id}" data-face="${f}">Remove</button>` : ''}</div>` : ''}</div>`).join('')}</div>
-    <p class="small muted" style="margin:0">Photos belong to the gear definition, so every ${esc(def.model)} shows them. Crop the photo to just the faceplate for the best fit, then line the jacks up in Library → Panel layout. Turn photos off in View.</p>`;
+    ${def.images?.[f] ? `<img src="${def.images[f]}" alt="${esc(def.model)} ${f} panel" style="aspect-ratio:${sz.w}/${sz.h}">` : `<div class="photo-empty" style="aspect-ratio:${sz.w}/${sz.h}">No photo</div>`}
+    ${editable ? `<div class="toolbar">${def.images?.[f] ? `<button data-act="adjustPhoto" data-def="${def.id}" data-face="${f}">Adjust</button>` : ''}<button data-act="addPhoto" data-def="${def.id}" data-face="${f}">${def.images?.[f] ? 'Replace' : 'Add photo'}</button>${def.images?.[f] ? `<button data-act="removePhoto" data-def="${def.id}" data-face="${f}">Remove</button>` : ''}</div>` : ''}</div>`).join('')}</div>
+    <p class="small muted" style="margin:0">Photos belong to the gear definition, so every ${esc(def.model)} shows them. After choosing a photo you can move, zoom and rotate it inside the faceplate window. If you change the gear's height or width, use Adjust again.</p>`;
+}
+
+// ----- photo editor: frame a photo inside the faceplate, like a profile picture -----
+let pe = null;
+const RECT_CONNS = ['rj45', 'sfp', 'iec', 'nema', 'phoenix', 'hdmi', 'usb', 'usbc', 'thunderbolt', 'displayport', 'lc', 'toslink'];
+function openPhotoEditor(defId, face, src, params) {
+  const def = project.library.find((d) => d.id === defId); if (!def) return;
+  const sz = devSize(def); const k = Math.min(1.2, 600 / sz.w);
+  pe = { defId, face, src, W: sz.w, H: sz.h, k, x: sz.w / 2, y: sz.h / 2, s: 1, r90: 0, fine: 0, jacks: true, img: null };
+  openModal(`${def.make} ${def.model} · ${face} photo`, `
+    <div class="pe-wrap"><canvas id="pe-canvas" style="width:${Math.round(sz.w * k)}px;height:${Math.round(sz.h * k)}px" width="${Math.round(sz.w * k * 2)}" height="${Math.round(sz.h * k * 2)}" aria-label="Photo framing window"></canvas></div>
+    <p class="small muted" style="margin:0">Drag the photo to move it. Scroll or use Zoom to resize. The window is exactly the ${def.ru}U${def.width === 'half' ? ' half-width' : ''} faceplate, so nothing gets stretched. The green outlines are the jacks: line them up with the photo, or move the jacks later in Panel layout.</p>
+    <div class="inline-fields pe-controls">
+      <div class="seg"><span>Rotate</span><button data-act="peRot" data-d="-90" aria-label="Rotate left 90 degrees">↺ 90°</button><button data-act="peRot" data-d="90" aria-label="Rotate right 90 degrees">↻ 90°</button></div>
+      <label class="field"><span>Straighten <b id="pe-fine-v">0°</b></span><input type="range" id="pe-fine" min="-15" max="15" step="0.5" value="0" data-inp="peFine"></label>
+      <label class="field"><span>Zoom</span><input type="range" id="pe-zoom" min="10" max="400" step="1" value="100" data-inp="peZoom"></label>
+      <div class="seg"><button data-act="peFit" title="Show the whole photo">Fit</button><button data-act="peFill" title="Fill the window">Fill</button></div>
+      <label class="tog"><input type="checkbox" id="pe-jacks" data-chg="peJacks" checked> Show jacks</label>
+    </div>
+    <div class="toolbar"><button class="primary" data-act="peSave">Save photo</button><button data-act="peNew">Choose a different photo…</button><span class="spacer"></span><button data-act="closeModal">Cancel</button></div>`);
+  const img = new Image();
+  img.onload = () => {
+    if (!pe) return;
+    pe.img = img;
+    if (params && params.s) Object.assign(pe, { x: params.x, y: params.y, s: params.s, r90: params.r90 || 0, fine: params.fine || 0 });
+    else peFill();
+    peSync(); peDraw();
+  };
+  img.onerror = () => { closeModal(); toast("That photo couldn't be opened."); };
+  img.src = src;
+}
+function peBox() {
+  const rad = (pe.r90 + pe.fine) * Math.PI / 180; const c = Math.abs(Math.cos(rad)), s = Math.abs(Math.sin(rad));
+  return { w: pe.img.width * c + pe.img.height * s, h: pe.img.width * s + pe.img.height * c };
+}
+const peFillScale = () => { const b = peBox(); return Math.max(pe.W / b.w, pe.H / b.h); };
+function peFill() { pe.s = peFillScale(); pe.x = pe.W / 2; pe.y = pe.H / 2; }
+function peFit() { const b = peBox(); pe.s = Math.min(pe.W / b.w, pe.H / b.h); pe.x = pe.W / 2; pe.y = pe.H / 2; }
+function peSync() {
+  const z = $('#pe-zoom'); if (z) z.value = Math.round(pe.s / peFillScale() * 100);
+  const f = $('#pe-fine'); if (f) f.value = pe.fine;
+  const fv = $('#pe-fine-v'); if (fv) fv.textContent = `${pe.fine}°`;
+}
+function peRender(ctx, scale) {
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#202327'; ctx.fillRect(0, 0, pe.W * scale, pe.H * scale);
+  ctx.translate(pe.x * scale, pe.y * scale); ctx.rotate((pe.r90 + pe.fine) * Math.PI / 180); ctx.scale(pe.s * scale, pe.s * scale);
+  ctx.drawImage(pe.img, -pe.img.width / 2, -pe.img.height / 2);
+  ctx.restore();
+}
+function peDraw() {
+  const cv = $('#pe-canvas'); if (!cv || !pe?.img) return;
+  const ctx = cv.getContext('2d'); const sc = pe.k * 2;
+  peRender(ctx, sc);
+  if (!pe.jacks) return;
+  const def = project.library.find((d) => d.id === pe.defId);
+  const lay = layoutFace(def, pe.face, pe.W, pe.H);
+  ctx.save(); ctx.scale(sc, sc); ctx.lineWidth = 1.6 / sc * 1.5; ctx.strokeStyle = 'rgba(143,209,166,.95)';
+  for (const pp of lay.ports) {
+    const sh = portShape(pp.conn, pp.p); const x = pp.x + (pp.p - sh.w) / 2, y = pp.y + (pp.p * 0.72 - sh.h) / 2;
+    ctx.beginPath();
+    if (RECT_CONNS.includes(pp.conn)) ctx.rect(x, y, sh.w, sh.h); else ctx.ellipse(x + sh.w / 2, y + sh.h / 2, sh.w / 2, sh.h / 2, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function startPeDrag(e) {
+  e.preventDefault();
+  const st = { x0: e.clientX, y0: e.clientY, x: pe.x, y: pe.y };
+  const mv = (ev) => { pe.x = st.x + (ev.clientX - st.x0) / pe.k; pe.y = st.y + (ev.clientY - st.y0) / pe.k; peDraw(); };
+  window.addEventListener('pointermove', mv);
+  window.addEventListener('pointerup', () => window.removeEventListener('pointermove', mv), { once: true });
 }
 
 const COMPAT = {
@@ -1334,14 +1467,12 @@ function runChecks() {
     else if (!c.type && sigOf(a.g) !== sigOf(b.g) && sigOf(a.g) !== 'other' && sigOf(b.g) !== 'other') add('info', `${portLong(c.a)} carries ${sigName(sigOf(a.g))} but ${portLong(c.b)} expects ${sigName(sigOf(b.g))}.`, { kind: 'conn', id: c.id });
   }
   const ipUse = new Map();
-  for (const d of project.devices) {
-    for (const r of netPorts(d)) {
-      const ip = ipOf(r); if (!ip) continue;
-      if (!IP_RE.test(ip)) add('warn', `${portLong(r)} has “${ip}”, which isn't a valid IP address.`, { kind: 'port', ref: r });
-      else push(ipUse, ip.split('/')[0], r);
-    }
+  for (const { d, sl, v } of ipEntries()) {
+    if (!v.ip) continue;
+    if (!IP_RE.test(v.ip)) add('warn', `${d.name} · ${sl.label} has “${v.ip}”, which isn't a valid IP address.`, { kind: 'device', id: d.id });
+    else push(ipUse, v.ip.split('/')[0], { d, sl });
   }
-  for (const [ip, refs] of ipUse) if (refs.length > 1) add('error', `IP address ${ip} is used ${refs.length} times: ${refs.map(portLong).join(', ')}.`, { kind: 'port', ref: refs[0] });
+  for (const [ip, list] of ipUse) if (list.length > 1) add('error', `IP address ${ip} is used ${list.length} times: ${list.map((x) => `${x.d.name} · ${x.sl.label}`).join(', ')}.`, { kind: 'device', id: list[0].d.id });
   const chUse = new Map();
   for (const s of pt.sources) {
     const nm = s.name || 'Untitled source';
@@ -1377,7 +1508,7 @@ function render() {
   updatePhotoCSS();
   renderTop();
   const main = $('#main');
-  const views = { rack: rackView, list: listView, dante: danteView, print: printView, library: libraryView, checks: checksView };
+  const views = { rack: rackView, list: listView, sheet: rigSheetView, dante: danteView, print: printView, library: libraryView, checks: checksView };
   main.innerHTML = (views[ui.tab] || rackView)();
   for (const [id, x, y] of keep) { const el = document.getElementById(id); if (el) { el.scrollLeft = x; el.scrollTop = y; } }
   for (const s of $$('select[data-val]')) s.value = s.dataset.val;
@@ -1800,6 +1931,7 @@ function drawCables() {
 let drag = null;
 function onPointerDown(e) {
   if (e.button > 0) return;
+  if (e.target.id === 'pe-canvas' && pe?.img) { startPeDrag(e); return; }
   if (e.target.closest('.cab-tog')) return;
   const grip = e.target.closest('.rack-grip');
   if (grip && rigMode()) { startRackResize(e, grip); return; }
@@ -2060,21 +2192,26 @@ function deviceInspector(d) {
   const def = idx.def.get(d.defId);
   const head = `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${def.form === 'rack' ? def.ru + 'U' + (def.width === 'half' ? ' half-width' : '') : def.form}</div>
     <h3>${esc(d.name)}</h3> ${def.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified gear definition</span>'}</div>`;
-  const nets = netPorts(d);
-  const ipRows = nets.map((r) => {
-    const p = port(r); const key = `${p.g.id}:${p.n}`; const v = d.ips?.[key] || {};
-    const lab = `${esc(p.g.label)} ${esc(portNum(p))}`;
+  const slots = ipSlots(def);
+  const ipRows = slots.map((sl) => {
+    const v = d.ips?.[sl.id] || {}; const k = safeId(sl.id);
     return rigMode()
-      ? `<div class="iprow"><label for="ip-${p.g.id}-${p.n}">${lab}</label><input id="ip-${p.g.id}-${p.n}" class="mono" value="${esc(v.ip || '')}" placeholder="192.168.1.10" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="ip"><input id="ipn-${p.g.id}-${p.n}" value="${esc(v.note || '')}" placeholder="note, e.g. Dante primary" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="note"></div>`
-      : `<div class="iprow ro"><span>${lab}</span><span class="mono">${esc(v.ip || '—')}</span><span class="muted small">${esc(v.note || '')}</span></div>`;
+      ? `<div class="iprow"><label for="ip-${k}">${esc(sl.label)}</label><input id="ip-${k}" class="mono" value="${esc(v.ip || '')}" placeholder="192.168.1.10" data-chg="devIp" data-dev="${d.id}" data-k="${esc(sl.id)}" data-f="ip"><input id="ipn-${k}" value="${esc(v.note || '')}" placeholder="note" data-chg="devIp" data-dev="${d.id}" data-k="${esc(sl.id)}" data-f="note"></div>`
+      : `<div class="iprow ro"><span>${esc(sl.label)}</span><span class="mono">${esc(v.ip || '—')}</span><span class="muted small">${esc(v.note || '')}</span></div>`;
   }).join('');
-  const ipSec = nets.length ? sec('dev-ip', 'Network &amp; IP addresses', ipRows + '<p class="small muted" style="margin:0">One address per network jack. Every address in the rig is listed in the Dante &amp; IP tab.</p>', true) : '';
+  const ipSec = slots.length ? sec('dev-ip', 'IP addresses', ipRows + '<p class="small muted" style="margin:0">The gear definition sets how many addresses this unit has (Library → IP addresses). Every address is listed in the Dante &amp; IP tab.</p>', true) : '';
+  const hasNotes = !!(d.notes || d.fields?.some((f) => f.k || f.v));
+  const notesRO = hasNotes ? sec('dev-notes', 'Details &amp; notes', `${(d.fields || []).filter((f) => f.k || f.v).map((f) => `<div class="iprow ro" style="grid-template-columns:110px minmax(0,1fr)"><span class="muted">${esc(f.k)}</span><span>${esc(f.v)}</span></div>`).join('')}${d.notes ? `<p class="small" style="margin:0;white-space:pre-wrap">${esc(d.notes)}</p>` : ''}`, true) : '';
+  const notesRW = sec('dev-notes', 'Details &amp; notes', `<p class="small muted" style="margin:0">Anything worth writing down for this unit: firmware, serial number, settings, who to call. Shows on the Rig sheet.</p>
+    ${(d.fields || []).map((f, i) => `<div class="kvrow"><input id="dfk-${i}" value="${esc(f.k)}" placeholder="e.g. Firmware" data-chg="devKV" data-dev="${d.id}" data-i="${i}" data-f="k"><input id="dfv-${i}" value="${esc(f.v)}" placeholder="e.g. 4.20" data-chg="devKV" data-dev="${d.id}" data-i="${i}" data-f="v"><button data-act="devKVDel" data-dev="${d.id}" data-i="${i}" aria-label="Remove detail">✕</button></div>`).join('')}
+    <button data-act="devKVAdd" data-dev="${d.id}">+ Detail</button>
+    <label class="field"><span>Notes</span><textarea id="dv-notes" rows="3" data-chg="devNotes" data-dev="${d.id}">${esc(d.notes || '')}</textarea></label>`, hasNotes);
   const ref = def.ref ? sec('dev-ref', 'Reference', `<p class="small muted" style="margin:0">${esc(def.ref)}</p>`, false) : '';
   if (!rigMode()) {
     const where = d.place.type === 'rack' ? project.racks.find((r) => r.id === d.place.rackId)?.name : project.locations.find((l) => l.id === d.place.locId)?.name;
     return `${head}
       <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd>${d.place.type === 'rack' ? `<dt>Position</dt><dd>U${d.place.u}${d.place.side === 'full' ? '' : d.place.side === 'L' ? ', left half' : ', right half'}</dd>` : ''}${d.zone ? `<dt>Stage</dt><dd>${esc(d.zone)} · ${esc(d.position || '')}</dd>` : ''}</dl>
-      ${ipSec}${ref}
+      ${ipSec}${notesRO}${ref}
       ${lockNote('rename, move, relabel or remove it')}`;
   }
   const containers = [...project.racks.map((r) => `<option value="r:${r.id}">Rack: ${esc(r.name)}</option>`), ...project.locations.map((l) => `<option value="l:${l.id}">Location: ${esc(l.name)}</option>`)].join('');
@@ -2097,6 +2234,7 @@ function deviceInspector(d) {
     ${labelRows || def.category === 'pocket' || d.zone ? sec('dev-labels', 'Jack labels &amp; stage position', `${labelRows ? `<p class="small muted" style="margin:0">What volunteers see printed. For example, prefix “RIO” and start 31 makes these jacks RIO 31–36.</p>${labelRows}` : ''}
       <div class="row"><label for="dv-zone">Stage zone</label><input id="dv-zone" value="${esc(d.zone || '')}" placeholder="Down-stage" data-chg="devField" data-f="zone"></div>
       <div class="row"><label for="dv-pos">Position</label><input id="dv-pos" value="${esc(d.position || '')}" placeholder="Stage Right" data-chg="devField" data-f="position"></div>`, false) : ''}
+    ${notesRW}
     ${sec('dev-photo', 'Photos', photoHTML(def), !!def.images?.front || !!def.images?.rear)}
     ${pb}${ref}
     <div class="toolbar"><button data-act="dupDev" data-id="${d.id}">Duplicate</button><button data-act="editDef" data-def="${def.id}">Edit gear definition</button>${confirmBtn('delDev', 'Remove', `data-id="${d.id}"`)}</div>`;
@@ -2117,11 +2255,11 @@ function portInspector(ref) {
   const bpaths = bw.ends.filter((e) => e !== ref).slice(0, 3).map((e) => pathTo(bw, e).reverse());
   const key = `${p.g.id}:${p.n}`;
   const canSrc = p.g.dir === 'in' || p.g.conn === 'dante';
-  const net = isNetGroup(p.g); const ipv = p.dev.ips?.[key] || {};
+  const slot = slotFor(p); const net = !!slot; const ipv = slot ? p.dev.ips?.[slot.id] || {} : {};
   const srcOpts = patch().sources.map((s) => `<option value="${s.id}">${esc(s.name || 'Untitled')}${(s.ports || []).some(Boolean) ? ' · ' + esc(stereoLabel(s.ports)) : ''}</option>`).join('');
   const more = rigMode() ? `<div class="row"><label for="pt-name">Custom name</label><input id="pt-name" value="${esc(p.dev.portNames?.[key] || '')}" placeholder="e.g. PREACH MIC" data-chg="portName" data-ref="${ref}"></div>
-    ${net ? `<div class="row"><label for="pt-ip">IP address</label><input id="pt-ip" class="mono" value="${esc(ipv.ip || '')}" placeholder="192.168.1.10" data-chg="devIp" data-dev="${p.dev.id}" data-k="${key}" data-f="ip"></div>
-    <div class="row"><label for="pt-ipn">IP note</label><input id="pt-ipn" value="${esc(ipv.note || '')}" placeholder="e.g. Dante primary" data-chg="devIp" data-dev="${p.dev.id}" data-k="${key}" data-f="note"></div>` : ''}` : '';
+    ${net ? `<div class="row"><label for="pt-ip">${esc(slot.label)} IP</label><input id="pt-ip" class="mono" value="${esc(ipv.ip || '')}" placeholder="192.168.1.10" data-chg="devIp" data-dev="${p.dev.id}" data-k="${esc(slot.id)}" data-f="ip"></div>
+    <div class="row"><label for="pt-ipn">IP note</label><input id="pt-ipn" value="${esc(ipv.note || '')}" placeholder="note" data-chg="devIp" data-dev="${p.dev.id}" data-k="${esc(slot.id)}" data-f="note"></div>` : ''}` : '';
   return `<div><div class="eyebrow">${esc(p.dev.name)} · ${esc(CONN_NAMES[p.g.conn] || p.g.conn)} ${p.g.dir === 'in' ? 'input' : p.g.dir === 'out' ? 'output' : 'two-way'}${isPhysical(p.g) ? ' · ' + esc(sigName(sigOf(p.g))) : ''}</div>
     <h3>${esc(portLabel(ref))}</h3><div class="small muted">${esc(portLong(ref))}</div>${net && ipv.ip ? `<div class="small mono">IP ${esc(ipv.ip)}${ipv.note ? ` · ${esc(ipv.note)}` : ''}</div>` : ''}</div>
     ${canSrc ? sec('pt-src', 'Source plugged in here', `
@@ -2238,13 +2376,33 @@ function sourcePortOptions() {
 function outputPortOptions() {
   let html = '<option value="">—</option>';
   for (const d of project.devices) {
-    const def = idx.def.get(d.defId); if (!def || !['console', 'processor'].includes(def.category)) continue;
-    const gs = def.groups.filter((g) => g.dir === 'out' && isPhysical(g) && !['iec', 'nema', 'dc'].includes(g.conn)); if (!gs.length) continue;
+    const def = idx.def.get(d.defId); if (!def || !['console', 'processor', 'computer'].includes(def.category)) continue;
+    const gs = def.groups.filter((g) => g.dir === 'out' && ((isPhysical(g) && !['iec', 'nema', 'dc'].includes(g.conn)) || g.conn === 'dante')); if (!gs.length) continue;
     html += `<optgroup label="${esc(d.name)}">`;
     for (const g of gs) for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); html += `<option value="${r}">${esc(portShort(r))}</option>`; }
     html += '</optgroup>';
   }
   return html;
+}
+function danteRxOptions() {
+  let html = '<option value="">— not routed —</option>';
+  for (const d of project.devices) {
+    const def = idx.def.get(d.defId); const g = def?.groups.find((x) => x.conn === 'dante' && x.dir === 'in'); if (!g) continue;
+    html += `<optgroup label="${esc(d.name)}">`;
+    for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); const nm = d.portNames?.[`${g.id}:${n}`]; const fed = (idx.in.get(r) || []).some((c) => c.kind === 'dante'); html += `<option value="${r}">${esc(d.short)} Rx ${n}${nm ? ' · ' + esc(nm) : ''}${fed ? ' (in use)' : ''}</option>`; }
+    html += '</optgroup>';
+  }
+  return html;
+}
+// where a signal ends up: the first jack it reaches on each next piece of gear
+function goesTo(ref) {
+  if (!ref || !port(ref)) return '';
+  const t = traceTree(ref); const start = parseRef(ref).devId;
+  return t.ends.filter((e) => e !== ref).slice(0, 2).map((e) => {
+    const hops = []; let last = start;
+    for (const r of pathTo(t, e).slice(1)) { const dv = parseRef(r).devId; if (dv !== last) { hops.push(portShort(r)); last = dv; } }
+    return hops.join(' → ');
+  }).filter(Boolean).join('; ');
 }
 function listView() {
   const pt = patch();
@@ -2272,12 +2430,16 @@ function listView() {
     </tr>`;
   }).join('');
   const outOpts = outputPortOptions();
+  const rxOpts = danteRxOptions();
   const orows = pt.outputs.map((o, i) => {
-    const goes = o.port && port(o.port) ? next(o.port).map(portShort).join(', ') : '';
+    const goes = goesTo(o.port);
+    const isDante = port(o.port)?.g.conn === 'dante';
+    const sub = isDante ? (idx.out.get(o.port) || []).find((c) => c.kind === 'dante') : null;
     return `<tr><td class="num">${i + 1}</td>
       <td><input id="on-${o.id}" value="${esc(o.name)}" data-chg="out" data-id="${o.id}" data-f="name"></td>
       <td><input id="om-${o.id}" value="${esc(o.mix)}" data-chg="out" data-id="${o.id}" data-f="mix" style="min-width:70px"></td>
       <td><select id="op-${o.id}" data-chg="out" data-id="${o.id}" data-f="port" data-val="${o.port || ''}">${outOpts}</select></td>
+      <td>${isDante ? `<select id="od-${o.id}" data-chg="outDante" data-id="${o.id}" data-val="${sub?.b || ''}">${rxOpts}</select>` : '<span class="muted small">—</span>'}</td>
       <td class="comp">${esc(goes) || '<span class="muted">—</span>'}</td>
       <td><input id="opn-${o.id}" value="${esc(o.person)}" data-chg="out" data-id="${o.id}" data-f="person"></td>
       <td><input id="ont-${o.id}" value="${esc(o.notes)}" data-chg="out" data-id="${o.id}" data-f="notes"></td>
@@ -2295,8 +2457,8 @@ function listView() {
     <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources · Console Ch is worked out from your cables and Dante routes</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
       <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Stage input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>
-    <div class="card"><div class="card-head"><h3>Outputs</h3><span class="muted small">Monitor mixes, mains, stream feeds…</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
-      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Leaves on</th><th>Goes to</th><th>Person</th><th>Notes</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="8" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
+    <div class="card"><div class="card-head"><h3>Outputs</h3><span class="muted small">Monitor mixes, mains, stream feeds… Pick a Dante Tx channel in “Leaves on”, then where it goes in “Dante to”.</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Leaves on</th><th>Dante to</th><th>Goes to</th><th>Person</th><th>Notes</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="9" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
     </div>
     ${sec('list-settings', 'Groups, custom columns &amp; cable colours', `<div class="editor-grid">
       <div class="card"><div class="card-head"><h3>Groups &amp; row colours</h3><span class="spacer"></span><button data-act="addGroup">+ Group</button></div>
@@ -2310,6 +2472,153 @@ function listView() {
       </div>
     </div>`, false)}
   </section>`;
+}
+
+/* ---------- 8b. rig sheet: every rack written out ---------- */
+// Consecutive connections that run in step (In 1→Line 1, In 2→Line 2…) are written as one range.
+function compressRuns(rows) {
+  rows.sort((x, y) => x.gi - y.gi || x.mine.n - y.mine.n);
+  const out = []; let run = null;
+  for (const r of rows) {
+    if (run && run.key === r.key && r.mine.n === run.last.mine.n + 1 && r.other.n === run.last.other.n + 1) { run.last = r; run.count++; }
+    else { if (run) out.push(run); run = { key: r.key, first: r, last: r, count: 1 }; }
+  }
+  if (run) out.push(run);
+  return out.map((run) => {
+    const a = run.first, b = run.last; const many = run.count > 1;
+    const cname = (p) => p.dev.portNames?.[`${p.g.id}:${p.n}`];
+    const mine = `${a.mine.g.label} ${portNum(a.mine)}${many ? '–' + portNum(b.mine) : ''}${!many && cname(a.mine) ? ` “${cname(a.mine)}”` : ''}`;
+    const other = `${a.other.dev.name} · ${a.other.g.label} ${portNum(a.other)}${many ? '–' + portNum(b.other) : ''}${!many && cname(a.other) ? ` “${cname(a.other)}”` : ''}`;
+    return { mine, dir: a.dir, other, tags: a.tags };
+  });
+}
+function sheetLines(d) {
+  const inc = project.sheet.include; const pid = patch().id;
+  const def = idx.def.get(d.defId); const gi = (p) => def.groups.indexOf(p.g);
+  const cab = [], dan = [];
+  for (const c of project.connections) {
+    if (c.layer !== 'rig' && !(inc.patch && c.layer === pid)) continue;
+    if (c.kind === 'dante' ? !inc.dante : c.kind === 'tie' ? !inc.ties : !inc.cables) continue;
+    const pa = port(c.a), pb = port(c.b); if (!pa || !pb) continue;
+    for (const [mine, other, dir] of [[pa, pb, '→'], [pb, pa, '←']]) {
+      if (mine.dev.id !== d.id) continue;
+      if (c.kind === 'dante' && dir === '→') continue; // routes are listed on the receiving unit
+      const t = connType(c);
+      const tags = c.kind === 'dante' ? [] : [c.kind === 'tie' ? 'tie line' : '', t !== 'analog' ? sigName(t) : '', c.spec || '', c.layer === 'rig' ? '' : 'this patch only'].filter(Boolean);
+      (c.kind === 'dante' ? dan : cab).push({ mine, other, dir, gi: gi(mine), tags, key: [mine.g.id, other.dev.id, other.g.id, dir, c.kind, tags.join(',')].join('|') });
+    }
+  }
+  const named = inc.dante ? def.groups.filter((g) => g.conn === 'dante' && g.dir === 'out').flatMap((g) => Array.from({ length: g.count }, (_, i) => [i + 1, d.portNames?.[`${g.id}:${i + 1}`]]).filter(([, n]) => n).map(([n, nm]) => `${g.label} ${n} “${nm}”`)) : [];
+  return { cables: compressRuns(cab), dante: compressRuns(dan), named };
+}
+function unitInfo(d) {
+  const def = idx.def.get(d.defId); const inc = project.sheet.include;
+  return {
+    name: d.name, model: `${def.make} ${def.model}`, size: def.form === 'rack' ? `${def.ru}U${def.width === 'half' ? ' ½' : ''}` : '',
+    where: d.zone ? `${d.zone}${d.position ? ' · ' + d.position : ''}` : '',
+    ips: inc.ips ? ipSlots(def).map((sl) => [sl.label, d.ips?.[sl.id]?.ip, d.ips?.[sl.id]?.note]).filter((x) => x[1]) : [],
+    fields: inc.details ? (d.fields || []).filter((f) => f.k || f.v) : [], notes: inc.details ? d.notes || '' : '',
+    ...sheetLines(d),
+  };
+}
+function rackRows(r) {
+  const inc = project.sheet.include; const occ = occupancy(r); const rows = [];
+  const devs = project.devices.filter((d) => d.place?.type === 'rack' && d.place.rackId === r.id);
+  for (let u = 1; u <= r.ru; u++) {
+    for (const d of devs.filter((x) => x.place.u === u).sort((a, b) => (a.place.side === 'R') - (b.place.side === 'R'))) {
+      const ru = idx.def.get(d.defId)?.ru || 1;
+      rows.push({ u: ru > 1 ? `U${u}–${u + ru - 1}` : `U${u}`, side: d.place.side === 'full' ? '' : d.place.side === 'L' ? 'left' : 'right', unit: unitInfo(d) });
+    }
+    if (!inc.empty) continue;
+    const o = occ[u];
+    if (!o.L && !o.R) {
+      const prev = rows[rows.length - 1];
+      if (prev?.empty && !prev.side && prev.end === u - 1) { prev.end = u; prev.u = `U${prev.start}–${u}`; }
+      else rows.push({ u: `U${u}`, empty: true, side: '', start: u, end: u });
+    } else if (!o.L || !o.R) rows.push({ u: `U${u}`, empty: true, side: !o.L ? 'left' : 'right' });
+  }
+  return rows;
+}
+function sheetModel() {
+  const o = project.sheet; const locIds = new Set(project.locations.map((l) => l.id));
+  let areas = [{ loc: null, racks: project.racks.filter((r) => !r.locId || !locIds.has(r.locId)) }, ...project.locations.map((l) => ({ loc: l, racks: project.racks.filter((r) => r.locId === l.id) }))];
+  let onlyRack = null;
+  if (o.scope.startsWith('loc:')) areas = areas.filter((a) => a.loc?.id === o.scope.slice(4));
+  if (o.scope.startsWith('rack:')) { onlyRack = o.scope.slice(5); areas = areas.map((a) => ({ ...a, racks: a.racks.filter((r) => r.id === onlyRack) })).filter((a) => a.racks.length); }
+  return areas.map((a) => ({
+    title: a.loc ? a.loc.name : 'Racks not in a location',
+    racks: a.racks.map((r) => ({ rack: r, rows: rackRows(r) })),
+    gear: a.loc && !onlyRack ? project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === a.loc.id).map((d) => ({ u: '', side: '', unit: unitInfo(d) })) : [],
+  })).filter((a) => a.racks.length || a.gear.length);
+}
+function sheetScopeLabel() {
+  const o = project.sheet.scope;
+  if (o.startsWith('loc:')) return project.locations.find((l) => l.id === o.slice(4))?.name || '';
+  if (o.startsWith('rack:')) return project.racks.find((r) => r.id === o.slice(5))?.name || '';
+  return 'Whole rig';
+}
+function unitHTML(x) {
+  if (x.empty) return '<span class="s-empty">empty</span>';
+  const u = x.unit;
+  return `<div class="s-unit"><b>${esc(u.name)}</b> <span class="s-model">${esc(u.model)}${u.size ? ' · ' + esc(u.size) : ''}${u.where ? ' · ' + esc(u.where) : ''}</span></div>
+    ${u.ips.length ? `<div class="s-meta">${u.ips.map(([l, ip, n]) => `${esc(l)} <span class="s-mono">${esc(ip)}</span>${n ? ` (${esc(n)})` : ''}`).join(' · ')}</div>` : ''}
+    ${u.fields.length ? `<div class="s-meta">${u.fields.map((f) => `${esc(f.k)}: ${esc(f.v)}`).join(' · ')}</div>` : ''}
+    ${u.notes ? `<div class="s-notes">${esc(u.notes)}</div>` : ''}
+    ${u.cables.length || u.dante.length || u.named.length ? `<ul class="s-conns">${u.cables.map((c) => `<li><span class="s-mine">${esc(c.mine)}</span> ${c.dir} ${esc(c.other)}${c.tags.map((t) => ` <span class="s-tag">${esc(t)}</span>`).join('')}</li>`).join('')}${u.dante.map((c) => `<li><span class="s-mine">${esc(c.mine)}</span> ← ${esc(c.other)}</li>`).join('')}${u.named.length ? `<li><span class="s-tag">Dante names</span> ${esc(u.named.join(', '))}</li>` : ''}</ul>` : ''}`;
+}
+function sheetPaperHTML() {
+  const pr = project.print; const hc = pr.headerColor || '#3a5068';
+  const model = sheetModel();
+  const table = (rows) => `<table class="s-tbl"><tbody>${rows.map((x) => `<tr><td class="s-u">${esc(x.u || '')}${x.side ? `<br><span class="s-side">${x.side}</span>` : ''}</td><td>${unitHTML(x)}</td></tr>`).join('')}</tbody></table>`;
+  return `<div class="paper sheet" style="--pfs:${+pr.fontSize || 11}px">
+    <div class="phead" style="background:${esc(hc)}">${pr.logo ? `<img src="${esc(pr.logo)}" alt="${esc(pr.org)}">` : `<span class="org">${esc(pr.org)}</span>`}</div>
+    <div class="pbody">
+      <div class="ptitle">Rig sheet · ${esc(project.name)}</div>
+      <div class="pmeta"><div>${esc(sheetScopeLabel())}${project.sheet.include.patch ? ` · includes ${esc(patch().name)}` : ''}</div><div>Printed ${esc(new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }))}</div></div>
+      ${model.length ? model.map((a) => `<h4>${esc(a.title)}</h4>
+        ${a.racks.map((r) => `<div class="s-rack"><div class="s-rack-h" style="background:${esc(hc)}">${esc(r.rack.name)} · ${r.rack.ru}U</div>${table(r.rows)}</div>`).join('')}
+        ${a.gear.length ? `<div class="s-rack"><div class="s-rack-h" style="background:${esc(hc)}">Gear outside racks</div>${table(a.gear)}</div>` : ''}`).join('') : '<p>Nothing to show for this choice.</p>'}
+    </div>
+  </div>`;
+}
+function sheetText() {
+  const lines = [`RIG SHEET · ${project.name}`, sheetScopeLabel(), ''];
+  const unit = (x, pad) => {
+    if (x.empty) return [`${pad}${x.u}${x.side ? ' ' + x.side : ''}  (empty)`];
+    const u = x.unit; const out = [`${pad}${x.u ? x.u + (x.side ? ' ' + x.side : '') + '  ' : ''}${u.name} — ${u.model}${u.size ? ' · ' + u.size : ''}${u.where ? ' · ' + u.where : ''}`];
+    const ind = pad + '    ';
+    if (u.ips.length) out.push(`${ind}IP: ${u.ips.map(([l, ip, n]) => `${l} ${ip}${n ? ' (' + n + ')' : ''}`).join(' · ')}`);
+    for (const f of u.fields) out.push(`${ind}${f.k}: ${f.v}`);
+    if (u.notes) for (const l of u.notes.split('\n')) out.push(`${ind}Note: ${l}`);
+    for (const c of u.cables) out.push(`${ind}${c.mine} ${c.dir} ${c.other}${c.tags.length ? ' [' + c.tags.join(', ') + ']' : ''}`);
+    for (const c of u.dante) out.push(`${ind}${c.mine} ← ${c.other}`);
+    if (u.named.length) out.push(`${ind}Dante names: ${u.named.join(', ')}`);
+    return out;
+  };
+  for (const a of sheetModel()) {
+    lines.push(a.title.toUpperCase());
+    for (const r of a.racks) { lines.push(`  ${r.rack.name} (${r.rack.ru}U)`); for (const x of r.rows) lines.push(...unit(x, '    ')); lines.push(''); }
+    if (a.gear.length) { lines.push('  Gear outside racks'); for (const x of a.gear) lines.push(...unit(x, '    ')); lines.push(''); }
+  }
+  return lines.join('\n');
+}
+function rigSheetView() {
+  const o = project.sheet;
+  const inc = (k, t) => `<label class="tog"><input type="checkbox" id="rs-${k}" data-chg="sheetInc" data-k="${k}" ${o.include[k] ? 'checked' : ''}> ${t}</label>`;
+  const scopeOpts = '<option value="all">Whole rig</option>' + project.locations.map((l) => `<option value="loc:${l.id}">Location: ${esc(l.name)}</option>`).join('') + project.racks.map((r) => `<option value="rack:${r.id}">Rack: ${esc(r.name)}</option>`).join('');
+  return `<section class="view"><div class="print-split">
+    <div class="print-opts card">
+      <div class="card-head"><h3>Rig sheet</h3></div>
+      <p class="small muted" style="margin:0">Every rack written out top to bottom: what's in each space, its IP addresses and notes, and what's plugged into it. Matching runs of cables are grouped into ranges.</p>
+      <label class="field"><span>Show</span><select id="rs-scope" data-chg="sheetScope" data-val="${esc(o.scope)}">${scopeOpts}</select></label>
+      ${sec('rs-inc', 'Include', `<div style="display:grid;gap:4px">${inc('empty', 'Empty rack spaces')}${inc('ips', 'IP addresses')}${inc('details', 'Details &amp; notes')}${inc('cables', 'Cables')}${inc('ties', 'Tie lines')}${inc('dante', 'Dante routes &amp; channel names')}${inc('patch', `Cables in ${esc(patch().name)} too (not just the rig)`)}</div>`)}
+      <div class="eyebrow">Output</div>
+      <div class="toolbar"><button class="primary" data-act="printSheet">Print / Save as PDF</button><button data-act="copySheet">Copy as text</button></div>
+      <p class="small muted" style="margin:0">Add details and notes to any unit from its panel on the Rack tab (rig mode). Header colour and logo come from the Print tab.</p>
+      ${inFrame ? '<p class="small muted" style="margin:0">This preview inside Claude blocks printing. It works from the file on your Mac.</p>' : ''}
+    </div>
+    <div class="paper-wrap" id="sheet-wrap" data-keep-scroll>${sheetPaperHTML()}</div>
+  </div></section>`;
 }
 
 /* ---------- 9. dante ---------- */
@@ -2353,28 +2662,21 @@ function danteView() {
   </section>`;
 }
 function ipTableHTML() {
-  const rows = [];
-  for (const d of project.devices) for (const r of netPorts(d)) rows.push([d, r]);
-  if (!rows.length) return '<p class="small muted" style="margin:0">No network jacks in the rig yet.</p>';
+  const rows = ipEntries();
+  if (!rows.length) return '<p class="small muted" style="margin:0">No gear with IP addresses yet. Set how many addresses a model has in Library → IP addresses.</p>';
   const dup = new Map();
-  for (const [, r] of rows) { const ip = ipOf(r).split('/')[0]; if (ip) dup.set(ip, (dup.get(ip) || 0) + 1); }
-  return `<p class="small muted" style="margin:0">${rigMode() ? 'Type an address next to each network jack. Duplicates and typos show up in Checks.' : 'Switch to The rig to edit addresses.'}</p>
-    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Gear</th><th>Jack</th><th>IP address</th><th>Note</th></tr></thead><tbody>${rows.map(([d, r]) => {
-      const p = port(r); const key = `${p.g.id}:${p.n}`; const v = d.ips?.[key] || {};
-      const bad = v.ip && (!IP_RE.test(v.ip) || dup.get(v.ip.split('/')[0]) > 1);
-      return `<tr><td>${esc(d.name)}</td><td>${esc(p.g.label)} ${esc(portNum(p))}</td>
-        <td>${rigMode() ? `<input id="ipt-${d.id}-${p.g.id}-${p.n}" class="mono ${bad ? 'bad' : ''}" value="${esc(v.ip || '')}" placeholder="—" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="ip">` : `<span class="mono ${bad ? 'bad' : ''}">${esc(v.ip || '—')}</span>`}</td>
-        <td>${rigMode() ? `<input id="iptn-${d.id}-${p.g.id}-${p.n}" value="${esc(v.note || '')}" placeholder="—" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="note">` : esc(v.note || '')}</td></tr>`;
+  for (const { v } of rows) { const ip = (v.ip || '').split('/')[0]; if (ip) dup.set(ip, (dup.get(ip) || 0) + 1); }
+  return `<p class="small muted" style="margin:0">${rigMode() ? 'Duplicates and typos show up in Checks. Change how many addresses a model has in Library → IP addresses.' : 'Switch to The rig to edit addresses.'}</p>
+    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Gear</th><th>Address for</th><th>IP address</th><th>Note</th></tr></thead><tbody>${rows.map(({ d, sl, v }) => {
+      const bad = v.ip && (!IP_RE.test(v.ip) || dup.get(v.ip.split('/')[0]) > 1); const k = `${d.id}-${safeId(sl.id)}`;
+      return `<tr><td>${esc(d.name)}</td><td>${esc(sl.label)}</td>
+        <td>${rigMode() ? `<input id="ipt-${k}" class="mono ${bad ? 'bad' : ''}" value="${esc(v.ip || '')}" placeholder="—" data-chg="devIp" data-dev="${d.id}" data-k="${esc(sl.id)}" data-f="ip">` : `<span class="mono ${bad ? 'bad' : ''}">${esc(v.ip || '—')}</span>`}</td>
+        <td>${rigMode() ? `<input id="iptn-${k}" value="${esc(v.note || '')}" placeholder="—" data-chg="devIp" data-dev="${d.id}" data-k="${esc(sl.id)}" data-f="note">` : esc(v.note || '')}</td></tr>`;
     }).join('')}</tbody></table></div>
     <div class="toolbar"><button data-act="copyIps">Copy IP list (CSV)</button></div>`;
 }
 function ipListRows() {
-  const out = [];
-  for (const d of project.devices) for (const r of netPorts(d)) {
-    const p = port(r); const v = d.ips?.[`${p.g.id}:${p.n}`];
-    if (v?.ip) out.push([d.name, `${p.g.label} ${portNum(p)}`, v.ip, v.note || '']);
-  }
-  return out;
+  return ipEntries().filter(({ v }) => v.ip).map(({ d, sl, v }) => [d.name, sl.label, v.ip, v.note || '']);
 }
 let txOptCache = null;
 function danteTxOptions(txDevs) {
@@ -2444,7 +2746,7 @@ function paperHTML() {
   if (pr.include.outputs && pt.outputs.length) {
     body += `<h4>Outputs</h4><table><thead><tr>${['Output', 'Mix', 'Leaves on', 'Goes to', 'Person'].map((h) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>`;
     for (const o of pt.outputs) {
-      const goes = o.port && port(o.port) ? next(o.port).map(portShort).join(', ') : '';
+      const goes = goesTo(o.port);
       body += `<tr><td>${esc(o.name)}</td><td class="c">${esc(o.mix)}</td><td>${esc(o.port ? portShort(o.port) : '')}</td><td>${esc(goes)}</td><td class="c">${esc(o.person)}</td></tr>`;
     }
     body += '</tbody></table>';
@@ -2466,7 +2768,7 @@ function paperHTML() {
   }
   if (pr.include.ipList) {
     const rows = ipListRows();
-    if (rows.length) body += `<h4>IP addresses</h4><table><thead><tr>${['Gear', 'Jack', 'IP address', 'Note'].map((h) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="c" style="font-family:var(--f-mono)">${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')}</tbody></table>`;
+    if (rows.length) body += `<h4>IP addresses</h4><table><thead><tr>${['Gear', 'Address for', 'IP address', 'Note'].map((h) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="c" style="font-family:var(--f-mono)">${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')}</tbody></table>`;
   }
   if (pr.include.pull) {
     const mics = new Map(), cables = new Map();
@@ -2577,6 +2879,8 @@ function defEditor(d) {
     <div class="card-head"><h3>Connectors &amp; channels</h3><span class="spacer"></span><button data-act="grpAdd">+ Port group</button></div>
     <p class="small muted" style="margin:0">One row per set of identical jacks. “Sources” marks jacks a mic or instrument can be assigned to in the patchlist. “Dante” and “Virtual” groups aren't drawn on the panel.</p>
     <div class="tbl-wrap"><table class="grid"><thead><tr><th>Label</th><th>Count</th><th>Connector</th><th>Direction</th><th>Side</th><th>Rows</th><th>Names</th><th>Signal</th><th>Sources</th><th></th></tr></thead><tbody>${groupRows}</tbody></table></div>
+    ${sec('lib-ips', `IP addresses (${(d.ipSlots || []).length})`, `<div class="toolbar"><span class="small muted" style="flex:1">How many IP addresses this gear has and what each one is for. Tie one to a network jack to show it on that jack.</span><button data-act="ipSlotAdd">+ IP address</button></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th>Address for</th><th>Jack</th><th></th></tr></thead><tbody>${(d.ipSlots || []).map((sl, i) => `<tr><td><input id="ips-l-${i}" value="${esc(sl.label)}" data-chg="ipSlotField" data-i="${i}" data-f="label"></td><td><select id="ips-p-${i}" data-chg="ipSlotField" data-i="${i}" data-f="port" data-val="${esc(sl.port || '')}"><option value="">Not tied to a jack</option>${d.groups.filter((g) => (isPhysical(g) || g.face === 'virtual') && g.dir === 'io' && NET_CONNS.includes(g.conn)).flatMap((g) => Array.from({ length: g.count }, (_, n) => `<option value="${g.id}:${n + 1}">${esc(g.label)} ${esc(g.names?.[n] ?? ((g.start ?? 1) + n))}</option>`)).join('')}</select></td><td>${confirmBtn('ipSlotDel', '✕', `data-i="${i}"`)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted small">No IP addresses.</td></tr>'}</tbody></table></div>`, true)}
     ${sec('lib-routing', 'Internal routing', `<div class="toolbar"><span class="small muted" style="flex:1">What feeds what inside the box, number for number. Example: In 1 → Dante Tx 1 means input 5 comes out on Dante Tx 5.</span><button data-act="linkAdd" ${d.groups.length < 2 ? 'disabled' : ''}>+ Route</button></div>
     <div class="tbl-wrap"><table class="grid"><thead><tr><th>From</th><th>Start</th><th></th><th>To</th><th>Start</th><th>How many</th><th></th></tr></thead><tbody>${linkRows || '<tr><td colspan="7" class="muted small">No internal routing.</td></tr>'}</tbody></table></div>`, false)}
     ${sec('lib-photos', 'Photos', photoHTML(d), !!d.images?.front || !!d.images?.rear)}
@@ -2613,7 +2917,14 @@ function openModal(title, html) {
   m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="card-head"><h3>${esc(title)}</h3><span class="spacer"></span><button data-act="closeModal">Close</button></div>${html}</div>`;
   m.hidden = false;
 }
-function closeModal() { $('#modal').hidden = true; $('#modal').innerHTML = ''; }
+function closeModal() { $('#modal').hidden = true; $('#modal').innerHTML = ''; pe = null; }
+function doPrint(html, orientation) {
+  const root = $('#print-root'); root.innerHTML = html;
+  let st = $('#page-style'); if (!st) { st = document.createElement('style'); st.id = 'page-style'; document.head.appendChild(st); }
+  st.textContent = `@page { size: letter ${orientation}; margin: 0.25in; }`;
+  try { window.print(); } catch { /* blocked */ }
+  if (inFrame) toast('Printing is blocked in this preview. Open the app in its own tab or from the file on your Mac.', 5000);
+}
 const findSrc = (id) => patch().sources.find((s) => s.id === id);
 const defaultsFor = (def) => {
   const same = project.devices.filter((d) => d.defId === def.id).length;
@@ -2682,9 +2993,34 @@ const actions = {
     const i = p.racks.indexOf(r); const d = +el.dataset.d;
     for (let j = i + d; j >= 0 && j < p.racks.length; j += d) if (same(p.racks[j])) { [p.racks[i], p.racks[j]] = [p.racks[j], p.racks[i]]; break; }
   }),
+  adjustPhoto: (el) => {
+    const def = project.library.find((d) => d.id === el.dataset.def); const f = el.dataset.face;
+    const ps = def?.photoSrc?.[f];
+    if (ps?.src) openPhotoEditor(def.id, f, ps.src, ps); else if (def?.images?.[f]) openPhotoEditor(def.id, f, def.images[f], null);
+  },
+  peRot: (el) => { pe.r90 = (pe.r90 + +el.dataset.d + 360) % 360; peFill(); peSync(); peDraw(); },
+  peFit: () => { peFit(); peSync(); peDraw(); },
+  peFill: () => { peFill(); peSync(); peDraw(); },
+  peNew: () => { ui.photoTarget = { defId: pe.defId, face: pe.face }; $('#file-photo').click(); },
+  peSave: () => {
+    if (!pe?.img) return;
+    const out = document.createElement('canvas'); out.width = Math.round(pe.W * 2); out.height = Math.round(pe.H * 2);
+    peRender(out.getContext('2d'), 2);
+    const url = out.toDataURL('image/jpeg', 0.85);
+    const { defId, face, src, x, y, s, r90, fine } = pe; const def = project.library.find((d) => d.id === defId);
+    closeModal();
+    commit(`Set the ${face} photo of ${def.model}`, () => { def.images ||= {}; def.images[face] = url; def.photoSrc ||= {}; def.photoSrc[face] = { src, x, y, s, r90, fine }; });
+    toast('Photo saved.');
+  },
+  devKVAdd: (el) => commit('Added a detail', (p) => { p.devices.find((d) => d.id === el.dataset.dev).fields.push({ k: '', v: '' }); }),
+  devKVDel: (el) => commit('Removed a detail', (p) => { p.devices.find((d) => d.id === el.dataset.dev).fields.splice(+el.dataset.i, 1); }),
+  ipSlotAdd: () => commit('Added an IP address to gear', () => { const d = libDef(); (d.ipSlots ||= []).push({ id: uid('ip'), label: `IP ${d.ipSlots.length + 1}`, port: '' }); }),
+  ipSlotDel: (el) => { ui.armed = null; commit('Removed an IP address from gear', () => { libDef().ipSlots.splice(+el.dataset.i, 1); }); },
+  printSheet: () => doPrint(sheetPaperHTML(), 'portrait'),
+  copySheet: () => copyText(sheetText(), 'Rig sheet copied as text.'),
   addPhoto: (el) => { ui.photoTarget = { defId: el.dataset.def, face: el.dataset.face }; $('#file-photo').click(); },
-  removePhoto: (el) => commit('Removed a photo', (p) => { const d = p.library.find((x) => x.id === el.dataset.def); if (d?.images) delete d.images[el.dataset.face]; }),
-  copyIps: () => copyText(['Gear,Jack,IP address,Note', ...ipListRows().map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n'), 'IP list copied.'),
+  removePhoto: (el) => commit('Removed a photo', (p) => { const d = p.library.find((x) => x.id === el.dataset.def); if (d?.images) delete d.images[el.dataset.face]; if (d?.photoSrc) delete d.photoSrc[el.dataset.face]; }),
+  copyIps: () => copyText(['Gear,Address for,IP address,Note', ...ipListRows().map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n'), 'IP list copied.'),
   moveLoc: (el) => commit('Reordered locations', (p) => moveIn(p.locations, el.dataset.id, +el.dataset.d)),
   dupDev: (el) => {
     const d = idx.dev.get(el.dataset.id); const def = idx.def.get(d.defId);
@@ -2745,19 +3081,13 @@ const actions = {
   printColMove: (el) => commit('', (p) => { const cols = printColumns(); const i = cols.findIndex((c) => c.key === el.dataset.k), j = i + +el.dataset.d; if (j < 0 || j >= cols.length) return; [cols[i], cols[j]] = [cols[j], cols[i]]; }),
   pickLogo: () => $('#file-logo').click(),
   clearLogo: () => commit('Removed logo', (p) => { p.print.logo = ''; }),
-  print: () => {
-    const root = $('#print-root'); root.innerHTML = paperHTML();
-    let st = $('#page-style'); if (!st) { st = document.createElement('style'); st.id = 'page-style'; document.head.appendChild(st); }
-    st.textContent = `@page { size: letter ${project.print.orientation}; margin: 0.25in; }`;
-    try { window.print(); } catch { /* blocked */ }
-    if (inFrame) toast('Printing is blocked in this preview. Open the app in its own tab or from the file on your Mac.', 5000);
-  },
+  print: () => doPrint(paperHTML(), project.print.orientation),
   csv: () => download(`${patch().name || 'patchlist'}.csv`, csvText(), 'text/csv'),
   copyCsv: () => copyText(csvText(), 'CSV copied. Paste it into Numbers, Excel or Google Sheets.'),
   // library
   libSel: (el) => { ui.libSel = el.dataset.def; render(); },
   editDef: (el) => { ui.tab = 'library'; ui.libSel = el.dataset.def; render(); },
-  newDef: () => { const id = uid('def'); commit('Created a gear definition', (p) => p.library.push({ id, make: 'New', model: 'Gear', short: 'NEW', category: 'other', form: 'rack', ru: 1, width: 'full', watts: 0, verified: false, ref: '', groups: [{ id: 'in', label: 'In', count: 8, start: 1, conn: 'xlr', dir: 'in', face: 'rear', src: true }], links: [] }), { quiet: true }); ui.tab = 'library'; ui.libSel = id; render(); },
+  newDef: () => { const id = uid('def'); commit('Created a gear definition', (p) => p.library.push({ id, make: 'New', model: 'Gear', short: 'NEW', category: 'other', form: 'rack', ru: 1, width: 'full', watts: 0, verified: false, ref: '', groups: [{ id: 'in', label: 'In', count: 8, start: 1, conn: 'xlr', dir: 'in', face: 'rear', src: true }], links: [], ipSlots: [] }), { quiet: true }); ui.tab = 'library'; ui.libSel = id; render(); },
   dupDef: (el) => { const src = project.library.find((d) => d.id === el.dataset.def); const id = uid('def'); commit(`Duplicated ${src.model}`, (p) => p.library.push({ ...JSON.parse(JSON.stringify(src)), id, model: src.model + ' copy', verified: false }), { quiet: true }); ui.libSel = id; render(); },
   delDef: (el) => { ui.armed = null; commit('Deleted a gear definition', (p) => { p.library = p.library.filter((d) => d.id !== el.dataset.def); }, { quiet: true }); ui.libSel = null; render(); },
   grpAdd: () => commit('Edited gear', () => { const d = libDef(); d.groups.push({ id: uid('g'), label: 'Port', count: 1, start: 1, conn: 'xlr', dir: 'in', face: 'rear' }); }),
@@ -2836,6 +3166,21 @@ const changes = {
       if (cur.ip || cur.note) d.ips[el.dataset.k] = cur; else delete d.ips[el.dataset.k];
     });
   },
+  devKV: (el) => commit('Edited a detail', (p) => { p.devices.find((d) => d.id === el.dataset.dev).fields[+el.dataset.i][el.dataset.f] = el.value; }),
+  devNotes: (el) => commit('Edited notes', (p) => { p.devices.find((d) => d.id === el.dataset.dev).notes = el.value; }),
+  ipSlotField: (el) => commit('Edited gear IP addresses', () => { libDef().ipSlots[+el.dataset.i][el.dataset.f] = el.value; }),
+  sheetScope: (el) => { project.sheet.scope = el.value; save(); render(); },
+  sheetInc: (el) => { project.sheet.include[el.dataset.k] = el.checked; save(); render(); },
+  peJacks: (el) => { pe.jacks = el.checked; peDraw(); },
+  outDante: (el) => {
+    const o = patch().outputs.find((x) => x.id === el.dataset.id); const tx = o.port, rx = el.value;
+    const layer = rigMode() ? 'rig' : patch().id;
+    commit(rx ? `Dante: ${portShort(tx)} → ${portShort(rx)}` : `Dante: cleared ${portShort(tx)}`, (p) => {
+      p.connections = p.connections.filter((c) => !(c.kind === 'dante' && ((c.a === tx && (c.layer === layer || c.layer === 'rig' || c.layer === patch().id)) || (rx && c.b === rx && (c.layer === layer || c.layer === 'rig' || c.layer === patch().id)))));
+      if (rx) p.connections.push({ id: uid('c'), a: tx, b: rx, kind: 'dante', layer, color: '' });
+    });
+    if (rx) toast(rigMode() ? 'Dante route saved in the rig.' : `Dante route saved in ${patch().name} only.`);
+  },
   viewField: (el) => { project.view[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; save(); render(); },
   typeVis: (el) => { if (el.checked) delete project.view.hideTypes[el.dataset.t]; else project.view.hideTypes[el.dataset.t] = true; save(); render(); },
   connKind: (el) => commit(el.value === 'tie' ? 'Made a cable into a tie line' : 'Made a tie line into a cable', (p) => {
@@ -2897,6 +3242,8 @@ const changes = {
   }),
 };
 const inputs = {
+  peFine: (el) => { pe.fine = +el.value; const fv = $('#pe-fine-v'); if (fv) fv.textContent = `${pe.fine}°`; peDraw(); },
+  peZoom: (el) => { pe.s = peFillScale() * (+el.value / 100); peDraw(); },
   connQuery: (el) => { ui.connQuery = el.value; const s = $('#pt-target'); if (s) s.innerHTML = connectOptions(el.dataset.ref, el.value); },
   addQuery: (el) => {
     ui.addQuery = el.value;
@@ -2928,6 +3275,10 @@ document.addEventListener('input', (e) => {
   if (el && inputs[el.dataset.inp]) inputs[el.dataset.inp](el, e);
 });
 document.addEventListener('pointerdown', onPointerDown);
+document.addEventListener('wheel', (e) => {
+  if (e.target.id !== 'pe-canvas' || !pe?.img) return;
+  e.preventDefault(); pe.s *= e.deltaY < 0 ? 1.06 : 1 / 1.06; peSync(); peDraw();
+}, { passive: false });
 document.addEventListener('dblclick', (e) => {
   if (e.target.closest('#pt-target') && ui.sel?.kind === 'port') actions.connectPicked({ dataset: { ref: ui.sel.ref } });
 });
@@ -2969,10 +3320,8 @@ $('#file-lib').addEventListener('change', (e) => readFile(e.target, (txt) => {
 $('#file-photo').addEventListener('change', async (e) => {
   const f = e.target.files?.[0]; const t = ui.photoTarget; e.target.value = ''; if (!f || !t) return;
   try {
-    const url = await resizeImage(f);
-    const def = project.library.find((d) => d.id === t.defId);
-    commit(`Added a ${t.face} photo to ${def.model}`, () => { def.images ||= {}; def.images[t.face] = url; });
-    toast(`Photo added (${Math.round(url.length * 0.75 / 1024)} KB).`);
+    const url = await resizeImage(f, 1600);
+    openPhotoEditor(t.defId, t.face, url, null);
   } catch { toast("That file couldn't be read as an image. Try a JPG or PNG."); }
 });
 $('#file-logo').addEventListener('change', (e) => {
