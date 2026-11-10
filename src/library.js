@@ -91,7 +91,7 @@ const DEFAULT_LIBRARY = [
   // ---------------- console & processing ----------------
   {
     id: 'ah-avantis', make: 'Allen & Heath', model: 'Avantis', short: 'AVANTIS', category: 'console',
-    form: 'desk', ru: 3, width: 'full', watts: 300, verified: false,
+    form: 'desk', ru: 3, width: 'full', watts: 300, verified: false, mixer: true,
     ref: 'Desk console. Rear I/O shown approximately. Assumes one 64x64 Dante card; Dante Rx n feeds input channel n.',
     groups: [
       G('in', 'Local In', 12, 'xlr', 'in', 'rear', { rows: 2, src: true }),
@@ -455,5 +455,7 @@ function defaultPrint() {
       { key: 'path', on: false }, { key: 'notes', on: false },
     ],
     include: { inputs: true, outputs: false, stageMap: true, pull: false, ipList: false },
+    // which columns the printed output list shows (the output's name always shows)
+    outCols: { type: false, mix: true, leaves: false, goes: false, person: true, notes: false },
   };
 }

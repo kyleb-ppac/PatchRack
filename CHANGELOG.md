@@ -3,6 +3,17 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.9 (2026-11-10)
+- **Line jacks up with photos (Library → Panel layout):** switch Drag to **Single jacks** to move any one jack, or keep **Port groups** to move whole blocks. Click a jack or block and nudge it with the arrow keys (1px, Shift for 10px). Hold Alt while dragging a block to place it off the grid. Each group now has **Space across** and **Space down** settings, and "Put back" returns moved jacks to their rows.
+- **Custom-size gear:** for gear that isn't rack-mounted, choose Size → **Custom size** and enter width and height in inches. It's drawn at real scale (1U = 1.75″). New mounting **Sits on a rack shelf**: the gear goes in a rack on a shelf of however many U you set, drawn at its real size.
+- **Mixer flag:** tick **Mixer / console** on a gear definition (the Avantis is ticked already). Mixers drive the two patchlist changes below.
+- **Patchlist, Console Ch:** for sources that reach the network over Dante, Console Ch is now a picker of the mixer's channels (showing what's already on each). Picking one makes the Dante route for you. Channels fed by local inputs can't be picked; they're still worked out from the cables.
+- **Patchlist, stereo:** pick the first input and the second fills in with the next one (In 7 → In 8). You can still change it.
+- **Patchlist, outputs:** choose a **Type** first (Analog, Dante, AES…), then "Leaves on" lists only the mixer's outputs of that type. Only gear marked as a mixer appears.
+- **Print:** choose which columns the output list shows (Type, Mix, Leaves on, Goes to, Person, Notes). "Leaves on" and "Goes to" are off by default; the Technical preset turns them on.
+- **Dante & IP tab reorganised:** a short "How Dante works here" explainer, a clear **New routes go in: The rig / this patch** switch, and four sections: **Routes** (make a whole block at once, e.g. Rio A Tx 1–32 → Avantis Rx 17–48, and see every route grouped into blocks with what it lands on), **Receivers**, **Transmitters** and **IP addresses**.
+- **Patches no longer change the rig's Dante routes:** replacing a permanent route while editing a patch now switches it off for that patch only. Turn it back on from Dante & IP → Routes.
+
 ## v0.0.8 (2026-11-10)
 - **Rig sheet tab:** every location and rack written out top to bottom: what's in each space (and which spaces are empty), IP addresses, details and notes, every cable and tie line, and Dante routes. Matching runs of connections are grouped (e.g. "In 1–6 ← Pocket MS-SR · Tie 1–6"). Show the whole rig, one location or one rack; choose what to include; print/PDF or copy as text.
 - **Details & notes on every unit:** free-form detail fields (firmware, serial, settings…) and a notes box in the unit's panel (rig mode). Shown on the Rig sheet.

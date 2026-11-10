@@ -432,3 +432,22 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
   .paper .phead, .paper th, .paper td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .paper tr { break-inside: avoid; }
 }
+
+/* v0.0.9: shelves, single-jack layout, dante routes, print sub-options */
+.shelf { position: absolute; z-index: 0; pointer-events: none; border-radius: 2px;
+  background: linear-gradient(180deg, transparent calc(100% - 6px), #4a5057 calc(100% - 6px), #2e3338);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
+.shelf::before, .shelf::after { content: ""; position: absolute; bottom: 0; width: 6px; height: 100%; background: linear-gradient(90deg, #3a4046, #2b3035); }
+.shelf::before { left: 0; } .shelf::after { right: 0; }
+.dev.on-shelf { z-index: 1; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 2px 3px rgba(0,0,0,.5); }
+.jack-box { position: absolute; z-index: 4; border: 1px dashed rgba(143,209,166,.6); border-radius: 3px; cursor: move; touch-action: none; }
+.jack-box:hover, .jack-box.moving { border: 2px solid #8fd1a6; background: rgba(143,209,166,.15); }
+.grp-box.focus, .jack-box.focus { border: 2px solid var(--trace); background: rgba(255,255,255,.12); }
+.route-form { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: end; }
+.route-form .field select { min-width: 150px; }
+.route-form .field input { width: 76px; }
+.route-arrow { font-size: 20px; color: var(--muted); padding-bottom: 4px; }
+.subtabs { justify-self: start; flex-wrap: wrap; }
+.help-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.subopts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 4px 22px; align-items: center; }
+.inputcell .comp { white-space: nowrap; font-size: 12px; }

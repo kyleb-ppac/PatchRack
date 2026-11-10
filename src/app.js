@@ -7,7 +7,7 @@
    ===================================================================== */
 
 /* ---------- 1. utilities ---------- */
-const SCHEMA = 3;
+const SCHEMA = 4;
 const STORE_KEY = 'patchrack.project';
 const U = 48;      // pixels per rack unit
 const W = 520;     // pixels per 19" panel width
@@ -79,6 +79,7 @@ function migrate(p) {
   p.cableColors ||= JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS));
   p.print = { ...defaultPrint(), ...(p.print || {}) };
   p.print.include = { ...defaultPrint().include, ...(p.print.include || {}) };
+  p.print.outCols = { ...defaultPrint().outCols, ...(p.print.outCols || {}) };
   const have = new Set(p.library.map((d) => d.id));
   for (const d of DEFAULT_LIBRARY) if (!have.has(d.id)) p.library.push(JSON.parse(JSON.stringify(d)));
   if (!p.patches.length) p.patches.push(newPatch('Patch 1'));
@@ -98,6 +99,10 @@ function migrate(p) {
     }
   }
   for (const def of p.library) def.ipSlots ||= [];
+  if ((p.schema || 1) < 4) {
+    // v0.0.9: gear can be marked as a mixer (console channels and outputs are picked from mixers)
+    for (const def of p.library) if (def.mixer === undefined) def.mixer = def.category === 'console';
+  }
   for (const d of p.devices) { d.portNames ||= {}; d.labels ||= {}; d.ips ||= {}; d.fields ||= []; }
   p.sheet = { scope: 'all', ...(p.sheet || {}) };
   p.sheet.include = { empty: true, ips: true, details: true, cables: true, ties: true, dante: true, patch: false, ...(p.sheet.include || {}) };
@@ -221,9 +226,10 @@ function buildIndex() {
     out: new Map(), in: new Map(), cables: new Map(), active: [], broken: [],
     srcAt: new Map(), mark: new Map(), outMark: new Map(),
   };
-  const pid = patch()?.id;
+  const pid = patch()?.id; const off = new Set(patch()?.danteOff || []);
   for (const c of project.connections) {
     if (c.layer !== 'rig' && c.layer !== pid) continue;
+    if (off.has(c.id)) continue;   // a rig Dante route switched off for this patch only
     if (!port(c.a) || !port(c.b)) { idx.broken.push(c); continue; }
     idx.active.push(c); push(idx.out, c.a, c); push(idx.in, c.b, c);
     if (c.kind !== 'dante') {
@@ -423,7 +429,7 @@ function openPhotoEditor(defId, face, src, params) {
   pe = { defId, face, src, W: sz.w, H: sz.h, k, x: sz.w / 2, y: sz.h / 2, s: 1, r90: 0, fine: 0, jacks: true, img: null };
   openModal(`${def.make} ${def.model} · ${face} photo`, `
     <div class="pe-wrap"><canvas id="pe-canvas" style="width:${Math.round(sz.w * k)}px;height:${Math.round(sz.h * k)}px" width="${Math.round(sz.w * k * 2)}" height="${Math.round(sz.h * k * 2)}" aria-label="Photo framing window"></canvas></div>
-    <p class="small muted" style="margin:0">Drag the photo to move it. Scroll or use Zoom to resize. The window is exactly the ${def.ru}U${def.width === 'half' ? ' half-width' : ''} faceplate, so nothing gets stretched. The green outlines are the jacks: line them up with the photo, or move the jacks later in Panel layout.</p>
+    <p class="small muted" style="margin:0">Drag the photo to move it. Scroll or use Zoom to resize. The window is exactly the ${esc(customSize(def) ? sizeText(def) : `${def.ru}U${def.width === 'half' ? ' half-width' : ''}`)} faceplate, so nothing gets stretched. The green outlines are the jacks: line them up with the photo, or move the jacks later in Panel layout.</p>
     <div class="inline-fields pe-controls">
       <div class="seg"><span>Rotate</span><button data-act="peRot" data-d="-90" aria-label="Rotate left 90 degrees">↺ 90°</button><button data-act="peRot" data-d="90" aria-label="Rotate right 90 degrees">↻ 90°</button></div>
       <label class="field"><span>Straighten <b id="pe-fine-v">0°</b></span><input type="range" id="pe-fine" min="-15" max="15" step="0.5" value="0" data-inp="peFine"></label>
@@ -575,17 +581,26 @@ function renderTop() {
 /* ---------- 6. rack view ---------- */
 const PITCH = { rca: 18, mini: 14, usbc: 14, thunderbolt: 14, displayport: 18, lc: 16, opticalcon: 26, toslink: 16, xlr: 26, combo: 26, dmx5: 26, dmx3: 26, ethercon: 24, rj45: 19, trs: 18, headphone: 18, bnc: 17, sfp: 19, phoenix: 13, iec: 28, nema: 28, dc: 16, speakon: 28, powercon: 28, usb: 15, hdmi: 20 };
 const layoutCache = new Map();
+// p = jack size; px / py = distance from one jack to the next across / down
+// (the group's own spacing if set in Panel layout, otherwise the jack size)
 function groupDims(g, s, h, top) {
-  const p = (PITCH[g.conn] || 20) * s;
+  const base = PITCH[g.conn] || 20;
+  // spacing set by hand is exact panel pixels, so it doesn't change when the jacks are scaled to fit
+  const p = base * s, px = +g.sx || p, py = +g.sy || p;
   const lab = g.nolabel ? 0 : 10 * Math.max(s, 0.7);
-  const maxRows = Math.max(1, Math.floor((h - top - lab - 2) / p));
+  const maxRows = Math.max(1, Math.floor((h - top - lab - 2 - p) / py) + 1);
   let rows = g.rows || (g.count <= 12 ? 1 : g.count <= 24 ? 2 : 4);
   rows = Math.max(1, Math.min(rows, maxRows, g.count));
   const cols = Math.ceil(g.count / rows);
-  return { p, lab, rows, cols, bw: cols * p, bh: rows * p + lab };
+  return { p, px, py, lab, rows, cols, bw: (cols - 1) * px + p, bh: (rows - 1) * py + p + lab };
+}
+// one jack's spot inside its group, plus any nudge it was given in Panel layout
+function jackXY(g, dm, i, x, y) {
+  const r = Math.floor(i / dm.cols), c = i % dm.cols; const o = g.off?.[i + 1];
+  return { x: x + c * dm.px + (o?.x || 0), y: y + dm.lab + r * dm.py + (o?.y || 0) };
 }
 function layoutFace(def, face, w, h) {
-  const key = `${def.id}|${face}|${w}|${h}|${JSON.stringify(def.groups.map((g) => [g.id, g.label, g.count, g.conn, g.face, g.rows, g.pos]))}|${JSON.stringify(def.layout?.[face] || null)}`;
+  const key = `${def.id}|${face}|${w}|${h}|${JSON.stringify(def.groups.map((g) => [g.id, g.label, g.count, g.conn, g.face, g.rows, g.pos, g.sx, g.sy, g.off]))}|${JSON.stringify(def.layout?.[face] || null)}`;
   if (layoutCache.has(key)) return layoutCache.get(key);
   const gs = def.groups.filter((g) => g.face === face);
   let best = null;
@@ -599,10 +614,7 @@ function layoutFace(def, face, w, h) {
       const dm = groupDims(g, s, h, top);
       const x = g.pos ? g.pos.x : pad, y = g.pos ? g.pos.y : bottom + 3;
       if (!g.nolabel) labels.push({ x, y, text: g.label, s });
-      for (let i = 0; i < g.count; i++) {
-        const r = Math.floor(i / dm.cols), c = i % dm.cols;
-        ports.push({ gid: g.id, n: i + 1, x: x + c * dm.p, y: y + dm.lab + r * dm.p, p: dm.p, conn: g.conn, dir: g.dir });
-      }
+      for (let i = 0; i < g.count; i++) ports.push({ gid: g.id, n: i + 1, ...jackXY(g, dm, i, x, y), p: dm.p, conn: g.conn, dir: g.dir });
       blocks.push({ gid: g.id, x, y, w: dm.bw, h: dm.bh });
       bottom = Math.max(bottom, y + dm.bh);
     }
@@ -614,14 +626,11 @@ function layoutFace(def, face, w, h) {
     const pad = 14, top = 14; let x = pad, y = top, bandH = 0, maxR = 0;
     const ports = [], labels = [], blocks = [];
     for (const g of gs) {
-      const { p, lab, cols, bw, bh } = groupDims(g, s, h, top);
+      const dm = groupDims(g, s, h, top); const { p, bw, bh } = dm;
       if (x + bw > w - pad && x > pad) { x = pad; y += bandH + 3; bandH = 0; }
       blocks.push({ gid: g.id, x, y, w: bw, h: bh });
       if (!g.nolabel) labels.push({ x, y, text: g.label, s });
-      for (let i = 0; i < g.count; i++) {
-        const r = Math.floor(i / cols), c = i % cols;
-        ports.push({ gid: g.id, n: i + 1, x: x + c * p, y: y + lab + r * p, p, conn: g.conn, dir: g.dir });
-      }
+      for (let i = 0; i < g.count; i++) ports.push({ gid: g.id, n: i + 1, ...jackXY(g, dm, i, x, y), p, conn: g.conn, dir: g.dir });
       x += bw + 12 * s; bandH = Math.max(bandH, bh); maxR = Math.max(maxR, x - 12 * s);
     }
     best = { ports, labels, blocks, s };
@@ -687,7 +696,7 @@ function planMove(d, dest) {
     }
     return { ok: true, moves, shuffled: 0 };
   }
-  if (def.form !== 'rack') return { ok: false, msg: `${def.model} isn't rack-mountable. Change its mounting in the Library first.` };
+  if (!rackable(def)) return { ok: false, msg: `${def.model} isn't rack-mountable. Change its mounting in the Library first.` };
   const rack = project.racks.find((r) => r.id === dest.rackId);
   const side = def.width === 'half' ? (dest.side === 'full' ? 'L' : dest.side) : 'full';
   const u = dest.u;
@@ -835,7 +844,15 @@ function rackFaceHTML(rack, face, caption) {
     const def = idx.def.get(d.defId); if (!def) return '';
     const side = d.place.side || 'full';
     const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
-    return devHTML(d, def, face, { top: (d.place.u - 1) * U, left, w: side === 'full' ? W : W / 2, h: def.ru * U, cls: side === 'full' ? '' : 'half-' + side });
+    const top = (d.place.u - 1) * U, slotW = side === 'full' ? W : W / 2, slotH = def.ru * U;
+    if (def.form === 'shelf') {
+      // gear sitting on a shelf: draw the shelf across its spaces, and the gear at its real size on top of it
+      const sz = devSize(def); const w = Math.min(slotW - 8, sz.w), h = Math.min(slotH - 6, sz.h);
+      const x = left + (slotW - w) / 2;
+      return `<div class="shelf" style="top:${top}px;left:${left}px;width:${slotW}px;height:${slotH}px" aria-hidden="true"></div>`
+        + devHTML(d, def, face, { top: top + slotH - 6 - h, left: x, w, h, cls: 'free on-shelf' });
+    }
+    return devHTML(d, def, face, { top, left, w: slotW, h: slotH, cls: side === 'full' ? '' : 'half-' + side });
   }).join('');
   return `<div class="rack-face">${caption ? `<div class="face-cap">${face}</div>` : ''}
     <div class="rack-body">
@@ -846,7 +863,21 @@ function rackFaceHTML(rack, face, caption) {
     </div></div>`;
 }
 const LOC_GRID = 10, LOC_MIN_W = 550;
-const devSize = (def) => ({ w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U });
+// 19" panel = 520px and 1U (1.75") = 48px, so both work out to the same pixels per inch
+const PX_IN = U / 1.75;
+// gear with its own size (a laptop, a wireless receiver on a shelf…) is measured in inches
+const customSize = (def) => def.width === 'custom' && def.form !== 'rack';
+const devSize = (def) => customSize(def)
+  ? { w: Math.round(Math.min(60, Math.max(1, +def.wIn || 8)) * PX_IN), h: Math.round(Math.min(40, Math.max(0.5, +def.hIn || 1.75)) * PX_IN) }
+  : { w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U };
+// can it go in a rack? Rack-mounted gear, or gear that sits on a rack shelf
+const rackable = (def) => def.form === 'rack' || def.form === 'shelf';
+const fmtIn = (v) => `${+(+v || 0).toFixed(2)}″`;
+function sizeText(def, long = false) {
+  if (customSize(def)) return `${fmtIn(def.wIn || 8)} × ${fmtIn(def.hIn || 1.75)}${def.form === 'shelf' ? ` on a ${def.ru}U shelf` : ''}`;
+  if (def.form === 'rack' || def.form === 'shelf') return `${def.ru}U${def.width === 'half' ? (long ? ' half-width' : ' ½') : ''}${def.form === 'shelf' ? ' shelf' : ''}`;
+  return def.form === 'desk' ? 'desk' : def.form;
+}
 // where each piece of gear sits inside a location. Gear never dragged there is
 // laid out automatically (in rows), or stacked below gear that has been placed.
 function locLayout(loc, ov = null) {
@@ -981,7 +1012,7 @@ function onPointerDown(e) {
   if (e.target.closest('.cab-tog')) return;
   const grip = e.target.closest('.rack-grip');
   if (grip && rigMode()) { startRackResize(e, grip); return; }
-  const gb = e.target.closest('.grp-box');
+  const gb = e.target.closest('.grp-box, .jack-box');
   if (gb) { startGroupDrag(e, gb); return; }
   const lab = e.target.closest('.dev-label');
   if (lab && rigMode() && lab.closest('#stage-inner')) { startDevDrag(e, lab); return; }
@@ -1122,14 +1153,16 @@ function endRackResize() {
 let grpDrag = null;
 function startGroupDrag(e, box) {
   e.preventDefault();
-  grpDrag = { box, face: box.dataset.face, gid: box.dataset.gid, x0: e.clientX, y0: e.clientY, left: parseFloat(box.style.left), top: parseFloat(box.style.top), moved: false };
+  grpDrag = { box, face: box.dataset.face, gid: box.dataset.gid, n: box.dataset.n ? +box.dataset.n : 0, x0: e.clientX, y0: e.clientY, left: parseFloat(box.style.left), top: parseFloat(box.style.top), moved: false };
   window.addEventListener('pointermove', onGroupDrag);
   window.addEventListener('pointerup', endGroupDrag, { once: true });
 }
 const GRID = 4;
 function grpTarget(e, g = grpDrag) {
   const pv = g.box.parentElement;
-  const snap = (v) => Math.round(v / GRID) * GRID;
+  // single jacks and Alt-drags move freely (half-pixel steps); blocks snap to the grid
+  const step = g.n || e.altKey ? 0.5 : GRID;
+  const snap = (v) => Math.round(v / step) * step;
   const x = Math.max(0, Math.min(pv.offsetWidth - g.box.offsetWidth, snap(g.left + e.clientX - g.x0)));
   const y = Math.max(0, Math.min(pv.offsetHeight - g.box.offsetHeight, snap(g.top + e.clientY - g.y0)));
   return { x, y };
@@ -1143,16 +1176,22 @@ function onGroupDrag(e) {
 }
 function endGroupDrag(e) {
   window.removeEventListener('pointermove', onGroupDrag);
-  const g = grpDrag; grpDrag = null; if (!g || !g.moved) return;
+  const g = grpDrag; grpDrag = null; if (!g) return;
+  const def = libDef(); if (!def) return;
+  ui.layFocus = { def: def.id, face: g.face, gid: g.gid, n: g.n };
+  if (!g.moved) { render(); return; }
   suppressNextClick();
   const t = grpTarget(e, g);
-  const def = libDef(); const sz = devSize(def);
-  const lay = layoutFace(def, g.face, sz.w, sz.h);
-  commit(`Moved ${def.groups.find((x) => x.id === g.gid)?.label} on the ${g.face} of ${def.model}`, () => {
-    def.layout ||= {};
-    def.layout[g.face] = { s: lay.s };
-    for (const b of lay.blocks) { const grp = def.groups.find((x) => x.id === b.gid); if (grp) grp.pos = { x: b.x, y: b.y }; }
-    def.groups.find((x) => x.id === g.gid).pos = { x: t.x, y: t.y };
+  const grp = def.groups.find((x) => x.id === g.gid);
+  if (g.n) {
+    // a single jack: remember how far it sits from its place in the group
+    const o = grp.off?.[g.n] || { x: 0, y: 0 };
+    commit(`Moved ${grp.label} ${g.n} on the ${g.face} of ${def.model}`, () => { setJackOff(grp, g.n, o.x + t.x - g.left, o.y + t.y - g.top); layoutCache.clear(); });
+    return;
+  }
+  commit(`Moved ${grp?.label} on the ${g.face} of ${def.model}`, () => {
+    pinLayout(def, g.face);
+    grp.pos = { x: t.x, y: t.y };
     layoutCache.clear();
   });
 }
@@ -1212,11 +1251,11 @@ function addGearHTML(title, s) {
   let fits = (d) => true;
   if (s.kind === 'slot') {
     const rack = project.racks.find((r) => r.id === s.rackId);
-    defs = defs.filter((d) => d.form === 'rack');
+    defs = defs.filter(rackable);
     fits = (d) => s.side === 'full'
       ? canPlace(rack, s.u, d.ru, d.width === 'half' ? 'L' : 'full')
       : d.width === 'half' && canPlace(rack, s.u, d.ru, s.side);
-  } else defs.sort((a, b) => (a.form === 'rack') - (b.form === 'rack'));
+  } else defs.sort((a, b) => rackable(a) - rackable(b));
   const byCat = new Map();
   for (const d of defs) push(byCat, d.category || 'other', d);
   let list = '';
@@ -1224,7 +1263,7 @@ function addGearHTML(title, s) {
     list += `<div class="eyebrow" style="margin-top:6px">${esc(CATEGORY_NAMES[cat] || cat)}</div><div class="list">`;
     for (const d of ds) {
       const ok = fits(d);
-      list += `<button data-act="install" data-def="${d.id}" ${ok ? '' : 'disabled title="Does not fit here"'}><span>${esc(d.make)} ${esc(d.model)}</span><small>${d.form === 'rack' ? `${d.ru}U${d.width === 'half' ? ' ½' : ''}` : d.form}</small></button>`;
+      list += `<button data-act="install" data-def="${d.id}" ${ok ? '' : 'disabled title="Does not fit here"'}><span>${esc(d.make)} ${esc(d.model)}</span><small>${esc(sizeText(d))}</small></button>`;
     }
     list += '</div>';
   }
@@ -1236,7 +1275,7 @@ function addGearHTML(title, s) {
 function deviceInspector(d) {
   if (!d) return inspectorHome();
   const def = idx.def.get(d.defId);
-  const head = `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${def.form === 'rack' ? def.ru + 'U' + (def.width === 'half' ? ' half-width' : '') : def.form}</div>
+  const head = `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${esc(sizeText(def, true))}</div>
     <h3>${esc(d.name)}</h3> ${def.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified gear definition</span>'}</div>`;
   const slots = ipSlots(def);
   const ipRows = slots.map((sl) => {
@@ -1419,17 +1458,57 @@ function sourcePortOptions() {
   }
   return html;
 }
-function outputPortOptions() {
+// ----- outputs: picked from mixers only, narrowed by the type of output -----
+const OUT_TYPE_NAMES = { analog: 'Analog', dante: 'Dante', aes: 'AES/EBU', speaker: 'Speaker', network: 'Network', fiber: 'Fiber', sdi: 'SDI', hdmi: 'HDMI', dmx: 'DMX', rf: 'RF', usb: 'USB', thunderbolt: 'Thunderbolt', control: 'Control', other: 'Other' };
+const groupOutType = (g) => (g.conn === 'dante' ? 'dante' : sigOf(g));
+const outType = (o) => o.type || (port(o.port) ? groupOutType(port(o.port).g) : '');
+const isOutGroup = (g) => g.dir === 'out' && ((isPhysical(g) && !['iec', 'nema', 'dc', 'powercon'].includes(g.conn)) || g.conn === 'dante');
+const mixerDevs = () => project.devices.filter((d) => idx.def.get(d.defId)?.mixer);
+// the kinds of output the mixers in the rig actually have, in a sensible order
+function outTypesAvailable() {
+  const have = new Set();
+  for (const d of mixerDevs()) for (const g of idx.def.get(d.defId).groups) if (isOutGroup(g)) have.add(groupOutType(g));
+  return Object.keys(OUT_TYPE_NAMES).filter((k) => have.has(k));
+}
+function outputPortOptions(type, used = new Set()) {
   let html = '<option value="">—</option>';
-  for (const d of project.devices) {
-    const def = idx.def.get(d.defId); if (!def || !['console', 'processor', 'computer'].includes(def.category)) continue;
-    const gs = def.groups.filter((g) => g.dir === 'out' && ((isPhysical(g) && !['iec', 'nema', 'dc'].includes(g.conn)) || g.conn === 'dante')); if (!gs.length) continue;
+  for (const d of mixerDevs()) {
+    const def = idx.def.get(d.defId);
+    const gs = def.groups.filter((g) => isOutGroup(g) && (!type || groupOutType(g) === type)); if (!gs.length) continue;
     html += `<optgroup label="${esc(d.name)}">`;
-    for (const g of gs) for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); html += `<option value="${r}">${esc(portShort(r))}</option>`; }
+    for (const g of gs) for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); const nm = d.portNames?.[`${g.id}:${n}`]; html += `<option value="${r}">${esc(`${g.label} ${portNum(port(r))}`)}${nm ? ' · ' + esc(nm) : ''}${used.has(r) ? ' (used)' : ''}</option>`; }
     html += '</optgroup>';
   }
   return html;
 }
+
+// ----- console channels: picking one creates the Dante route that lands the source there -----
+const stepRef = (ref, k) => { const r = parseRef(ref); const p = port(ref); if (!p || r.n + k < 1 || r.n + k > p.g.count) return null; return mkRef(r.devId, r.gid, r.n + k); };
+// the nearest Dante transmit channel a signal passes through (the input itself, for a Dante source)
+function danteTxOn(ref) {
+  for (const x of traceTree(ref).parent.keys()) { const p = port(x); if (p?.g.conn === 'dante' && p.g.dir === 'out') return x; }
+  return null;
+}
+// the Dante receive channel that feeds a console channel (from the mixer's internal routing)
+const danteRxFor = (chRef) => prev(chRef).find((r) => { const p = port(r); return p?.g.conn === 'dante' && p.g.dir === 'in'; }) || null;
+function channelOptions() {
+  const users = new Map();
+  for (const s of patch().sources) for (const ch of new Set(sourceChannels(s))) push(users, ch, s.name || 'Untitled');
+  let html = '<option value="">— none —</option>';
+  for (const d of mixerDevs()) {
+    const def = idx.def.get(d.defId);
+    for (const g of def.groups.filter((x) => x.conn === 'channel')) {
+      html += `<optgroup label="${esc(d.name)}">`;
+      for (let n = 1; n <= g.count; n++) {
+        const r = mkRef(d.id, g.id, n); const u = users.get(r); const viaDante = !!danteRxFor(r);
+        html += `<option value="${r}" ${viaDante ? '' : 'disabled'}>${esc(chLabel(r))}${u ? ' · ' + esc(u.join(', ')) : ''}${viaDante ? '' : ' (local input)'}</option>`;
+      }
+      html += '</optgroup>';
+    }
+  }
+  return html;
+}
+function nextSrcPort(ref) { return ref ? stepRef(ref, 1) || '' : ''; }
 function danteRxOptions() {
   let html = '<option value="">— not routed —</option>';
   for (const d of project.devices) {
@@ -1450,12 +1529,23 @@ function goesTo(ref) {
     return hops.join(' → ');
   }).filter(Boolean).join('; ');
 }
+// Console Ch: a picker when the source reaches the network over Dante (so a route can be made),
+// otherwise the channel worked out from the cables
+function consoleChCell(s, chs, chOpts) {
+  const ports = (s.ports || []).filter((r) => r && port(r));
+  const text = chs.length ? esc(chs.map(chLabel).join(', ')) : '<span style="color:var(--warn)">none</span>';
+  if (!ports.length || !mixerDevs().length || !danteTxOn(ports[0])) return `<span class="comp" title="Worked out from the cables">${text}</span>`;
+  const ch0 = consoleChannels(ports[0]).find((r) => idx.def.get(port(r).dev.defId)?.mixer) || '';
+  const rest = ports.slice(1).map((r) => consoleChannels(r)[0]).filter(Boolean);
+  return `<div class="inputcell" style="min-width:150px"><select id="sch-${s.id}" data-chg="srcCh" data-id="${s.id}" data-val="${ch0}" title="Choosing a channel makes the Dante route for you${ports.length > 1 ? '. The second input goes to the next channel.' : ''}">${chOpts}</select>${rest.length ? `<span class="comp">+ ${esc(rest.map(chLabel).join(', '))}</span>` : ''}</div>`;
+}
 function listView() {
   const pt = patch();
   const portOpts = sourcePortOptions();
   const grpOpts = '<option value="">—</option>' + project.groups.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
   const colOpts = '<option value="">—</option>' + project.cableColors.map((c) => `<option value="${c.id}">${esc(c.name)}${c.length ? ' ' + esc(c.length) : ''}</option>`).join('');
   const cust = project.columns;
+  const chOpts = channelOptions();
   const rows = pt.sources.map((s, i) => {
     const g = project.groups.find((x) => x.id === s.groupId);
     const st = (s.ports || []).length > 1;
@@ -1470,21 +1560,28 @@ function listView() {
       <td><input id="spn-${s.id}" value="${esc(s.person)}" data-chg="src" data-id="${s.id}" data-f="person" style="min-width:80px"></td>
       <td><select id="sc-${s.id}" data-chg="src" data-id="${s.id}" data-f="cable" data-val="${s.cable || ''}">${colOpts}</select></td>
       ${cust.map((c) => `<td><input id="cu-${c.id}-${s.id}" value="${esc(s.custom?.[c.id] || '')}" data-chg="srcCustom" data-id="${s.id}" data-c="${c.id}" style="min-width:80px"></td>`).join('')}
-      <td class="comp" title="Worked out from the cables and Dante routes">${chs.length ? esc(chs.map(chLabel).join(', ')) : '<span style="color:var(--warn)">none</span>'}</td>
+      <td>${consoleChCell(s, chs, chOpts)}</td>
       <td><input id="snt-${s.id}" value="${esc(s.notes)}" data-chg="src" data-id="${s.id}" data-f="notes" style="min-width:100px"></td>
       <td><div class="rowbtns"><button data-act="showSrc" data-id="${s.id}" title="Trace in rack">Trace</button><button data-act="moveSrc" data-id="${s.id}" data-d="-1" title="Move up">↑</button><button data-act="moveSrc" data-id="${s.id}" data-d="1" title="Move down">↓</button>${confirmBtn('delSrc', '✕', `data-id="${s.id}"`)}</div></td>
     </tr>`;
   }).join('');
-  const outOpts = outputPortOptions();
+  const usedOut = new Set(pt.outputs.map((o) => o.port).filter(Boolean));
+  const types = outTypesAvailable(); const optCache = new Map();
+  const outOpts = (t) => { if (!optCache.has(t)) optCache.set(t, outputPortOptions(t, usedOut)); return optCache.get(t); };
+  const typeOpts = '<option value="">Any type</option>' + types.map((k) => `<option value="${k}">${esc(OUT_TYPE_NAMES[k])}</option>`).join('');
   const rxOpts = danteRxOptions();
   const orows = pt.outputs.map((o, i) => {
     const goes = goesTo(o.port);
     const isDante = port(o.port)?.g.conn === 'dante';
     const sub = isDante ? (idx.out.get(o.port) || []).find((c) => c.kind === 'dante') : null;
+    const t = outType(o); const pp = port(o.port);
+    // keep showing a jack picked before this version, even if it isn't on a mixer
+    const extra = pp && !idx.def.get(pp.dev.defId)?.mixer ? `<option value="${o.port}">${esc(portShort(o.port))} (not a mixer)</option>` : '';
     return `<tr><td class="num">${i + 1}</td>
       <td><input id="on-${o.id}" value="${esc(o.name)}" data-chg="out" data-id="${o.id}" data-f="name"></td>
       <td><input id="om-${o.id}" value="${esc(o.mix)}" data-chg="out" data-id="${o.id}" data-f="mix" style="min-width:70px"></td>
-      <td><select id="op-${o.id}" data-chg="out" data-id="${o.id}" data-f="port" data-val="${o.port || ''}">${outOpts}</select></td>
+      <td><select id="ot-${o.id}" data-chg="out" data-id="${o.id}" data-f="type" data-val="${t}" style="min-width:90px">${typeOpts}</select></td>
+      <td><select id="op-${o.id}" data-chg="out" data-id="${o.id}" data-f="port" data-val="${o.port || ''}" style="min-width:120px">${extra}${outOpts(t)}</select></td>
       <td>${isDante ? `<select id="od-${o.id}" data-chg="outDante" data-id="${o.id}" data-val="${sub?.b || ''}">${rxOpts}</select>` : '<span class="muted small">—</span>'}</td>
       <td class="comp">${esc(goes) || '<span class="muted">—</span>'}</td>
       <td><input id="opn-${o.id}" value="${esc(o.person)}" data-chg="out" data-id="${o.id}" data-f="person"></td>
@@ -1500,11 +1597,11 @@ function listView() {
       </div>
       <p class="small muted" style="margin:0">Templates: keep a patch called “Template – Full Band” and use “Save a copy as new patch” each week, then fine-tune.</p>
     </div>
-    <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources · Console Ch is worked out from your cables and Dante routes</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
+    <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources · Pick a Console Ch and the Dante route is made for you (sources on Dante gear). Otherwise it's worked out from the cables.</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
       <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Stage input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>
-    <div class="card"><div class="card-head"><h3>Outputs</h3><span class="muted small">Monitor mixes, mains, stream feeds… Pick a Dante Tx channel in “Leaves on”, then where it goes in “Dante to”.</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
-      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Leaves on</th><th>Dante to</th><th>Goes to</th><th>Person</th><th>Notes</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="9" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
+    <div class="card"><div class="card-head"><h3>Outputs</h3>${mixerDevs().length ? '' : '<span class="pill unv">No mixer marked yet: tick “Mixer / console” on your console in the Library</span>'}<span class="muted small">Monitor mixes, mains, stream feeds… Choose the type, then the mixer output it leaves on. For Dante, choose where it goes in “Dante to”.</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Type</th><th>Leaves on</th><th>Dante to</th><th>Goes to</th><th>Person</th><th>Notes</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="10" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
     </div>
     ${sec('list-settings', 'Groups, custom columns &amp; cable colours', `<div class="editor-grid">
       <div class="card"><div class="card-head"><h3>Groups &amp; row colours</h3><span class="spacer"></span><button data-act="addGroup">+ Group</button></div>
@@ -1560,7 +1657,7 @@ function sheetLines(d) {
 function unitInfo(d) {
   const def = idx.def.get(d.defId); const inc = project.sheet.include;
   return {
-    name: d.name, model: `${def.make} ${def.model}`, size: def.form === 'rack' ? `${def.ru}U${def.width === 'half' ? ' ½' : ''}` : '',
+    name: d.name, model: `${def.make} ${def.model}`, size: rackable(def) || customSize(def) ? sizeText(def) : '',
     where: d.zone ? `${d.zone}${d.position ? ' · ' + d.position : ''}` : '',
     ips: inc.ips ? ipSlots(def).map((sl) => [sl.label, d.ips?.[sl.id]?.ip, d.ips?.[sl.id]?.note]).filter((x) => x[1]) : [],
     fields: inc.details ? (d.fields || []).filter((f) => f.k || f.v) : [], notes: inc.details ? d.notes || '' : '',
@@ -1668,43 +1765,123 @@ function rigSheetView() {
 }
 
 /* ---------- 9. dante ---------- */
-function danteView() {
-  const txDevs = [], rxDevs = [];
+function danteDevs() {
+  const tx = [], rx = [];
   for (const d of project.devices) {
     const def = idx.def.get(d.defId); if (!def) continue;
-    const tx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'out');
-    const rx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in');
-    if (tx) txDevs.push([d, tx]); if (rx) rxDevs.push([d, rx]);
+    const t = def.groups.find((g) => g.conn === 'dante' && g.dir === 'out');
+    const r = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in');
+    if (t) tx.push([d, t]); if (r) rx.push([d, r]);
   }
+  return { tx, rx };
+}
+// what a receive channel feeds inside its own unit (Avantis Rx 17 → Ch 17, Tio Rx 3 → Out 3)
+function rxFeeds(rxRef) {
+  const dv = parseRef(rxRef)?.devId;
+  return next(rxRef).map(port).find((p) => p && p.dev.id === dv) || null;
+}
+// every active Dante route, grouped into runs that step together (Tx 1–16 → Rx 1–16)
+function danteRuns() {
+  const order = new Map(project.devices.map((d, i) => [d.id, i]));
+  const rows = idx.active.filter((c) => c.kind === 'dante').map((c) => ({ c, a: port(c.a), b: port(c.b) }))
+    .sort((x, y) => order.get(x.b.dev.id) - order.get(y.b.dev.id) || order.get(x.a.dev.id) - order.get(y.a.dev.id) || (x.c.layer === 'rig') - (y.c.layer === 'rig') || x.b.n - y.b.n);
+  const runs = []; let run = null;
+  for (const r of rows) {
+    const key = [r.a.dev.id, r.a.g.id, r.b.dev.id, r.b.g.id, r.c.layer].join('|');
+    if (run && run.key === key && r.a.n === run.last.a.n + 1 && r.b.n === run.last.b.n + 1) { run.last = r; run.ids.push(r.c.id); }
+    else { run = { key, first: r, last: r, ids: [r.c.id], layer: r.c.layer }; runs.push(run); }
+  }
+  return runs;
+}
+const rangeTxt = (a, b) => (a === b ? `${a}` : `${a}–${b}`);
+function danteRoutesHTML(devs) {
+  const pt = patch(); const dr = ui.dr ||= {};
+  if (!devs.tx.some(([d]) => d.id === dr.tx)) dr.tx = devs.tx[0]?.[0].id;
+  if (!devs.rx.some(([d]) => d.id === dr.rx)) dr.rx = devs.rx.find(([d]) => idx.def.get(d.defId)?.mixer)?.[0].id || devs.rx[0]?.[0].id;
+  const tx = devs.tx.find(([d]) => d.id === dr.tx), rx = devs.rx.find(([d]) => d.id === dr.rx);
+  let form = '<p class="small muted" style="margin:0">Routes need gear with Dante transmit and receive channels in the rig.</p>';
+  if (tx && rx) {
+    const txs = Math.max(1, Math.min(tx[1].count, +dr.txs || 1)), rxs = Math.max(1, Math.min(rx[1].count, +dr.rxs || 1));
+    const n = Math.max(1, Math.min(+dr.n || 1, tx[1].count - txs + 1, rx[1].count - rxs + 1));
+    let taken = 0;
+    for (let i = 0; i < n; i++) if ((idx.in.get(mkRef(rx[0].id, rx[1].id, rxs + i)) || []).some((c) => c.kind === 'dante')) taken++;
+    const f0 = rxFeeds(mkRef(rx[0].id, rx[1].id, rxs)), f1 = rxFeeds(mkRef(rx[0].id, rx[1].id, rxs + n - 1));
+    const devOpts = (list, v) => list.map(([d, g]) => `<option value="${d.id}" ${d.id === v ? 'selected' : ''}>${esc(d.name)} (${g.count})</option>`).join('');
+    form = `<div class="route-form">
+        <label class="field"><span>From (transmits)</span><select id="dr-tx" data-chg="drField" data-f="tx">${devOpts(devs.tx, dr.tx)}</select></label>
+        <label class="field"><span>Tx channel</span><input id="dr-txs" type="number" min="1" max="${tx[1].count}" value="${txs}" data-inp="drNum" data-f="txs"></label>
+        <span class="route-arrow" aria-hidden="true">→</span>
+        <label class="field"><span>To (receives)</span><select id="dr-rx" data-chg="drField" data-f="rx">${devOpts(devs.rx, dr.rx)}</select></label>
+        <label class="field"><span>Rx channel</span><input id="dr-rxs" type="number" min="1" max="${rx[1].count}" value="${rxs}" data-inp="drNum" data-f="rxs"></label>
+        <label class="field"><span>How many</span><input id="dr-n" type="number" min="1" max="256" value="${n}" data-inp="drNum" data-f="n"></label>
+        <button class="primary" id="dr-go" data-act="danteRoute">Make ${n} route${n > 1 ? 's' : ''}</button>
+      </div>
+      <p class="small" id="dr-preview" style="margin:0"><b>${esc(tx[0].short)} Tx ${rangeTxt(txs, txs + n - 1)}</b> → <b>${esc(rx[0].short)} Rx ${rangeTxt(rxs, rxs + n - 1)}</b>${f0 ? ` <span class="muted">(lands on ${esc(f0.g.label)} ${rangeTxt(portNum(f0), f1 ? portNum(f1) : portNum(f0))})</span>` : ''}${taken ? ` · <span style="color:var(--warn)">${taken} of those receive channels already have a route; it will be replaced.</span>` : ''}
+        Goes in <b>${rigMode() ? 'the rig' : esc(pt.name) + ' only'}</b>.</p>`;
+  }
+  const runs = danteRuns();
+  const list = runs.length ? `<div class="tbl-wrap"><table class="grid"><thead><tr><th>From</th><th></th><th>To</th><th>Lands on</th><th>Belongs to</th><th></th></tr></thead><tbody>${runs.map((r) => {
+    const A = r.first.a, B = r.first.b, a1 = r.last.a, b1 = r.last.b;
+    const nm = (p) => p.dev.portNames?.[`${p.g.id}:${p.n}`];
+    const f0 = rxFeeds(r.first.c.b), f1 = rxFeeds(r.last.c.b);
+    const one = r.ids.length === 1;
+    return `<tr><td>${esc(A.dev.name)} · Tx ${rangeTxt(A.n, a1.n)}${one && nm(A) ? ` <span class="muted">“${esc(nm(A))}”</span>` : ''}</td><td class="muted">→</td>
+      <td>${esc(B.dev.name)} · Rx ${rangeTxt(B.n, b1.n)}</td>
+      <td class="comp">${f0 ? esc(`${f0.g.label} ${rangeTxt(portNum(f0), f1 ? portNum(f1) : portNum(f0))}`) : '<span class="muted">—</span>'}</td>
+      <td><span class="pill ${r.layer === 'rig' ? 'rig' : 'patch'}">${r.layer === 'rig' ? 'Rig' : esc(pt.name)}</span></td>
+      <td>${r.layer === 'rig' && !rigMode() ? `<button data-act="danteDelRun" data-ids="${r.ids.join(',')}" title="Leaves the rig alone; turn it back on any time">Switch off in ${esc(pt.name)}</button>` : confirmBtn('danteDelRun', one ? 'Remove' : `Remove ${r.ids.length}`, `data-ids="${r.ids.join(',')}"`)}</td></tr>`;
+  }).join('')}</tbody></table></div>` : '<p class="small muted" style="margin:0">No Dante routes yet.</p>';
+  const offIds = (pt.danteOff || []).filter((id) => project.connections.some((c) => c.id === id));
+  const offList = offIds.length ? `<div class="card"><div class="card-head"><h3>Rig routes switched off in ${esc(pt.name)}</h3><span class="spacer"></span><button data-act="danteRestore" data-ids="${offIds.join(',')}">Turn all back on</button></div>
+    <p class="small muted" style="margin:0">These permanent routes still work in every other patch.</p>
+    <div class="chips">${offIds.map((id) => { const c = project.connections.find((x) => x.id === id); return `<span class="chip">${esc(portShort(c.a))} → ${esc(portShort(c.b))} <button data-act="danteRestore" data-ids="${id}" style="padding:0 6px">Turn on</button></span>`; }).join('')}</div></div>` : '';
+  return `<div class="card"><div class="card-head"><h3>Make routes</h3><span class="muted small">a whole block at once</span></div>${form}</div>
+    <div class="card"><div class="card-head"><h3>All routes</h3><span class="muted small">${idx.active.filter((c) => c.kind === 'dante').length} routes in ${runs.length} block${runs.length === 1 ? '' : 's'}</span></div>${list}</div>${offList}`;
+}
+function danteView() {
+  const devs = danteDevs();
+  const tab = ui.danteTab || 'routes';
   const subOf = (ref) => (idx.in.get(ref) || []).filter((c) => c.kind === 'dante');
-  const layerBtn = (v, t) => `<button data-act="layer" data-layer="${v}" class="${ui.layer === v ? 'on' : ''}">${t}</button>`;
-  const rxHTML = rxDevs.map(([d, g]) => {
-    let used = 0;
-    const rows = Array.from({ length: g.count }, (_, i) => {
-      const r = mkRef(d.id, g.id, i + 1); const subs = subOf(r); if (subs.length) used++;
-      const src = idx.mark.get(r);
-      const editing = ui.danteEdit === r;
-      const cell = editing
-        ? `<select id="dsel" data-chg="danteSub" data-ref="${r}" data-val="${subs[0]?.a || ''}">${danteTxOptions(txDevs)}</select>`
-        : `<button class="dsub ${subs.length ? 'set' : ''}" data-act="danteEdit" data-ref="${r}">${subs.length ? subs.map((c) => esc(portShort(c.a))).join(' + ') : '—'}</button>`;
-      return `<tr><td class="num">${i + 1}</td><td><input id="dn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}" ${rigMode() ? '' : 'disabled'}></td><td>${cell}</td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
-    }).join('');
-    return `<details class="dgrp card" ${ui.danteOpen?.[d.id] ?? (g.count <= 64) ? 'open' : ''} data-dev="${d.id}"><summary>${esc(d.name)} <span class="muted small">· receives ${used}/${g.count}</span></summary>
-      <div class="tbl-wrap"><table class="grid"><thead><tr><th>Rx</th><th>Channel name</th><th>Subscribed to</th><th>Source</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
-  }).join('');
-  const txHTML = txDevs.map(([d, g]) => `<details class="dgrp card"><summary>${esc(d.name)} <span class="muted small">· ${g.count} transmit channels</span></summary>
-    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Tx</th><th>Channel name</th><th>Source</th></tr></thead><tbody>${Array.from({ length: g.count }, (_, i) => {
-      const r = mkRef(d.id, g.id, i + 1); const src = idx.mark.get(r);
-      return `<tr><td class="num">${i + 1}</td><td><input id="tn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}" ${rigMode() ? '' : 'disabled'}></td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
-    }).join('')}</tbody></table></div></details>`).join('');
+  const rig = rigMode();
+  let body = '';
+  if (tab === 'routes') body = danteRoutesHTML(devs);
+  if (tab === 'rx') {
+    body = devs.rx.map(([d, g]) => {
+      let used = 0;
+      const rows = Array.from({ length: g.count }, (_, i) => {
+        const r = mkRef(d.id, g.id, i + 1); const subs = subOf(r); if (subs.length) used++;
+        const src = idx.mark.get(r); const f = rxFeeds(r);
+        const cell = ui.danteEdit === r
+          ? `<select id="dsel" data-chg="danteSub" data-ref="${r}" data-val="${subs[0]?.a || ''}">${danteTxOptions(devs.tx)}</select>`
+          : `<button class="dsub ${subs.length ? 'set' : ''}" data-act="danteEdit" data-ref="${r}" title="Choose which transmit channel feeds Rx ${i + 1}">${subs.length ? subs.map((c) => esc(portShort(c.a))).join(' + ') : 'choose…'}</button>`;
+        return `<tr><td class="num">${i + 1}</td><td>${cell}</td><td class="comp">${src ? esc(src.name) : ''}</td><td class="comp muted">${f ? esc(`${f.g.label} ${portNum(f)}`) : ''}</td><td><input id="dn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}" ${rig ? '' : 'disabled'} aria-label="Rx ${i + 1} name"></td></tr>`;
+      }).join('');
+      return `<details class="dgrp card" ${ui.danteOpen?.[d.id] ?? (g.count <= 64) ? 'open' : ''} data-dev="${d.id}"><summary>${esc(d.name)} <span class="muted small">· ${used} of ${g.count} receive channels routed</span></summary>
+        <div class="tbl-wrap"><table class="grid"><thead><tr><th>Rx</th><th>Gets its signal from (Tx)</th><th>Source</th><th>Feeds</th><th>Rx name</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+    }).join('') || '<p class="muted small">No gear with Dante receive channels.</p>';
+  }
+  if (tab === 'tx') {
+    body = devs.tx.map(([d, g]) => `<details class="dgrp card" ${ui.danteOpen?.['tx' + d.id] ? 'open' : ''} data-dev="tx${d.id}"><summary>${esc(d.name)} <span class="muted small">· ${g.count} transmit channels</span></summary>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th>Tx</th><th>Channel name</th><th>Source</th><th>Routed to</th></tr></thead><tbody>${Array.from({ length: g.count }, (_, i) => {
+        const r = mkRef(d.id, g.id, i + 1); const src = idx.mark.get(r); const to = (idx.out.get(r) || []).filter((c) => c.kind === 'dante');
+        return `<tr><td class="num">${i + 1}</td><td><input id="tn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}" ${rig ? '' : 'disabled'} aria-label="Tx ${i + 1} name"></td><td class="comp">${src ? esc(src.name) : ''}</td><td class="comp muted">${esc(to.map((c) => portShort(c.b)).join(', '))}</td></tr>`;
+      }).join('')}</tbody></table></div></details>`).join('') || '<p class="muted small">No gear with Dante transmit channels.</p>';
+  }
+  if (tab === 'ip') body = `<div class="card">${ipTableHTML()}</div>`;
+  const nRoutes = idx.active.filter((c) => c.kind === 'dante').length;
+  const tabBtn = (k, t) => `<button data-act="danteTab" data-t="${k}" class="${tab === k ? 'on' : ''}">${t}</button>`;
   return `<section class="view">
-    <div class="card"><div class="card-head"><h2>Dante &amp; IP</h2><span class="spacer"></span>${modeSeg()}</div>
-      ${sec('ip-table', 'IP addresses', ipTableHTML())}
+    <div class="card"><div class="card-head"><h2>Dante &amp; IP</h2><span class="spacer"></span>
+        <div class="seg"><span>New routes go in</span><button data-act="layer" data-layer="rig" class="rigbtn ${rig ? 'on' : ''}">The rig (every patch)</button><button data-act="layer" data-layer="patch" class="${rig ? '' : 'on'}">${esc(patch().name)} only</button></div></div>
+      ${sec('dante-help', 'How Dante works here', `<ul class="small help-list">
+        <li>Dante gear sends audio over the network as numbered channels. <b>Transmit (Tx)</b> channels leave a unit: a Rio's input 5 goes out on its Tx 5. <b>Receive (Rx)</b> channels arrive at a unit: the Avantis's Rx 17 feeds console channel 17.</li>
+        <li>A <b>route</b> joins one Tx channel to one Rx channel, the same as ticking a box in Dante Controller. One Tx can feed many receivers; each Rx takes only one.</li>
+        <li>Quickest: <b>Routes</b> below makes a whole block at once (e.g. Rio A Tx 1–32 → Avantis Rx 17–48). Or pick a <b>Console Ch</b> in the Patchlist and the route is made for you.</li>
+        <li><b>Receivers</b> lists every Rx channel to fix one at a time. <b>Transmitters</b> is where you name channels (in The rig) so the names show everywhere.</li>
+        <li>Routes in <b>The rig</b> are in every patch. Routes made while editing a patch belong to that patch only, and replacing a rig route there just switches it off for that patch.</li></ul>`)}
+      <div class="seg subtabs">${tabBtn('routes', `Routes (${nRoutes})`)}${tabBtn('rx', 'Receivers')}${tabBtn('tx', 'Transmitters')}${tabBtn('ip', `IP addresses (${ipEntries().filter((x) => x.v.ip).length})`)}</div>
     </div>
-    <div class="card"><div class="card-head"><h3>Dante routing</h3></div>
-      <p class="small muted" style="margin:0">${rigMode() ? 'Routes you set now are permanent (every patch). Channel names can be edited.' : `Routes you set now apply to ${esc(patch().name)} only. Switch to The rig to make permanent routes or rename channels.`} Click a “Subscribed to” cell to choose which transmitter feeds that receive channel. The signal trace and Console Ch columns follow these routes. Importing and exporting Dante Controller preset files is planned for a later phase.</p></div>
-    ${sec('dante-rx', 'Receivers', rxHTML)}
-    ${sec('dante-tx', 'Transmitters', txHTML, false)}
+    ${body}
   </section>`;
 }
 function ipTableHTML() {
@@ -1761,6 +1938,13 @@ function cellValue(s, key) {
     default: if (key.startsWith('custom:')) return s.custom?.[key.slice(7)] || ''; return '';
   }
 }
+const OUT_COLS = [['type', 'Type'], ['mix', 'Mix'], ['leaves', 'Leaves on'], ['goes', 'Goes to'], ['person', 'Person'], ['notes', 'Notes']];
+function outCell(o, k) {
+  if (k === 'type') return OUT_TYPE_NAMES[outType(o)] || '';
+  if (k === 'leaves') return o.port ? portShort(o.port) : '';
+  if (k === 'goes') return goesTo(o.port);
+  return o[k] || '';
+}
 function paperHTML() {
   const pr = project.print, pt = patch();
   const cols = printColumns().filter((c) => c.on).map((c) => c.key);
@@ -1790,11 +1974,9 @@ function paperHTML() {
     body += '</tbody></table>';
   }
   if (pr.include.outputs && pt.outputs.length) {
-    body += `<h4>Outputs</h4><table><thead><tr>${['Output', 'Mix', 'Leaves on', 'Goes to', 'Person'].map((h) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>`;
-    for (const o of pt.outputs) {
-      const goes = goesTo(o.port);
-      body += `<tr><td>${esc(o.name)}</td><td class="c">${esc(o.mix)}</td><td>${esc(o.port ? portShort(o.port) : '')}</td><td>${esc(goes)}</td><td class="c">${esc(o.person)}</td></tr>`;
-    }
+    const oc = OUT_COLS.filter(([k]) => pr.outCols[k]);
+    body += `<h4>Outputs</h4><table><thead><tr>${[['name', 'Output'], ...oc].map(([, h]) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>`;
+    for (const o of pt.outputs) body += `<tr><td>${esc(o.name)}</td>${oc.map(([k]) => `<td class="${k === 'mix' || k === 'person' || k === 'type' ? 'c' : ''}">${esc(outCell(o, k))}</td>`).join('')}</tr>`;
     body += '</tbody></table>';
   }
   if (pr.include.stageMap) {
@@ -1848,7 +2030,7 @@ function printView() {
         <div class="card-head"><h3>Layout</h3></div>
         <div class="seg"><span>Preset</span><button data-act="preset" data-p="volunteer" class="${pr.preset === 'volunteer' ? 'on' : ''}">Volunteer</button><button data-act="preset" data-p="tech" class="${pr.preset === 'tech' ? 'on' : ''}">Technical</button></div>
         ${sec('pr-cols', 'Columns (order top to bottom)', `<div class="colpick">${cols.map((c, i) => `<div><label><input type="checkbox" id="pc-${i}" data-chg="printCol" data-k="${esc(c.key)}" ${c.on ? 'checked' : ''}> ${esc(colLabel(c.key))}</label><button data-act="printColMove" data-k="${esc(c.key)}" data-d="-1" aria-label="Move up">↑</button><button data-act="printColMove" data-k="${esc(c.key)}" data-d="1" aria-label="Move down">↓</button></div>`).join('')}</div>`)}
-        ${sec('pr-inc', 'Include', `<div style="display:grid;gap:4px">${inc('inputs', 'Input list')}${inc('outputs', 'Output list')}${inc('stageMap', 'Stage box map')}${inc('pull', 'Equipment pull list')}${inc('ipList', 'IP address list')}</div>`)}
+        ${sec('pr-inc', 'Include', `<div style="display:grid;gap:4px">${inc('inputs', 'Input list')}${inc('outputs', 'Output list')}${pr.include.outputs ? `<div class="subopts"><span class="small muted">Output list shows</span>${OUT_COLS.map(([k, t]) => `<label class="tog"><input type="checkbox" id="oc-${k}" data-chg="printOutCol" data-k="${k}" ${pr.outCols[k] ? 'checked' : ''}> ${t}</label>`).join('')}</div>` : ''}${inc('stageMap', 'Stage box map')}${inc('pull', 'Equipment pull list')}${inc('ipList', 'IP address list')}</div>`)}
         ${sec('pr-look', 'Look', `
         <label class="field"><span>Title</span><input id="pr-title" value="${esc(pr.title)}" data-chg="printField" data-f="title"></label>
         <label class="field"><span>Header name (shown when there's no logo)</span><input id="pr-org" value="${esc(pr.org)}" data-chg="printField" data-f="org"></label>
@@ -1915,12 +2097,16 @@ function defEditor(d) {
       <button data-act="dupDef" data-def="${d.id}">Duplicate</button>${used ? '' : confirmBtn('delDef', 'Delete', `data-def="${d.id}"`)}</div>
     <div class="inline-fields">${f('make', 'Make')}${f('model', 'Model')}${f('short', 'Short label')}
       <label class="field"><span>Category</span><select id="df-category" data-chg="defField" data-f="category">${opt(CATEGORY_NAMES, d.category)}</select></label>
-      <label class="field"><span>Mounting</span><select id="df-form" data-chg="defField" data-f="form">${opt({ rack: '19" rack', desk: 'Desk / free-standing', pocket: 'Floor pocket / wall plate' }, d.form)}</select></label>
-      ${f('ru', 'Height (U)', 'number', 'min="1" max="20" style="width:80px"')}
-      <label class="field"><span>Width</span><select id="df-width" data-chg="defField" data-f="width">${opt({ full: 'Full rack width', half: 'Half rack width' }, d.width)}</select></label>
+      <label class="field"><span>Mounting</span><select id="df-form" data-chg="defField" data-f="form">${opt({ rack: 'Mounted in a 19" rack', shelf: 'Sits on a rack shelf', desk: 'Desk / free-standing', pocket: 'Floor pocket / wall plate' }, d.form)}</select></label>
+      <label class="field"><span>Size</span><select id="df-width" data-chg="defField" data-f="width">${opt(d.form === 'rack' ? { full: 'Full rack width', half: 'Half rack width' } : { full: 'Full rack width', half: 'Half rack width', custom: 'Custom size (inches)' }, d.width)}</select></label>
+      ${customSize(d) ? `${f('wIn', 'Width (in)', 'number', 'min="0.5" max="60" step="0.05" style="width:90px"')}${f('hIn', 'Height (in)', 'number', 'min="0.5" max="40" step="0.05" style="width:90px"')}` : ''}
+      ${!customSize(d) || d.form === 'shelf' ? f('ru', d.form === 'shelf' ? 'Rack spaces it takes (U)' : 'Height (U)', 'number', 'min="1" max="20" style="width:80px"') : ''}
       ${f('watts', 'Power (W)', 'number', 'min="0" style="width:90px"')}
       <label class="tog"><input type="checkbox" id="df-verified" data-chg="defField" data-f="verified" ${d.verified ? 'checked' : ''}> Verified against the real unit</label>
+      <label class="tog" title="Its channels can be picked in the patchlist's Console Ch column, and only mixers appear in the Outputs list."><input type="checkbox" id="df-mixer" data-chg="defField" data-f="mixer" ${d.mixer ? 'checked' : ''}> Mixer / console</label>
     </div>
+    ${customSize(d) ? `<p class="small muted" style="margin:0">Drawn at its real size (1U is 1.75″, a 19″ rack is 19″ wide). ${d.form === 'shelf' ? `It sits on a ${d.ru}U shelf in a rack; the shelf grows if the gear is taller.` : 'Place it in a location (Stage, FOH…), or choose “Sits on a rack shelf” to put it in a rack.'}</p>` : d.form === 'shelf' ? '<p class="small muted" style="margin:0">Choose “Custom size” to draw it at its real size on the shelf.</p>' : ''}
+    ${d.mixer && !d.groups.some((g) => g.conn === 'channel') ? '<p class="small muted" style="margin:0">To pick console channels in the patchlist, add a port group with the connector “Console channel” (side Virtual), and an Internal routing line from its Dante Rx (or inputs) to it.</p>' : ''}
     <label class="field"><span>Reference / notes</span><input id="df-ref" value="${esc(d.ref || '')}" data-chg="defField" data-f="ref"></label>
     <div class="card-head"><h3>Connectors &amp; channels</h3><span class="spacer"></span><button data-act="grpAdd">+ Port group</button></div>
     <p class="small muted" style="margin:0">One row per set of identical jacks. “Sources” marks jacks a mic or instrument can be assigned to in the patchlist. “Dante” and “Virtual” groups aren't drawn on the panel.</p>
@@ -1930,18 +2116,74 @@ function defEditor(d) {
     ${sec('lib-routing', 'Internal routing', `<div class="toolbar"><span class="small muted" style="flex:1">What feeds what inside the box, number for number. Example: In 1 → Dante Tx 1 means input 5 comes out on Dante Tx 5.</span><button data-act="linkAdd" ${d.groups.length < 2 ? 'disabled' : ''}>+ Route</button></div>
     <div class="tbl-wrap"><table class="grid"><thead><tr><th>From</th><th>Start</th><th></th><th>To</th><th>Start</th><th>How many</th><th></th></tr></thead><tbody>${linkRows || '<tr><td colspan="7" class="muted small">No internal routing.</td></tr>'}</tbody></table></div>`, false)}
     ${sec('lib-photos', 'Photos', photoHTML(d), !!d.images?.front || !!d.images?.rear)}
-    <div class="card-head"><h3>Panel layout</h3><span class="muted small">Drag a block of ports to move it. It snaps to a ${GRID}px grid.</span></div>
-    <div style="overflow-x:auto"><div style="display:grid;gap:14px">${['front', 'rear'].map((face) => {
+    ${panelLayoutHTML(d)}`;
+}
+function panelLayoutHTML(d) {
+  const jacks = ui.layMode === 'jack';
+  const foc = ui.layFocus?.def === d.id ? ui.layFocus : null;
+  const faces = ['front', 'rear'].filter((f) => d.groups.some((g) => g.face === f));
+  return `<div class="card-head"><h3>Panel layout</h3><span class="spacer"></span>
+      <div class="seg"><span>Drag</span><button data-act="layMode" data-m="group" class="${jacks ? '' : 'on'}">Port groups</button><button data-act="layMode" data-m="jack" class="${jacks ? 'on' : ''}">Single jacks</button></div></div>
+    <p class="small muted" style="margin:0">${jacks
+      ? 'Drag any one jack to line it up with the photo. Click a jack, then use the arrow keys to nudge it 1px (hold Shift for 10px).'
+      : `Drag a block of jacks to move it (it snaps to a ${GRID}px grid; hold Alt to place it freely). Click a block, then use the arrow keys to nudge it 1px (Shift for 10px).`}
+      Set the space between jacks below each panel. Turn on the photo (View → Show gear photos) to line everything up against it.</p>
+    ${faces.length ? '' : '<p class="small muted" style="margin:0">This gear has no jacks on its front or rear panel.</p>'}
+    <div style="overflow-x:auto"><div style="display:grid;gap:18px">${faces.map((face) => {
       const sz = devSize(d); const lay = layoutFace(d, face, sz.w, sz.h);
-      const boxes = lay.blocks.map((b) => `<div class="grp-box" data-face="${face}" data-gid="${b.gid}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px" title="Drag to move"></div>`).join('');
+      const boxes = jacks
+        ? lay.ports.map((pp) => {
+          const sh = portShape(pp.conn, pp.p); const bw = Math.max(10, sh.w + 4), bh = Math.max(10, sh.h + 4);
+          const x = pp.x + (pp.p - sh.w) / 2 - (bw - sh.w) / 2, y = pp.y + (pp.p * 0.72 - sh.h) / 2 - (bh - sh.h) / 2;
+          const on = foc && foc.face === face && foc.gid === pp.gid && foc.n === pp.n;
+          return `<div class="jack-box ${on ? 'focus' : ''}" data-face="${face}" data-gid="${pp.gid}" data-n="${pp.n}" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${bw.toFixed(1)}px;height:${bh.toFixed(1)}px" title="${esc(`${d.groups.find((g) => g.id === pp.gid)?.label} ${pp.n}`)}: drag to move"></div>`;
+        }).join('')
+        : lay.blocks.map((b) => {
+          const on = foc && foc.face === face && foc.gid === b.gid && !foc.n;
+          return `<div class="grp-box ${on ? 'focus' : ''}" data-face="${face}" data-gid="${b.gid}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px" title="${esc(d.groups.find((g) => g.id === b.gid)?.label)}: drag to move"></div>`;
+        }).join('');
+      const spacing = d.groups.map((g, i) => [g, i]).filter(([g]) => g.face === face).map(([g, i]) => {
+        const dm = groupDims(g, lay.s, sz.h, 14); const nudged = Object.keys(g.off || {}).length;
+        return `<tr><td>${esc(g.label)} <span class="muted small">(${g.count})</span></td>
+          <td><input id="gsx-${i}" type="number" min="4" max="200" step="0.5" value="${g.sx || ''}" placeholder="${+dm.px.toFixed(1)}" data-chg="grpField" data-i="${i}" data-f="sx" style="width:76px" aria-label="${esc(g.label)}: space across"></td>
+          <td><input id="gsy-${i}" type="number" min="4" max="200" step="0.5" value="${g.sy || ''}" placeholder="${+dm.py.toFixed(1)}" data-chg="grpField" data-i="${i}" data-f="sy" style="width:76px" ${dm.rows > 1 ? '' : 'disabled title="Only one row"'} aria-label="${esc(g.label)}: space down"></td>
+          <td><input id="grw-${i}" type="number" min="0" max="8" value="${g.rows || ''}" placeholder="auto" data-chg="grpField" data-i="${i}" data-f="rows" style="width:60px" aria-label="${esc(g.label)}: rows"></td>
+          <td>${nudged ? `<span class="small">${nudged} moved</span> <button class="face-btn" data-act="resetJacks" data-i="${i}">Put back</button>` : '<span class="muted small">—</span>'}</td></tr>`;
+      }).join('');
       return `<div><div class="card-head"><span class="eyebrow">${face}</span>${d.layout?.[face] ? `<button class="face-btn" data-act="resetLayout" data-face="${face}">Reset to automatic</button>` : '<span class="muted small">automatic layout</span>'}</div>
-        <div class="pv" style="position:relative;width:${sz.w}px;height:${sz.h}px">${previewDev(d, face)}${boxes}</div></div>`;
+        <div class="pv" style="position:relative;width:${sz.w}px;height:${sz.h}px">${previewDev(d, face)}${boxes}</div>
+        <div class="tbl-wrap" style="margin-top:8px;max-width:${Math.max(sz.w, 460)}px"><table class="grid"><thead><tr><th>Group</th><th>Space across (px)</th><th>Space down (px)</th><th>Rows</th><th>Single jacks</th></tr></thead><tbody>${spacing}</tbody></table></div>
+        <p class="small muted" style="margin:4px 0 0">Space is measured centre to centre. Leave it blank for the automatic spacing shown greyed out.</p></div>`;
     }).join('')}</div></div>`;
+}
+// fix every group on this face to where it's shown now, so one can then be moved by hand
+function pinLayout(def, face) {
+  if (def.layout?.[face]) return;
+  const sz = devSize(def); const lay = layoutFace(def, face, sz.w, sz.h);
+  def.layout ||= {}; def.layout[face] = { s: lay.s };
+  for (const b of lay.blocks) { const grp = def.groups.find((x) => x.id === b.gid); if (grp) grp.pos = { x: b.x, y: b.y }; }
+}
+function setJackOff(g, n, x, y) {
+  x = Math.round(x * 2) / 2; y = Math.round(y * 2) / 2;
+  g.off ||= {};
+  if (x || y) g.off[n] = { x, y }; else delete g.off[n];
+  if (!Object.keys(g.off).length) delete g.off;
+}
+function nudgeLayout(dx, dy) {
+  const f = ui.layFocus; const def = libDef(); if (!def || !f || f.def !== def.id) return false;
+  const g = def.groups.find((x) => x.id === f.gid); if (!g) return false;
+  commit('', () => {
+    if (f.n) { const o = g.off?.[f.n] || { x: 0, y: 0 }; setJackOff(g, f.n, o.x + dx, o.y + dy); }
+    else { pinLayout(def, f.face); g.pos = { x: Math.max(0, g.pos.x + dx), y: Math.max(0, g.pos.y + dy) }; }
+    layoutCache.clear();
+  });
+  return true;
 }
 function previewDev(def, face) {
   const fake = { id: '__pv', defId: def.id, name: def.model, short: def.short || '', place: {}, portNames: {}, labels: {} };
   idx.dev.set('__pv', fake);
-  const html = devHTML(fake, def, face, { top: 0, left: 0, w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U, cls: 'free', preview: true });
+  const sz = devSize(def);
+  const html = devHTML(fake, def, face, { top: 0, left: 0, w: sz.w, h: sz.h, cls: 'free', preview: true });
   idx.dev.delete('__pv');
   return html;
 }
@@ -1978,6 +2220,50 @@ const defaultsFor = (def) => {
 };
 function moveIn(arr, id, d) { const i = arr.findIndex((x) => x.id === id), j = i + d; if (i < 0 || j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; }
 function libDef() { return project.library.find((d) => d.id === ui.libSel); }
+
+// Remove the Dante routes `drop` picks out. Editing a patch never changes the rig: a rig route is
+// switched off for this patch only (and can be turned back on in Dante & IP → Routes).
+// Returns how many rig routes were switched off.
+function dropDante(p, drop) {
+  const pt = p.patches.find((x) => x.id === ui.patchId) || p.patches[0]; let off = 0;
+  const offSet = new Set(pt.danteOff || []);
+  p.connections = p.connections.filter((c) => {
+    if (c.kind !== 'dante' || (c.layer !== 'rig' && c.layer !== pt.id) || offSet.has(c.id) || !drop(c)) return true;
+    if (c.layer === 'rig' && !rigMode()) { (pt.danteOff ||= []).push(c.id); off++; return true; }
+    return false;
+  });
+  return off;
+}
+const offNote = (n) => (n ? ` ${n} rig route${n > 1 ? 's were' : ' was'} switched off for ${patch().name} only (Dante & IP → Routes to turn ${n > 1 ? 'them' : 'it'} back on).` : '');
+function routeToChannel(s, ch) {
+  if (!s) return;
+  const ports = (s.ports || []).filter((r) => r && port(r));
+  const layer = rigMode() ? 'rig' : patch().id;
+  const plan = [], problems = [];
+  ports.forEach((r, i) => {
+    const tx = danteTxOn(r);
+    if (!tx) { problems.push(`${portLabel(r)} doesn't reach a Dante transmit channel`); return; }
+    if (!ch) { plan.push({ tx }); return; }
+    const target = stepRef(ch, i);
+    if (!target) { problems.push(`there's no channel after ${chLabel(ch)} for the second input`); return; }
+    const rx = danteRxFor(target);
+    if (!rx) { problems.push(`${chLabel(target)} is fed by a local input, not Dante. Cable it on the Rack tab`); return; }
+    plan.push({ tx, rx, ch: target });
+  });
+  if (problems.length) { toast(`Couldn't route ${s.name || 'that source'}: ${problems.join('; ')}.`, 6000); render(); return; }
+  const isMixer = (ref) => !!idx.def.get(idx.dev.get(parseRef(ref)?.devId)?.defId)?.mixer;
+  let off = 0;
+  commit(ch ? `${s.name} → ${plan.map((x) => chLabel(x.ch)).join(' + ')}` : `Cleared the console channel for ${s.name}`, (p) => {
+    for (const { tx, rx } of plan) {
+      const rxDev = rx && parseRef(rx).devId;
+      // the source moves to the new channel (its old route into the same mixer goes), and the new channel drops whatever fed it before
+      off += dropDante(p, (c) => (c.a === tx && (rx ? parseRef(c.b)?.devId === rxDev : isMixer(c.b))) || (rx && c.b === rx));
+      if (rx) p.connections.push({ id: uid('c'), a: tx, b: rx, kind: 'dante', layer, color: '' });
+    }
+  });
+  const where = layer === 'rig' ? 'in the rig' : `in ${patch().name} only`;
+  toast((ch ? `Dante: ${plan.map((x) => `${portShort(x.tx)} → ${portShort(x.rx)}`).join(', ')} (${where}).` : `Removed ${s.name}'s Dante route to the mixer.`) + offNote(off), 6000);
+}
 
 const actions = {
   tab: (el) => { ui.tab = el.dataset.tab; ui.danteEdit = null; render(); window.scrollTo(0, 0); },
@@ -2017,9 +2303,11 @@ const actions = {
   resetLayout: (el) => commit('Reset panel layout', () => {
     const d = libDef(); const face = el.dataset.face;
     if (d.layout) delete d.layout[face];
-    for (const g of d.groups) if (g.face === face) delete g.pos;
+    for (const g of d.groups) if (g.face === face) { delete g.pos; delete g.off; delete g.sx; delete g.sy; }
     layoutCache.clear();
   }),
+  layMode: (el) => { ui.layMode = el.dataset.m; ui.layFocus = null; render(); },
+  resetJacks: (el) => commit('Put jacks back in their rows', () => { delete libDef().groups[+el.dataset.i].off; layoutCache.clear(); }),
   cabTog: (el) => {
     const id = el.dataset.id, v = project.view;
     if (v.cableMode === 'picked') { if (v.cables[id] === true) delete v.cables[id]; else v.cables[id] = true; }
@@ -2093,7 +2381,7 @@ const actions = {
   addSrc: () => commit('Added a source', () => patch().sources.push({ id: uid('s'), name: '', groupId: '', mic: '', ports: [], person: '', cable: '', notes: '', custom: {} })),
   delSrc: (el) => { ui.armed = null; commit(`Deleted ${findSrc(el.dataset.id)?.name || 'a source'}`, () => { patch().sources = patch().sources.filter((s) => s.id !== el.dataset.id); }); },
   moveSrc: (el) => commit('', () => moveIn(patch().sources, el.dataset.id, +el.dataset.d)),
-  stereo: (el) => commit('', () => { const s = findSrc(el.dataset.id); s.ports ||= []; if (s.ports.length > 1) s.ports = s.ports.slice(0, 1); else s.ports = [s.ports[0] || '', '']; }),
+  stereo: (el) => commit('', () => { const s = findSrc(el.dataset.id); s.ports ||= []; if (s.ports.length > 1) s.ports = s.ports.slice(0, 1); else s.ports = [s.ports[0] || '', nextSrcPort(s.ports[0])]; }),
   addOut: () => commit('Added an output', () => patch().outputs.push({ id: uid('o'), name: '', mix: '', port: '', person: '', notes: '' })),
   delOut: (el) => { ui.armed = null; commit('Deleted an output', () => { patch().outputs = patch().outputs.filter((o) => o.id !== el.dataset.id); }); },
   moveOut: (el) => commit('', () => moveIn(patch().outputs, el.dataset.id, +el.dataset.d)),
@@ -2115,6 +2403,24 @@ const actions = {
   },
   newPatch: () => { const np = newPatch('New patch'); commit('Created a patch', (p) => p.patches.push(np), { quiet: true }); ui.patchId = np.id; render(); },
   delPatch: () => { ui.armed = null; const id = patch().id; commit(`Deleted patch ${patch().name}`, (p) => { p.patches = p.patches.filter((x) => x.id !== id); p.connections = p.connections.filter((c) => c.layer !== id); }, { quiet: true }); ui.patchId = project.patches[0].id; render(); },
+  danteTab: (el) => { ui.danteTab = el.dataset.t; ui.danteEdit = null; render(); },
+  danteRoute: () => {
+    const devs = danteDevs(); const dr = ui.dr;
+    const tx = devs.tx.find(([d]) => d.id === dr.tx), rx = devs.rx.find(([d]) => d.id === dr.rx); if (!tx || !rx) return;
+    const txs = Math.max(1, +dr.txs || 1), rxs = Math.max(1, +dr.rxs || 1);
+    const n = Math.max(1, Math.min(+dr.n || 1, tx[1].count - txs + 1, rx[1].count - rxs + 1));
+    const layer = rigMode() ? 'rig' : patch().id; let off = 0;
+    commit(`Dante: ${tx[0].short} Tx ${rangeTxt(txs, txs + n - 1)} → ${rx[0].short} Rx ${rangeTxt(rxs, rxs + n - 1)}`, (p) => {
+      const rxRefs = new Set(Array.from({ length: n }, (_, i) => mkRef(rx[0].id, rx[1].id, rxs + i)));
+      off = dropDante(p, (c) => rxRefs.has(c.b));
+      for (let i = 0; i < n; i++) p.connections.push({ id: uid('c'), a: mkRef(tx[0].id, tx[1].id, txs + i), b: mkRef(rx[0].id, rx[1].id, rxs + i), kind: 'dante', layer, color: '' });
+    });
+    // ready for the next block: carry on from where this one ended
+    dr.txs = txs + n; dr.rxs = rxs + n;
+    toast(`${n} route${n > 1 ? 's' : ''} made ${layer === 'rig' ? 'in the rig' : `in ${patch().name} only`}.` + offNote(off), 6000);
+  },
+  danteDelRun: (el) => { ui.armed = null; const ids = new Set(el.dataset.ids.split(',')); let off = 0; commit(`Removed ${ids.size} Dante route${ids.size > 1 ? 's' : ''}`, (p) => { off = dropDante(p, (c) => ids.has(c.id)); }); if (off) toast(offNote(off).trim(), 6000); },
+  danteRestore: (el) => { const ids = new Set(el.dataset.ids.split(',')); commit(`Turned ${ids.size} rig Dante route${ids.size > 1 ? 's' : ''} back on in ${patch().name}`, () => { const pt = patch(); pt.danteOff = (pt.danteOff || []).filter((id) => !ids.has(id)); if (!pt.danteOff.length) delete pt.danteOff; }); },
   danteEdit: (el) => { ui.danteEdit = el.dataset.ref; render(); const s = $('#dsel'); if (s) s.focus(); },
   preset: (el) => commit('', (p) => {
     const on = el.dataset.p === 'tech' ? ['source', 'mic', 'input', 'consoleCh', 'cable', 'person', 'notes'] : ['source', 'mic', 'input', 'person'];
@@ -2123,6 +2429,8 @@ const actions = {
     const ordered = [...on.map((k) => cols.find((c) => c.key === k)).filter(Boolean), ...cols.filter((c) => !on.includes(c.key))];
     p.print.columns = ordered.map((c) => ({ ...c, on: on.includes(c.key) }));
     p.print.include.outputs = el.dataset.p === 'tech'; p.print.include.pull = el.dataset.p === 'tech';
+    const tech = el.dataset.p === 'tech';
+    p.print.outCols = { type: tech, mix: true, leaves: tech, goes: tech, person: true, notes: tech };
   }),
   printColMove: (el) => commit('', (p) => { const cols = printColumns(); const i = cols.findIndex((c) => c.key === el.dataset.k), j = i + +el.dataset.d; if (j < 0 || j >= cols.length) return; [cols[i], cols[j]] = [cols[j], cols[i]]; }),
   pickLogo: () => $('#file-logo').click(),
@@ -2182,7 +2490,7 @@ const changes = {
     const d = project.devices.find((y) => y.id === ui.sel.id); const def = idx.def.get(d.defId);
     const [t, id] = el.value.split(':');
     if (t === 'l') { commit(`Moved ${d.name}`, () => { d.place = { type: 'loc', locId: id }; }); return; }
-    if (def.form !== 'rack') { toast(`${def.model} isn't rack-mountable. Change its mounting in the Library first.`); render(); return; }
+    if (!rackable(def)) { toast(`${def.model} isn't rack-mountable. Change its mounting in the Library first.`); render(); return; }
     const rack = project.racks.find((r) => r.id === id);
     for (let u = 1; u <= rack.ru; u++) for (const side of def.width === 'half' ? ['L', 'R'] : ['full']) if (canPlace(rack, u, def.ru, side, d.id)) { commit(`Moved ${d.name} to ${rack.name}`, () => { d.place = { type: 'rack', rackId: id, u, side }; }); return; }
     toast(`No room in ${rack.name} for ${def.ru}U.`); render();
@@ -2215,17 +2523,19 @@ const changes = {
   devKV: (el) => commit('Edited a detail', (p) => { p.devices.find((d) => d.id === el.dataset.dev).fields[+el.dataset.i][el.dataset.f] = el.value; }),
   devNotes: (el) => commit('Edited notes', (p) => { p.devices.find((d) => d.id === el.dataset.dev).notes = el.value; }),
   ipSlotField: (el) => commit('Edited gear IP addresses', () => { libDef().ipSlots[+el.dataset.i][el.dataset.f] = el.value; }),
+  drField: (el) => { ui.dr[el.dataset.f] = el.value; render(); },
   sheetScope: (el) => { project.sheet.scope = el.value; save(); render(); },
   sheetInc: (el) => { project.sheet.include[el.dataset.k] = el.checked; save(); render(); },
   peJacks: (el) => { pe.jacks = el.checked; peDraw(); },
   outDante: (el) => {
     const o = patch().outputs.find((x) => x.id === el.dataset.id); const tx = o.port, rx = el.value;
     const layer = rigMode() ? 'rig' : patch().id;
+    let off = 0;
     commit(rx ? `Dante: ${portShort(tx)} → ${portShort(rx)}` : `Dante: cleared ${portShort(tx)}`, (p) => {
-      p.connections = p.connections.filter((c) => !(c.kind === 'dante' && ((c.a === tx && (c.layer === layer || c.layer === 'rig' || c.layer === patch().id)) || (rx && c.b === rx && (c.layer === layer || c.layer === 'rig' || c.layer === patch().id)))));
+      off = dropDante(p, (c) => c.a === tx || (rx && c.b === rx));
       if (rx) p.connections.push({ id: uid('c'), a: tx, b: rx, kind: 'dante', layer, color: '' });
     });
-    if (rx) toast(rigMode() ? 'Dante route saved in the rig.' : `Dante route saved in ${patch().name} only.`);
+    if (rx || off) toast((rx ? (rigMode() ? 'Dante route saved in the rig.' : `Dante route saved in ${patch().name} only.`) : '') + offNote(off), 6000);
   },
   viewField: (el) => { project.view[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; save(); render(); },
   typeVis: (el) => { if (el.checked) delete project.view.hideTypes[el.dataset.t]; else project.view.hideTypes[el.dataset.t] = true; save(); render(); },
@@ -2247,8 +2557,20 @@ const changes = {
   locField: (el) => commit('Renamed location', (p) => { p.locations.find((l) => l.id === el.dataset.id).name = el.value; }),
   src: (el) => commit(`Edited ${findSrc(el.dataset.id)?.name || 'source'}`, () => { findSrc(el.dataset.id)[el.dataset.f] = el.value; }),
   srcCustom: (el) => commit('Edited a custom column', () => { const s = findSrc(el.dataset.id); (s.custom ||= {})[el.dataset.c] = el.value; }),
-  srcPort: (el) => commit(`Patched ${findSrc(el.dataset.id)?.name}`, () => { const s = findSrc(el.dataset.id); s.ports ||= []; s.ports[+el.dataset.i] = el.value; }),
-  out: (el) => commit('Edited an output', () => { patch().outputs.find((o) => o.id === el.dataset.id)[el.dataset.f] = el.value; }),
+  srcPort: (el) => commit(`Patched ${findSrc(el.dataset.id)?.name}`, () => {
+    const s = findSrc(el.dataset.id); s.ports ||= []; const i = +el.dataset.i; s.ports[i] = el.value;
+    // stereo: the second input follows the first (In 7 → In 8). It can still be changed by hand.
+    if (i === 0 && s.ports.length > 1) s.ports[1] = nextSrcPort(el.value);
+  }),
+  srcCh: (el) => routeToChannel(findSrc(el.dataset.id), el.value),
+  out: (el) => commit('Edited an output', () => {
+    const o = patch().outputs.find((x) => x.id === el.dataset.id); const f = el.dataset.f;
+    o[f] = el.value;
+    const pp = port(o.port);
+    // choosing a type clears a jack of another type; choosing a jack sets its type
+    if (f === 'type' && pp && el.value && groupOutType(pp.g) !== el.value) o.port = '';
+    if (f === 'port' && pp) o.type = groupOutType(pp.g);
+  }),
   patchField: (el) => commit('Edited patch details', () => { patch()[el.dataset.f] = el.value; }),
   groupField: (el) => commit('Edited a group', (p) => { p.groups.find((g) => g.id === el.dataset.id)[el.dataset.f] = el.value; }),
   colName: (el) => commit('Renamed a column', (p) => { p.columns.find((c) => c.id === el.dataset.id).name = el.value; }),
@@ -2256,28 +2578,38 @@ const changes = {
   danteSub: (el) => {
     const rx = el.dataset.ref, tx = el.value; const layer = ui.layer === 'rig' ? 'rig' : patch().id;
     ui.danteEdit = null;
+    let off = 0;
     commit(tx ? `Dante: ${portShort(tx)} → ${portShort(rx)}` : `Dante: cleared ${portShort(rx)}`, (p) => {
-      p.connections = p.connections.filter((c) => !(c.kind === 'dante' && c.b === rx && (c.layer === layer || c.layer === 'rig' || c.layer === patch().id)));
+      off = dropDante(p, (c) => c.b === rx);
       if (tx) p.connections.push({ id: uid('c'), a: tx, b: rx, kind: 'dante', layer, color: '' });
     });
+    if (off) toast(offNote(off).trim(), 6000);
   },
   printField: (el) => commit('', (p) => { const f = el.dataset.f; p.print[f] = el.type === 'checkbox' ? el.checked : f === 'fontSize' ? +el.value : el.value; }),
   printInc: (el) => commit('', (p) => { p.print.include[el.dataset.k] = el.checked; }),
   printCol: (el) => commit('', () => { printColumns().find((c) => c.key === el.dataset.k).on = el.checked; }),
+  printOutCol: (el) => commit('', (p) => { p.print.outCols[el.dataset.k] = el.checked; }),
   defField: (el) => commit('Edited gear', () => {
     const d = libDef(); const f = el.dataset.f;
-    if (f === 'verified') d.verified = el.checked;
+    if (f === 'verified' || f === 'mixer') d[f] = el.checked;
     else if (f === 'ru' || f === 'watts') d[f] = Math.max(f === 'ru' ? 1 : 0, +el.value || 0);
+    else if (f === 'wIn' || f === 'hIn') d[f] = Math.min(f === 'wIn' ? 60 : 40, Math.max(0.5, +el.value || 1));
     else d[f] = el.value;
+    if (f === 'width' && d.width === 'custom') { d.wIn ||= 8; d.hIn ||= 1.75; }
+    if (f === 'form' && d.form === 'rack' && d.width === 'custom') d.width = 'full';
+    // a shelf has to be at least as tall as the gear sitting on it
+    if (d.form === 'shelf' && customSize(d)) d.ru = Math.max(d.ru || 1, Math.ceil((d.hIn || 1.75) / 1.75 - 0.01));
+    layoutCache.clear();
   }),
   grpField: (el) => commit('Edited gear', () => {
     const g = libDef().groups[+el.dataset.i]; const f = el.dataset.f;
     if (f === 'count') g.count = Math.max(1, Math.min(256, +el.value || 1));
     else if (f === 'rows') { if (+el.value > 0) g.rows = +el.value; else delete g.rows; }
+    else if (f === 'sx' || f === 'sy') { if (+el.value >= 4) g[f] = Math.min(200, +el.value); else delete g[f]; }
     else if (f === 'names') { const n = el.value.split(',').map((x) => x.trim()).filter(Boolean); if (n.length) g.names = n; else delete g.names; }
     else if (f === 'src') g.src = el.checked;
     else if (f === 'signal') { if (el.value) g.signal = el.value; else delete g.signal; }
-    else { if (f === 'face' && g.face !== el.value) delete g.pos; g[f] = el.value; }
+    else { if (f === 'face' && g.face !== el.value) { delete g.pos; delete g.off; } g[f] = el.value; }
     layoutCache.clear();
   }),
   linkField: (el) => commit('Edited gear', () => {
@@ -2290,6 +2622,12 @@ const changes = {
 const inputs = {
   peFine: (el) => { pe.fine = +el.value; const fv = $('#pe-fine-v'); if (fv) fv.textContent = `${pe.fine}°`; peDraw(); },
   peZoom: (el) => { pe.s = peFillScale() * (+el.value / 100); peDraw(); },
+  // the route form's numbers refresh just the preview, so clicking "Make routes" straight after typing still works
+  drNum: (el) => {
+    ui.dr[el.dataset.f] = el.value;
+    const tmp = document.createElement('div'); tmp.innerHTML = danteRoutesHTML(danteDevs());
+    for (const id of ['dr-preview', 'dr-go']) { const a = $('#' + id), b = $('#' + id, tmp); if (a && b) a.innerHTML = b.innerHTML; }
+  },
   connQuery: (el) => { ui.connQuery = el.value; const s = $('#pt-target'); if (s) s.innerHTML = connectOptions(el.dataset.ref, el.value); },
   addQuery: (el) => {
     ui.addQuery = el.value;
@@ -2336,7 +2674,11 @@ document.addEventListener('toggle', (e) => {
 document.addEventListener('keydown', (e) => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '');
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-  else if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (ui.pick) { ui.pick = null; render(); } else if (ui.sel) select(null); }
+  else if (ui.tab === 'library' && ui.layFocus && !typing && e.key.startsWith('Arrow')) {
+    const k = e.shiftKey ? 10 : 1; const d = { ArrowLeft: [-k, 0], ArrowRight: [k, 0], ArrowUp: [0, -k], ArrowDown: [0, k] }[e.key];
+    if (d && nudgeLayout(...d)) e.preventDefault();
+  }
+  else if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (ui.pick) { ui.pick = null; render(); } else if (ui.layFocus) { ui.layFocus = null; render(); } else if (ui.sel) select(null); }
   else if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && ui.sel?.kind === 'conn') { const id = ui.sel.id; commit('Removed a cable', (p) => { p.connections = p.connections.filter((c) => c.id !== id); }); select(null); }
 });
 window.addEventListener('resize', () => { if (ui.tab === 'rack') drawCables(); });
