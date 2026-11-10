@@ -525,7 +525,7 @@ table.grid td.c { text-align: center; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.14</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.15</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -574,7 +574,7 @@ table.grid td.c { text-align: center; }
 <input type="file" id="file-dante" accept=".xml,text/xml,application/xml" hidden>
 
 <script>
-const APP_VERSION = '0.0.14';
+const APP_VERSION = '0.0.15';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -1753,7 +1753,7 @@ function planMove(d, dest) {
   if (u < 1 || u + h - 1 > rack.ru) return { ok: false, msg: `A ${h}U unit at U${u} runs past the bottom of ${rack.name}.` };
   const target = { type: 'rack', rackId: rack.id, u, side };
   if (canPlace(rack, u, h, side, d.id)) return { ok: true, moves: [[d.id, target]], shuffled: 0 };
-  if (d.place.type !== 'rack' || d.place.rackId !== rack.id) return { ok: false, msg: `That space in ${rack.name} is taken. Make room there first.` };
+  if (d.place.type !== 'rack' || d.place.rackId !== rack.id) return insertMove(d, h, rack, u, side, target);
   const others = project.devices.filter((x) => x.id !== d.id && x.place.type === 'rack' && x.place.rackId === rack.id);
   const span = (x) => [x.place.u, x.place.u + (idx.def.get(x.defId)?.ru || 1) - 1];
   const moves = [[d.id, target]];
@@ -1775,6 +1775,31 @@ function planMove(d, dest) {
   }
   const occ = occupancy(rack, new Map(moves));
   if (occ.clash || occ.over) return { ok: false, msg: "There isn't room to shuffle the gear that way." };
+  return { ok: true, moves, shuffled: moves.length - 1 };
+}
+// Moving gear into another rack where the space is taken: the gear there (and below it) slides
+// down to make room, as long as the rack has enough empty space further down.
+function insertMove(d, h, rack, u, side, target) {
+  const others = project.devices.filter((x) => x.id !== d.id && x.place.type === 'rack' && x.place.rackId === rack.id);
+  const ruOf = (x) => idx.def.get(x.defId)?.ru || 1;
+  // something that starts above the drop point and reaches into it can't be pushed out of the way
+  const straddle = others.find((x) => x.place.u < u && x.place.u + ruOf(x) - 1 >= u && (side === 'full' || x.place.side === 'full' || x.place.side === side));
+  if (straddle) return { ok: false, msg: `${straddle.name} sits across U${u} in ${rack.name}. Drop at U${straddle.place.u} (above it) or U${straddle.place.u + ruOf(straddle)} (below it).` };
+  if (side !== 'full') return { ok: false, msg: `That space in ${rack.name} is taken. Half-rack gear needs an empty half space.` };
+  const below = others.filter((x) => x.place.u >= u).sort((a, b) => a.place.u - b.place.u);
+  if (below.some((x) => x.place.side !== 'full')) {
+    const half = below.find((x) => x.place.side !== 'full');
+    if (half.place.u < u + h) return { ok: false, msg: `Half-rack gear (${half.name}) is in the way in ${rack.name}. Move it first, or drop somewhere else.` };
+  }
+  const moves = [[d.id, target]]; let cursor = u + h;
+  for (const x of below) {
+    if (x.place.u >= cursor) break;          // an empty space absorbs the rest
+    if (x.place.side !== 'full') return { ok: false, msg: `Half-rack gear (${x.name}) is in the way in ${rack.name}. Move it first, or drop somewhere else.` };
+    moves.push([x.id, { ...x.place, u: cursor }]); cursor += ruOf(x);
+  }
+  if (cursor - 1 > rack.ru) return { ok: false, msg: `Not enough room in ${rack.name}: it needs ${cursor - 1 - rack.ru} more U at the bottom. Make the rack taller (+ 1U) or clear a space.` };
+  const occ = occupancy(rack, new Map(moves));
+  if (occ.clash || occ.over) return { ok: false, msg: `There isn't room to make space in ${rack.name} that way.` };
   return { ok: true, moves, shuffled: moves.length - 1 };
 }
 function applyMoves(moves, msg, extra = moves.length - 1) {
@@ -2836,6 +2861,32 @@ function rigSheetView() {
 }
 
 /* ---------- 9. dante ---------- */
+// Why Dante gear might be missing from the matrix, with what to do about it
+function danteProblems() {
+  const out = [];
+  const looksDante = (def) => def.groups.some((g) => /dante/i.test(g.label) || (g.names || []).some((n) => /dante/i.test(n))) || (def.ipSlots || []).some((x) => /dante/i.test(x.label));
+  const seen = new Set();
+  for (const d of project.devices) {
+    const def = idx.def.get(d.defId); if (!def || seen.has(def.id)) continue;
+    const chans = def.groups.filter((g) => g.conn === 'dante');
+    if (chans.some((g) => g.dir === 'io')) { seen.add(def.id); out.push({ kind: 'io', def, d }); continue; }
+    if (!chans.length && looksDante(def)) { seen.add(def.id); out.push({ kind: 'nochan', def, d }); }
+  }
+  for (const def of project.library) {
+    if (!def.groups.some((g) => g.conn === 'dante' && g.dir !== 'io')) continue;
+    if (!project.devices.some((d) => d.defId === def.id) && def.userAdded) out.push({ kind: 'notinrig', def });
+  }
+  return out;
+}
+function danteProblemsHTML() {
+  const ps = danteProblems(); if (!ps.length) return '';
+  const line = (x) => {
+    if (x.kind === 'nochan') return `<li><b>${esc(x.def.make)} ${esc(x.def.model)}</b> (${esc(x.d.name)}) has Dante network jacks but no Dante channels, so there's nothing to route. <button data-act="danteAddCh" data-def="${x.def.id}">Add Dante channels…</button></li>`;
+    if (x.kind === 'io') return `<li><b>${esc(x.def.make)} ${esc(x.def.model)}</b> has Dante channels set to “Two-way”. Each group must be Output (Tx) or Input (Rx). <button data-act="editDef" data-def="${x.def.id}">Fix in the Library</button></li>`;
+    return `<li><b>${esc(x.def.make)} ${esc(x.def.model)}</b> is in the Library but not in the rig yet. Add it on the Rack tab (Editing: The rig → an empty rack space, or + Gear in a location).</li>`;
+  };
+  return `<div class="note"><span><b>Some Dante gear can't show in the matrix yet:</b><ul class="small help-list" style="margin-top:4px">${ps.map(line).join('')}</ul></span></div>`;
+}
 function danteDevs() {
   const tx = [], rx = [];
   for (const d of project.devices) {
@@ -2915,7 +2966,7 @@ function danteRoutesHTML(devs) {
 const mxState = () => (project.view.mx ||= { tx: {}, rx: {} });
 const mxOpen = (side, id) => !!mxState()[side][id];
 function matrixHTML(devs) {
-  if (!devs.tx.length || !devs.rx.length) return '<div class="card"><p class="small muted" style="margin:0">The matrix needs gear with Dante transmit and receive channels in the rig.</p></div>';
+  if (!devs.tx.length || !devs.rx.length) return `${danteProblemsHTML()}<div class="card"><p class="small muted" style="margin:0">The matrix needs gear with Dante transmit and receive channels in the rig.</p></div>`;
   const routes = new Map(), pair = new Map(), txInto = new Map(), rxFrom = new Map();
   const inc = (m, k) => m.set(k, (m.get(k) || 0) + 1);
   for (const c of idx.active) {
@@ -2965,7 +3016,7 @@ function matrixHTML(devs) {
     }
   }
   const all = (side, on) => `<button data-act="mxAll" data-side="${side}" data-on="${on ? 1 : ''}">${on ? 'Expand' : 'Collapse'} all</button>`;
-  return `<div class="card mx-card">
+  return `${danteProblemsHTML()}<div class="card mx-card">
     <div class="card-head"><h3>Routing matrix</h3><span class="muted small">Transmitters → across the top · Receivers ↓ down the side</span><span class="spacer"></span>
       <span class="small muted">Transmitters</span>${all('tx', 1)}${all('tx', 0)}<span class="small muted">Receivers</span>${all('rx', 1)}${all('rx', 0)}</div>
     <p class="small muted" style="margin:0"><b>Click</b> a unit's name to open or close its channels. <b>Click</b> a square to route that Tx to that Rx (click again to remove). <b>Drag</b> across squares to do many at once. <b>Shift-click</b> a second square to fill the diagonal from the last one (Tx 1–16 → Rx 17–32 in two clicks). A closed unit shows a dot or count where routes exist; click it to open.
@@ -3419,7 +3470,7 @@ function defEditor(d) {
     ${customSize(d) ? `<p class="small muted" style="margin:0">Drawn at its real size (1U is 1.75″, a 19″ rack is 19″ wide). ${d.form === 'shelf' ? `It sits on a ${d.ru}U shelf in a rack; the shelf grows if the gear is taller.` : 'Place it in a location (Stage, FOH…), or choose “Sits on a rack shelf” to put it in a rack.'}</p>` : d.form === 'shelf' ? '<p class="small muted" style="margin:0">Choose “Custom size” to draw it at its real size on the shelf.</p>' : ''}
     ${d.mixer && !d.groups.some((g) => g.conn === 'channel') ? '<p class="small muted" style="margin:0">To pick console channels in the patchlist, add a port group with the connector “Console channel” (side Virtual), and an Internal routing line from its Dante Rx (or inputs) to it.</p>' : ''}
     <label class="field"><span>Reference / notes</span><input id="df-ref" value="${esc(d.ref || '')}" data-chg="defField" data-f="ref"></label>
-    <div class="card-head"><h3>Connectors &amp; channels</h3><span class="spacer"></span><button data-act="grpAdd">+ Port group</button></div>
+    <div class="card-head"><h3>Connectors &amp; channels</h3><span class="spacer"></span><button data-act="grpAdd">+ Port group</button><button data-act="danteAddCh" data-def="${d.id}">+ Dante channels</button></div>
     <p class="small muted" style="margin:0">One row per set of identical jacks. “Sources” marks jacks a mic or instrument can be assigned to in the patchlist. “Dante” and “Virtual” groups aren't drawn on the panel.</p>
     <div class="tbl-wrap"><table class="grid"><thead><tr><th>Label</th><th>Count</th><th>Connector</th><th>Direction</th><th>Side</th><th>Rows</th><th>Names</th><th>Signal</th><th>Sources</th><th></th></tr></thead><tbody>${groupRows}</tbody></table></div>
     ${sec('lib-ips', `IP addresses (${(d.ipSlots || []).length})`, `<div class="toolbar"><span class="small muted" style="flex:1">How many IP addresses this gear has and what each one is for. Tie one to a network jack to show it on that jack.</span><button data-act="ipSlotAdd">+ IP address</button></div>
@@ -3628,6 +3679,23 @@ const actions = {
     (def.links ||= []).push({ from: rx.id, to: ch.id, count: Math.min(rx.count, ch.count) });
   }),
   danteImport: () => $('#file-dante').click(),
+  danteAddCh: (el) => {
+    const def = project.library.find((d) => d.id === el.dataset.def);
+    openModal(`Dante channels for ${def.make} ${def.model}`, `<p class="small muted" style="margin:0">How many channels does it send onto the network (transmit) and take from it (receive)? Check the spec sheet; use 0 for none. Every ${esc(def.model)} in the rig gets these.</p>
+      <div class="inline-fields"><label class="field"><span>Transmit (Tx)</span><input id="dac-tx" type="number" min="0" max="512" value="2"></label><label class="field"><span>Receive (Rx)</span><input id="dac-rx" type="number" min="0" max="512" value="2"></label></div>
+      <div class="toolbar"><button class="primary" data-act="danteAddChGo" data-def="${def.id}">Add channels</button><span class="spacer"></span><button data-act="closeModal">Cancel</button></div>`);
+  },
+  danteAddChGo: (el) => {
+    const tx = Math.max(0, Math.min(512, +$('#dac-tx').value || 0)), rx = Math.max(0, Math.min(512, +$('#dac-rx').value || 0));
+    if (!tx && !rx) { toast('Enter at least one channel.'); return; }
+    closeModal();
+    commit('Added Dante channels to gear', (p) => {
+      const def = p.library.find((d) => d.id === el.dataset.def);
+      if (tx) def.groups.push({ id: def.groups.some((g) => g.id === 'dtx') ? uid('g') : 'dtx', label: 'Dante Tx', count: tx, start: 1, conn: 'dante', dir: 'out', face: 'dante' });
+      if (rx) def.groups.push({ id: def.groups.some((g) => g.id === 'drx') ? uid('g') : 'drx', label: 'Dante Rx', count: rx, start: 1, conn: 'dante', dir: 'in', face: 'dante' });
+    });
+    toast('Dante channels added. It now shows in the matrix.');
+  },
   dimpGo: () => runDanteImport(),
   mxToggle: (el) => { const v = mxState()[el.dataset.side]; v[el.dataset.id] = !v[el.dataset.id]; save(); render(); },
   mxAll: (el) => { const devs = danteDevs()[el.dataset.side]; const v = mxState()[el.dataset.side]; for (const [d] of devs) v[d.id] = !!el.dataset.on; save(); render(); },
@@ -3771,8 +3839,8 @@ const actions = {
   // library
   libSel: (el) => { ui.libSel = el.dataset.def; render(); },
   editDef: (el) => { ui.tab = 'library'; ui.libSel = el.dataset.def; render(); },
-  newDef: () => { const id = uid('def'); commit('Created a gear definition', (p) => p.library.push({ id, make: 'New', model: 'Gear', short: 'NEW', category: 'other', form: 'rack', ru: 1, width: 'full', watts: 0, verified: false, ref: '', groups: [{ id: 'in', label: 'In', count: 8, start: 1, conn: 'xlr', dir: 'in', face: 'rear', src: true }], links: [], ipSlots: [] }), { quiet: true }); ui.tab = 'library'; ui.libSel = id; render(); },
-  dupDef: (el) => { const src = project.library.find((d) => d.id === el.dataset.def); const id = uid('def'); commit(`Duplicated ${src.model}`, (p) => p.library.push({ ...JSON.parse(JSON.stringify(src)), id, model: src.model + ' copy', verified: false }), { quiet: true }); ui.libSel = id; render(); },
+  newDef: () => { const id = uid('def'); commit('Created a gear definition', (p) => p.library.push({ id, userAdded: true, make: 'New', model: 'Gear', short: 'NEW', category: 'other', form: 'rack', ru: 1, width: 'full', watts: 0, verified: false, ref: '', groups: [{ id: 'in', label: 'In', count: 8, start: 1, conn: 'xlr', dir: 'in', face: 'rear', src: true }], links: [], ipSlots: [] }), { quiet: true }); ui.tab = 'library'; ui.libSel = id; render(); },
+  dupDef: (el) => { const src = project.library.find((d) => d.id === el.dataset.def); const id = uid('def'); commit(`Duplicated ${src.model}`, (p) => p.library.push({ ...JSON.parse(JSON.stringify(src)), id, userAdded: true, model: src.model + ' copy', verified: false }), { quiet: true }); ui.libSel = id; render(); },
   delDef: (el) => { ui.armed = null; commit('Deleted a gear definition', (p) => { p.library = p.library.filter((d) => d.id !== el.dataset.def); }, { quiet: true }); ui.libSel = null; render(); },
   grpAdd: () => commit('Edited gear', () => { const d = libDef(); d.groups.push({ id: uid('g'), label: 'Port', count: 1, start: 1, conn: 'xlr', dir: 'in', face: 'rear' }); }),
   grpDel: (el) => { ui.armed = null; commit('Edited gear', () => { const d = libDef(); const g = d.groups[+el.dataset.i]; d.groups.splice(+el.dataset.i, 1); d.links = (d.links || []).filter((L) => L.from !== g.id && L.to !== g.id); }); },
@@ -3823,7 +3891,7 @@ const changes = {
     if (!rackable(def)) { toast(`${def.model} isn't rack-mountable. Change its mounting in the Library first.`); render(); return; }
     const rack = project.racks.find((r) => r.id === id);
     for (let u = 1; u <= rack.ru; u++) for (const side of def.width === 'half' ? ['L', 'R'] : ['full']) if (canPlace(rack, u, def.ru, side, d.id)) { commit(`Moved ${d.name} to ${rack.name}`, () => { d.place = { type: 'rack', rackId: id, u, side }; }); return; }
-    toast(`No room in ${rack.name} for ${def.ru}U.`); render();
+    toast(`No empty ${def.ru}U space in ${rack.name}. Drag ${d.name} onto the rack instead (the gear there slides down to make room), or make the rack taller.`, 6000); render();
   },
   devU: (el) => {
     const d = project.devices.find((y) => y.id === ui.sel.id); const u = +el.value;
@@ -3947,6 +4015,10 @@ const changes = {
     else if (f === 'src') g.src = el.checked;
     else if (f === 'signal') { if (el.value) g.signal = el.value; else delete g.signal; }
     else { if (f === 'face' && g.face !== el.value) { delete g.pos; delete g.off; } g[f] = el.value; }
+    // Dante channels and console channels aren't jacks: put them on the right "side", and give Dante a real direction
+    if (f === 'conn' && g.conn === 'dante') { g.face = 'dante'; if (g.dir === 'io') g.dir = 'out'; }
+    if (f === 'conn' && g.conn === 'channel') { g.face = 'virtual'; g.dir = 'in'; }
+    if (f === 'face' && g.face === 'dante') { g.conn = 'dante'; if (g.dir === 'io') g.dir = 'out'; }
     layoutCache.clear();
   }),
   linkField: (el) => commit('Edited gear', () => {

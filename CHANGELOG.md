@@ -3,6 +3,14 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.15 (2026-11-10)
+- **Dante gear missing from the matrix now explains itself.** The matrix lists any unit that can't appear and why, with a fix:
+  - it has Dante network jacks but no Dante channels → **Add Dante channels…** (enter how many Tx and Rx);
+  - its Dante channels are set to "Two-way" → link to fix it in the Library (they must be Output = Tx or Input = Rx);
+  - gear you made in the Library hasn't been put in a rack or location yet.
+- Library: a **+ Dante channels** button next to + Port group. Choosing the "Dante channel" connector now sets the group's side to Dante and a real direction automatically; "Console channel" sets Virtual / Input.
+- **Move gear into another rack even where the space is taken:** drag it there (Editing: The rig) and the gear at that spot and below slides down to make room, if the rack has empty space further down. The drop preview says how many items will slide. If there isn't room, it says how many U are missing. Cables, tie lines, Dante routes, names and notes all stay with the unit; one Undo puts everything back.
+
 ## v0.0.14 (2026-11-10)
 - **Print column in the patchlist:** untick a source (or output) to leave it off the printout and CSV. It stays in the patch, still traces to the console and still shows in Checks; it's just greyed in the list. The Inputs heading says how many are on the printout.
 - **Import a Dante Controller preset** (Dante & IP → Import Dante Controller preset…). In Dante Controller choose File → Save Preset, then pick that file. Every device in it is matched to a unit in PatchRack (by name, then model; you can change any match, skip it, or add it as new Dante-only gear in a "Dante network" location). Brings in, as you choose:
