@@ -3,6 +3,12 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.10 (2026-11-10)
+- **Fix: the gear photo now shows behind the jacks in Library → Panel layout**, where you line them up. Before, it was shrunk to a tiny speck in the corner.
+- In the panel layout editor the photo always shows (whatever View → Show gear photos is set to), with a **Photo** tickbox to hide it. Jacks are drawn as hollow rings over it so you can see the real connectors through them, and the name strip is hidden so it doesn't cover the top row.
+- **Zoom 1× / 2× / 3×** in the panel layout editor for fine alignment. Dragging and arrow-key nudges still move in real panel pixels.
+- **Add / Adjust photo** buttons right beside each panel in the editor.
+
 ## v0.0.9 (2026-11-10)
 - **Line jacks up with photos (Library → Panel layout):** switch Drag to **Single jacks** to move any one jack, or keep **Port groups** to move whole blocks. Click a jack or block and nudge it with the arrow keys (1px, Shift for 10px). Hold Alt while dragging a block to place it off the grid. Each group now has **Space across** and **Space down** settings, and "Put back" returns moved jacks to their rows.
 - **Custom-size gear:** for gear that isn't rack-mounted, choose Size → **Custom size** and enter width and height in inches. It's drawn at real scale (1U = 1.75″). New mounting **Sits on a rack shelf**: the gear goes in a rack on a shelf of however many U you set, drawn at its real size.

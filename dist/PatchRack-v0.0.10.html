@@ -466,11 +466,16 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 .help-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 .subopts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 4px 22px; align-items: center; }
 .inputcell .comp { white-space: nowrap; font-size: 12px; }
+/* layout editor: the photo fills the panel (the grid background used to shrink it to one 8px tile) */
+.pv .dev.photo { background-size: 100% 100%; background-repeat: no-repeat; }
+.pv.with-photo .dev-label, .pv.with-photo .cab-tog { display: none; }
+.pv.with-photo .port { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ring, var(--ring-in)), 0 0 0 1px rgba(0,0,0,.7); }
+.pv-zoom { overflow: visible; }
 
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.9</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.10</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -518,7 +523,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 <input type="file" id="file-photo" accept="image/*" hidden>
 
 <script>
-const APP_VERSION = '0.0.9';
+const APP_VERSION = '0.0.10';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -1902,7 +1907,7 @@ function devHTML(d, def, face, box) {
   const selDev = ui.sel?.kind === 'device' && ui.sel.id === d.id;
   const hl = highlightSet();
   const sub = d.zone ? `${d.zone} · ${d.position || ''}` : `${def.make} ${def.model}`;
-  const photo = project.view.photos !== false && def.images?.[face] ? ` photo ph-${phCls(def.id)}-${face}` : '';
+  const photo = (box.photo ?? project.view.photos !== false) && def.images?.[face] ? ` photo ph-${phCls(def.id)}-${face}` : '';
   let html = `<div class="dev ${box.cls || ''} ${def.style ? 'st-' + def.style : ''} ${selDev ? 'sel' : ''}${photo}" data-dev="${d.id}" style="${box.free ? '' : `top:${box.top}px;left:${box.left}px;`}width:${box.w}px;height:${box.h}px">`;
   html += `<div class="dev-label" data-act="selDev" data-id="${d.id}" title="${esc(def.make + ' ' + def.model)}"><b>${esc(d.name)}</b> <em>${esc(sub)}</em>${def.verified ? '' : '<span class="unv">· unverified</span>'}</div>`;
   const mode = project.view.cableMode;
@@ -2146,8 +2151,9 @@ function grpTarget(e, g = grpDrag) {
   // single jacks and Alt-drags move freely (half-pixel steps); blocks snap to the grid
   const step = g.n || e.altKey ? 0.5 : GRID;
   const snap = (v) => Math.round(v / step) * step;
-  const x = Math.max(0, Math.min(pv.offsetWidth - g.box.offsetWidth, snap(g.left + e.clientX - g.x0)));
-  const y = Math.max(0, Math.min(pv.offsetHeight - g.box.offsetHeight, snap(g.top + e.clientY - g.y0)));
+  const z = ui.layZoom || 1;   // the editor can be zoomed in, so mouse movement is scaled back to panel pixels
+  const x = Math.max(0, Math.min(pv.offsetWidth - g.box.offsetWidth, snap(g.left + (e.clientX - g.x0) / z)));
+  const y = Math.max(0, Math.min(pv.offsetHeight - g.box.offsetHeight, snap(g.top + (e.clientY - g.y0) / z)));
   return { x, y };
 }
 function onGroupDrag(e) {
@@ -3105,12 +3111,16 @@ function panelLayoutHTML(d) {
   const jacks = ui.layMode === 'jack';
   const foc = ui.layFocus?.def === d.id ? ui.layFocus : null;
   const faces = ['front', 'rear'].filter((f) => d.groups.some((g) => g.face === f));
+  const z = ui.layZoom || 1; const showPhoto = ui.layPhoto !== false;
+  const hasPhoto = faces.some((f) => d.images?.[f]);
   return `<div class="card-head"><h3>Panel layout</h3><span class="spacer"></span>
+      ${hasPhoto ? `<label class="tog"><input type="checkbox" id="lay-photo" data-chg="layPhoto" ${showPhoto ? 'checked' : ''}> Photo</label>` : ''}
+      <div class="seg"><span>Zoom</span>${[1, 2, 3].map((k) => `<button data-act="layZoom" data-z="${k}" class="${z === k ? 'on' : ''}">${k}×</button>`).join('')}</div>
       <div class="seg"><span>Drag</span><button data-act="layMode" data-m="group" class="${jacks ? '' : 'on'}">Port groups</button><button data-act="layMode" data-m="jack" class="${jacks ? 'on' : ''}">Single jacks</button></div></div>
     <p class="small muted" style="margin:0">${jacks
       ? 'Drag any one jack to line it up with the photo. Click a jack, then use the arrow keys to nudge it 1px (hold Shift for 10px).'
       : `Drag a block of jacks to move it (it snaps to a ${GRID}px grid; hold Alt to place it freely). Click a block, then use the arrow keys to nudge it 1px (Shift for 10px).`}
-      Set the space between jacks below each panel. Turn on the photo (View → Show gear photos) to line everything up against it.</p>
+      Set the space between jacks below each panel. Zoom in for fine work.</p>
     ${faces.length ? '' : '<p class="small muted" style="margin:0">This gear has no jacks on its front or rear panel.</p>'}
     <div style="overflow-x:auto"><div style="display:grid;gap:18px">${faces.map((face) => {
       const sz = devSize(d); const lay = layoutFace(d, face, sz.w, sz.h);
@@ -3133,8 +3143,9 @@ function panelLayoutHTML(d) {
           <td><input id="grw-${i}" type="number" min="0" max="8" value="${g.rows || ''}" placeholder="auto" data-chg="grpField" data-i="${i}" data-f="rows" style="width:60px" aria-label="${esc(g.label)}: rows"></td>
           <td>${nudged ? `<span class="small">${nudged} moved</span> <button class="face-btn" data-act="resetJacks" data-i="${i}">Put back</button>` : '<span class="muted small">—</span>'}</td></tr>`;
       }).join('');
-      return `<div><div class="card-head"><span class="eyebrow">${face}</span>${d.layout?.[face] ? `<button class="face-btn" data-act="resetLayout" data-face="${face}">Reset to automatic</button>` : '<span class="muted small">automatic layout</span>'}</div>
-        <div class="pv" style="position:relative;width:${sz.w}px;height:${sz.h}px">${previewDev(d, face)}${boxes}</div>
+      return `<div><div class="card-head"><span class="eyebrow">${face}</span>${d.layout?.[face] ? `<button class="face-btn" data-act="resetLayout" data-face="${face}">Reset to automatic</button>` : '<span class="muted small">automatic layout</span>'}
+          ${d.images?.[face] ? `<button class="face-btn" data-act="adjustPhoto" data-def="${d.id}" data-face="${face}">Adjust ${face} photo</button>` : `<button class="face-btn" data-act="addPhoto" data-def="${d.id}" data-face="${face}">+ Add ${face} photo to line up against</button>`}</div>
+        <div class="pv-zoom" style="width:${sz.w * z}px;height:${sz.h * z}px"><div class="pv ${showPhoto && d.images?.[face] ? 'with-photo' : ''}" style="position:relative;width:${sz.w}px;height:${sz.h}px;transform:scale(${z});transform-origin:0 0">${previewDev(d, face, showPhoto)}${boxes}</div></div>
         <div class="tbl-wrap" style="margin-top:8px;max-width:${Math.max(sz.w, 460)}px"><table class="grid"><thead><tr><th>Group</th><th>Space across (px)</th><th>Space down (px)</th><th>Rows</th><th>Single jacks</th></tr></thead><tbody>${spacing}</tbody></table></div>
         <p class="small muted" style="margin:4px 0 0">Space is measured centre to centre. Leave it blank for the automatic spacing shown greyed out.</p></div>`;
     }).join('')}</div></div>`;
@@ -3162,11 +3173,11 @@ function nudgeLayout(dx, dy) {
   });
   return true;
 }
-function previewDev(def, face) {
+function previewDev(def, face, photo) {
   const fake = { id: '__pv', defId: def.id, name: def.model, short: def.short || '', place: {}, portNames: {}, labels: {} };
   idx.dev.set('__pv', fake);
   const sz = devSize(def);
-  const html = devHTML(fake, def, face, { top: 0, left: 0, w: sz.w, h: sz.h, cls: 'free', preview: true });
+  const html = devHTML(fake, def, face, { top: 0, left: 0, w: sz.w, h: sz.h, cls: 'free', preview: true, photo });
   idx.dev.delete('__pv');
   return html;
 }
@@ -3289,6 +3300,7 @@ const actions = {
     for (const g of d.groups) if (g.face === face) { delete g.pos; delete g.off; delete g.sx; delete g.sy; }
     layoutCache.clear();
   }),
+  layZoom: (el) => { ui.layZoom = +el.dataset.z; render(); },
   layMode: (el) => { ui.layMode = el.dataset.m; ui.layFocus = null; render(); },
   resetJacks: (el) => commit('Put jacks back in their rows', () => { delete libDef().groups[+el.dataset.i].off; layoutCache.clear(); }),
   cabTog: (el) => {
@@ -3509,6 +3521,7 @@ const changes = {
   drField: (el) => { ui.dr[el.dataset.f] = el.value; render(); },
   sheetScope: (el) => { project.sheet.scope = el.value; save(); render(); },
   sheetInc: (el) => { project.sheet.include[el.dataset.k] = el.checked; save(); render(); },
+  layPhoto: (el) => { ui.layPhoto = el.checked; render(); },
   peJacks: (el) => { pe.jacks = el.checked; peDraw(); },
   outDante: (el) => {
     const o = patch().outputs.find((x) => x.id === el.dataset.id); const tx = o.port, rx = el.value;
