@@ -244,7 +244,12 @@ span.area-title { font-family: var(--f-display); font-weight: 600; letter-spacin
 .rack-body { position: relative; display: grid; grid-template-columns: 22px auto 22px; background: var(--rail); border-radius: 4px; padding: 6px 0; }
 .rail { position: relative; }
 .rail span { position: absolute; left: 0; right: 0; text-align: center; font: 9px/1 var(--f-mono); color: #6f7880; }
-.rail i { position: absolute; left: 7px; width: 8px; height: 5px; border-radius: 2px; background: #2e3338; }
+/* the rails sit inside the 19" bay, under the gear's ears; the outer strips just carry the U numbers */
+.rail-in { position: absolute; top: 0; bottom: 0; z-index: 0; pointer-events: none; background: linear-gradient(90deg, #3a4046, #30353b); }
+.rail-in.L { left: 0; box-shadow: inset -1px 0 0 #1a1d20; } .rail-in.R { right: 0; box-shadow: inset 1px 0 0 #1a1d20; }
+/* mounting holes on 18.31" centres, so about 9.5px in from each outside edge */
+.rail-in i { position: absolute; width: 6px; height: 6px; border-radius: 1px; background: #15181b; }
+.rail-in.L i { left: 6.5px; } .rail-in.R i { right: 6.5px; }
 .rack-bay { position: relative; background: repeating-linear-gradient(180deg, #181b1f 0 47px, #1d2126 47px 48px); }
 .slot {
   position: absolute; border: 1px dashed transparent; color: transparent; font: 11px var(--f-mono);
@@ -261,7 +266,7 @@ span.area-title { font-family: var(--f-display); font-weight: 600; letter-spacin
 .dev::before, .dev::after { /* rack ear screws */
   content: ""; position: absolute; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: #4b5259; box-shadow: inset 0 0 0 1px #1a1d20;
 }
-.dev::before { left: 4px; } .dev::after { right: 4px; }
+.dev::before { left: 7px; } .dev::after { right: 7px; }
 .dev.half-L::after, .dev.half-R::before { display: none; }
 .dev.free::before, .dev.free::after { display: none; }
 .dev.sel { box-shadow: inset 0 0 0 2px var(--trace); }
@@ -475,7 +480,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.10</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.11</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -523,7 +528,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 <input type="file" id="file-photo" accept="image/*" hidden>
 
 <script>
-const APP_VERSION = '0.0.10';
+const APP_VERSION = '0.0.11';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -1813,10 +1818,12 @@ function rackFaceHTML(rack, face, caption) {
   const occ = occupancy(rack);
   const H = rack.ru * U;
   const selSlot = ui.sel?.kind === 'slot' && ui.sel.rackId === rack.id ? ui.sel : null;
-  let slots = '', rail = '';
+  let slots = '', rail = '', holes = '';
   for (let u = 1; u <= rack.ru; u++) {
     const top = (u - 1) * U;
-    rail += `<span style="top:${top + U / 2 - 4}px">${u}</span><i style="top:${top + 6}px"></i><i style="top:${top + U - 11}px"></i>`;
+    rail += `<span style="top:${top + U / 2 - 4}px">${u}</span>`;
+    // EIA rail holes: three per U, at 1/4", 7/8" and 1 1/2" down from the top of the space
+    for (const inch of [0.25, 0.875, 1.5]) holes += `<i style="top:${(top + inch * PX_IN - 3).toFixed(1)}px"></i>`;
     const o = occ[u];
     const slot = (side) => {
       const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
@@ -1845,14 +1852,17 @@ function rackFaceHTML(rack, face, caption) {
   return `<div class="rack-face">${caption ? `<div class="face-cap">${face}</div>` : ''}
     <div class="rack-body">
       <div class="rail" style="height:${H}px">${rail}</div>
-      <div class="rack-bay" data-rack="${rack.id}" data-face="${face}" style="width:${W}px;height:${H}px">${slots}${devs}</div>
+      <div class="rack-bay" data-rack="${rack.id}" data-face="${face}" style="width:${W}px;height:${H}px"><div class="rail-in L" style="width:${RAIL_W}px">${holes}</div><div class="rail-in R" style="width:${RAIL_W}px">${holes}</div>${slots}${devs}</div>
       <div class="rail" style="height:${H}px">${rail}</div>
       ${rigMode() ? `<div class="rack-grip" data-rack="${rack.id}" title="Drag to make the rack taller or shorter"></div>` : ''}
     </div></div>`;
 }
 const LOC_GRID = 10, LOC_MIN_W = 550;
-// 19" panel = 520px and 1U (1.75") = 48px, so both work out to the same pixels per inch
+// 19" panel = 520px and 1U (1.75") = 48px, so both work out to the same pixels per inch.
+// 19" is the panel's full width across its ears, which is also the outside of the rails:
+// the ears sit on the rails, and the opening between the rails is about 17.75".
 const PX_IN = U / 1.75;
+const RAIL_W = (19 - 17.75) / 2 * PX_IN;   // each rail, under the ears (~17px)
 // gear with its own size (a laptop, a wireless receiver on a shelf…) is measured in inches
 const customSize = (def) => def.width === 'custom' && def.form !== 'rack';
 const devSize = (def) => customSize(def)

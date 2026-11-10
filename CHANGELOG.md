@@ -3,6 +3,9 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.11 (2026-11-10)
+- **Fix: rack proportions.** 19″ is the panel's width across its ears, which is also the outside of the rails. Before, the rails were drawn outside the 19″ panel, as if 19″ were the space between them. Now the rails sit under the ears, the opening between them is 17¾″, and the mounting holes follow the real 3-per-U pattern on 18⅓″ centres. The screws on each unit's ears line up with the centre hole. Gear and photo sizes are unchanged (they were already 19″ ear to ear).
+
 ## v0.0.10 (2026-11-10)
 - **Fix: the gear photo now shows behind the jacks in Library → Panel layout**, where you line them up. Before, it was shrunk to a tiny speck in the corner.
 - In the panel layout editor the photo always shows (whatever View → Show gear photos is set to), with a **Photo** tickbox to hide it. Jacks are drawn as hollow rings over it so you can see the real connectors through them, and the name strip is hidden so it doesn't cover the top row.

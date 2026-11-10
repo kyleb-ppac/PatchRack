@@ -229,7 +229,12 @@ span.area-title { font-family: var(--f-display); font-weight: 600; letter-spacin
 .rack-body { position: relative; display: grid; grid-template-columns: 22px auto 22px; background: var(--rail); border-radius: 4px; padding: 6px 0; }
 .rail { position: relative; }
 .rail span { position: absolute; left: 0; right: 0; text-align: center; font: 9px/1 var(--f-mono); color: #6f7880; }
-.rail i { position: absolute; left: 7px; width: 8px; height: 5px; border-radius: 2px; background: #2e3338; }
+/* the rails sit inside the 19" bay, under the gear's ears; the outer strips just carry the U numbers */
+.rail-in { position: absolute; top: 0; bottom: 0; z-index: 0; pointer-events: none; background: linear-gradient(90deg, #3a4046, #30353b); }
+.rail-in.L { left: 0; box-shadow: inset -1px 0 0 #1a1d20; } .rail-in.R { right: 0; box-shadow: inset 1px 0 0 #1a1d20; }
+/* mounting holes on 18.31" centres, so about 9.5px in from each outside edge */
+.rail-in i { position: absolute; width: 6px; height: 6px; border-radius: 1px; background: #15181b; }
+.rail-in.L i { left: 6.5px; } .rail-in.R i { right: 6.5px; }
 .rack-bay { position: relative; background: repeating-linear-gradient(180deg, #181b1f 0 47px, #1d2126 47px 48px); }
 .slot {
   position: absolute; border: 1px dashed transparent; color: transparent; font: 11px var(--f-mono);
@@ -246,7 +251,7 @@ span.area-title { font-family: var(--f-display); font-weight: 600; letter-spacin
 .dev::before, .dev::after { /* rack ear screws */
   content: ""; position: absolute; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: #4b5259; box-shadow: inset 0 0 0 1px #1a1d20;
 }
-.dev::before { left: 4px; } .dev::after { right: 4px; }
+.dev::before { left: 7px; } .dev::after { right: 7px; }
 .dev.half-L::after, .dev.half-R::before { display: none; }
 .dev.free::before, .dev.free::after { display: none; }
 .dev.sel { box-shadow: inset 0 0 0 2px var(--trace); }

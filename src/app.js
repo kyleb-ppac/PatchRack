@@ -825,10 +825,12 @@ function rackFaceHTML(rack, face, caption) {
   const occ = occupancy(rack);
   const H = rack.ru * U;
   const selSlot = ui.sel?.kind === 'slot' && ui.sel.rackId === rack.id ? ui.sel : null;
-  let slots = '', rail = '';
+  let slots = '', rail = '', holes = '';
   for (let u = 1; u <= rack.ru; u++) {
     const top = (u - 1) * U;
-    rail += `<span style="top:${top + U / 2 - 4}px">${u}</span><i style="top:${top + 6}px"></i><i style="top:${top + U - 11}px"></i>`;
+    rail += `<span style="top:${top + U / 2 - 4}px">${u}</span>`;
+    // EIA rail holes: three per U, at 1/4", 7/8" and 1 1/2" down from the top of the space
+    for (const inch of [0.25, 0.875, 1.5]) holes += `<i style="top:${(top + inch * PX_IN - 3).toFixed(1)}px"></i>`;
     const o = occ[u];
     const slot = (side) => {
       const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
@@ -857,14 +859,17 @@ function rackFaceHTML(rack, face, caption) {
   return `<div class="rack-face">${caption ? `<div class="face-cap">${face}</div>` : ''}
     <div class="rack-body">
       <div class="rail" style="height:${H}px">${rail}</div>
-      <div class="rack-bay" data-rack="${rack.id}" data-face="${face}" style="width:${W}px;height:${H}px">${slots}${devs}</div>
+      <div class="rack-bay" data-rack="${rack.id}" data-face="${face}" style="width:${W}px;height:${H}px"><div class="rail-in L" style="width:${RAIL_W}px">${holes}</div><div class="rail-in R" style="width:${RAIL_W}px">${holes}</div>${slots}${devs}</div>
       <div class="rail" style="height:${H}px">${rail}</div>
       ${rigMode() ? `<div class="rack-grip" data-rack="${rack.id}" title="Drag to make the rack taller or shorter"></div>` : ''}
     </div></div>`;
 }
 const LOC_GRID = 10, LOC_MIN_W = 550;
-// 19" panel = 520px and 1U (1.75") = 48px, so both work out to the same pixels per inch
+// 19" panel = 520px and 1U (1.75") = 48px, so both work out to the same pixels per inch.
+// 19" is the panel's full width across its ears, which is also the outside of the rails:
+// the ears sit on the rails, and the opening between the rails is about 17.75".
 const PX_IN = U / 1.75;
+const RAIL_W = (19 - 17.75) / 2 * PX_IN;   // each rail, under the ears (~17px)
 // gear with its own size (a laptop, a wireless receiver on a shelf…) is measured in inches
 const customSize = (def) => def.width === 'custom' && def.form !== 'rack';
 const devSize = (def) => customSize(def)
