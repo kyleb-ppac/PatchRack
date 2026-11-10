@@ -3,6 +3,11 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.16 (2026-11-10)
+- **Pick the console channel first:** a new source with no input yet now shows a Console Ch picker. Choose the channel and the input that feeds it is filled in from the routing (a floor pocket jack rather than the stage box input behind it). Works for stereo too (the next channel fills the right side). If nothing is routed to that channel yet, it says so.
+- **Inputs don't have to be on stage:** "Stage input" is now just **Input**, and the picker also lists the mixer's own inputs (local XLR, USB…), Dante channels that start on a device (playback computer, processor) and wireless channels, after the usual stage jacks.
+- **Stereo or mono outputs:** each output has an **ST** button. In stereo, pick the left output and the right fills in as the next one (Aux 1 → Aux 2). For Dante, setting the left “Dante to” also routes the right side to the next receive channel. Both sides show in Goes to, the trace and the printout (e.g. "Dante Tx 7/8").
+
 ## v0.0.15 (2026-11-10)
 - **Dante gear missing from the matrix now explains itself.** The matrix lists any unit that can't appear and why, with a fix:
   - it has Dante network jacks but no Dante channels → **Add Dante channels…** (enter how many Tx and Rx);

@@ -525,7 +525,7 @@ table.grid td.c { text-align: center; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.15</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.16</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -574,7 +574,7 @@ table.grid td.c { text-align: center; }
 <input type="file" id="file-dante" accept=".xml,text/xml,application/xml" hidden>
 
 <script>
-const APP_VERSION = '0.0.15';
+const APP_VERSION = '0.0.16';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -1293,7 +1293,7 @@ function buildIndex() {
     push(idx.srcAt, r, s);
     for (const x of traceTree(r).parent.keys()) if (!idx.mark.has(x)) idx.mark.set(x, s);
   }
-  for (const o of pt.outputs) if (o.port) for (const x of traceTree(o.port).parent.keys()) if (!idx.outMark.has(x)) idx.outMark.set(x, o);
+  for (const o of pt.outputs) for (const r of outPorts(o)) for (const x of traceTree(r).parent.keys()) if (!idx.outMark.has(x)) idx.outMark.set(x, o);
 }
 
 // where does the signal at `ref` go next?
@@ -1579,7 +1579,7 @@ function runChecks() {
   for (const s of pt.sources) {
     const nm = s.name || 'Untitled source';
     const ports = (s.ports || []).filter(Boolean);
-    if (!ports.length) { add('warn', `“${nm}” has no stage input yet.`, { kind: 'source', id: s.id }); continue; }
+    if (!ports.length) { add('warn', `“${nm}” has no input yet.`, { kind: 'source', id: s.id }); continue; }
     for (const r of ports) {
       const p = port(r);
       if (!p) { add('warn', `“${nm}” is assigned to a port that no longer exists.`, { kind: 'source', id: s.id }); continue; }
@@ -2036,7 +2036,7 @@ function highlightSet() {
   const addRef = (r) => { for (const x of traceTree(r).parent.keys()) set.add(x); for (const x of traceTree(r, prev).parent.keys()) set.add(x); };
   if (ui.sel?.kind === 'port') addRef(ui.sel.ref);
   if (ui.sel?.kind === 'source') { const s = patch().sources.find((x) => x.id === ui.sel.id); for (const r of s?.ports || []) if (r && port(r)) for (const x of traceTree(r).parent.keys()) set.add(x); }
-  if (ui.sel?.kind === 'output') { const o = patch().outputs.find((x) => x.id === ui.sel.id); if (o?.port && port(o.port)) addRef(o.port); }
+  if (ui.sel?.kind === 'output') { const o = patch().outputs.find((x) => x.id === ui.sel.id); for (const r of o ? outPorts(o) : []) addRef(r); }
   if (ui.sel?.kind === 'conn') { const c = project.connections.find((x) => x.id === ui.sel.id); if (c) { set.add(c.a); set.add(c.b); } }
   hlCache = { key: JSON.stringify(ui.sel) + project.modified + ui.patchId, set };
   return set;
@@ -2511,35 +2511,47 @@ function sourceInspector(s) {
   if (!s) return inspectorHome();
   const g = project.groups.find((x) => x.id === s.groupId);
   return `<div class="eyebrow">Source · ${esc(g?.name || 'No group')}</div><h3>${esc(s.name)}</h3>
-    <dl class="kv"><dt>Mic/DI</dt><dd>${esc(s.mic)}</dd><dt>Stage input</dt><dd>${esc(stereoLabel(s.ports)) || '—'}</dd><dt>Person</dt><dd>${esc(s.person)}</dd><dt>Console</dt><dd>${esc(sourceChannels(s).map(chLabel).join(', ') || '—')}</dd></dl>
+    <dl class="kv"><dt>Mic/DI</dt><dd>${esc(s.mic)}</dd><dt>Input</dt><dd>${esc(stereoLabel(s.ports)) || '—'}</dd><dt>Person</dt><dd>${esc(s.person)}</dd><dt>Console</dt><dd>${esc(sourceChannels(s).map(chLabel).join(', ') || '—')}</dd></dl>
     <div class="eyebrow">Signal path</div>${traceHTML(sourcePaths(s))}
     <button data-act="tab" data-tab="list">Edit in patchlist</button>`;
 }
 function outputInspector(o) {
   if (!o) return inspectorHome();
-  const t = o.port && port(o.port) ? traceTree(o.port) : null;
-  return `<div class="eyebrow">Output</div><h3>${esc(o.name)}</h3>
-    <dl class="kv"><dt>Mix</dt><dd>${esc(o.mix)}</dd><dt>Leaves on</dt><dd>${esc(o.port ? portLong(o.port) : '—')}</dd><dt>Person</dt><dd>${esc(o.person)}</dd></dl>
-    <div class="eyebrow">Signal goes to</div>${t ? traceHTML(t.ends.filter((e) => e !== o.port).map((e) => pathTo(t, e))) : ''}
+  const paths = outPorts(o).flatMap((r) => { const t = traceTree(r); return t.ends.filter((e) => e !== r).map((e) => pathTo(t, e)); });
+  return `<div class="eyebrow">Output · ${o.stereo ? 'stereo' : 'mono'}</div><h3>${esc(o.name)}</h3>
+    <dl class="kv"><dt>Mix</dt><dd>${esc(o.mix)}</dd><dt>Leaves on</dt><dd>${esc(outPorts(o).map(portLong).join(' + ') || '—')}</dd><dt>Person</dt><dd>${esc(o.person)}</dd></dl>
+    <div class="eyebrow">Signal goes to</div>${traceHTML(paths)}
     <button data-act="tab" data-tab="list">Edit in patchlist</button>`;
 }
 
 /* ---------- 8. patchlist ---------- */
 const BUILTIN_COLS = {
-  group: 'Group', source: 'Source', mic: 'Mic/DI', input: 'Stage Input(s)', person: 'Person',
+  group: 'Group', source: 'Source', mic: 'Mic/DI', input: 'Input(s)', person: 'Person',
   cable: 'Cable', consoleCh: 'Console Ch', path: 'Signal path', notes: 'Notes',
 };
+// Anywhere a source can come in. Jacks marked "Sources" in the Library come first, then every other
+// way in: console local inputs and USB, Dante channels from a computer or processor, wireless channels…
+function isSourcePoint(g, def) {
+  if (g.src) return true;
+  if (g.conn === 'channel') return false;
+  // a Dante channel that starts on this unit (playback computer, another console), not one that just carries a jack's signal
+  if (g.conn === 'dante') return g.dir === 'out' && !(def?.links || []).some((L) => L.to === g.id);
+  if (g.face === 'virtual') return g.dir === 'in' && g.conn === 'rf';
+  // other jacks only on a mixer (its local inputs, USB…); amp and IEM inputs aren't where sources plug in
+  return !!def?.mixer && isPhysical(g) && g.dir === 'in' && !['power', 'network', 'fiber'].includes(sigOf(g));
+}
 function sourcePortOptions() {
-  let html = '<option value="">—</option>';
+  let main = '', more = '';
   const devs = [...project.devices].sort((a, b) => (a.place.type === 'loc' ? 0 : 1) - (b.place.type === 'loc' ? 0 : 1));
   for (const d of devs) {
     const def = idx.def.get(d.defId); if (!def) continue;
-    const gs = def.groups.filter((g) => g.src); if (!gs.length) continue;
-    html += `<optgroup label="${esc(d.name)}">`;
-    for (const g of gs) for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); html += `<option value="${r}">${esc(portLabel(r))}</option>`; }
-    html += '</optgroup>';
+    const gs = def.groups.filter((g) => isSourcePoint(g, def)); if (!gs.length) continue;
+    const opts = (list) => list.map((g) => Array.from({ length: g.count }, (_, i) => { const r = mkRef(d.id, g.id, i + 1); return `<option value="${r}">${esc(portLabel(r))}</option>`; }).join('')).join('');
+    const a = gs.filter((g) => g.src), b = gs.filter((g) => !g.src);
+    if (a.length) main += `<optgroup label="${esc(d.name)}">${opts(a)}</optgroup>`;
+    if (b.length) more += `<optgroup label="${esc(d.name)}${a.length ? ' (other inputs)' : ''}">${opts(b)}</optgroup>`;
   }
-  return html;
+  return '<option value="">—</option>' + main + more;
 }
 // ----- outputs: picked from mixers only, narrowed by the type of output -----
 const OUT_TYPE_NAMES = { analog: 'Analog', dante: 'Dante', aes: 'AES/EBU', speaker: 'Speaker', network: 'Network', fiber: 'Fiber', sdi: 'SDI', hdmi: 'HDMI', dmx: 'DMX', rf: 'RF', usb: 'USB', thunderbolt: 'Thunderbolt', control: 'Control', other: 'Other' };
@@ -2553,6 +2565,10 @@ function outTypesAvailable() {
   for (const d of mixerDevs()) for (const g of idx.def.get(d.defId).groups) if (isOutGroup(g)) have.add(groupOutType(g));
   return Object.keys(OUT_TYPE_NAMES).filter((k) => have.has(k));
 }
+// an output's jacks: one for mono, left + right for stereo
+const outPorts = (o) => [o.port, o.stereo ? o.port2 : null].filter((r) => r && port(r));
+const outLeaves = (o) => (o.stereo ? stereoLabel([o.port, o.port2]) : (o.port ? portShort(o.port) : ''));
+const outGoes = (o) => outPorts(o).map(goesTo).filter(Boolean).join(' / ');
 function outputPortOptions(type, used = new Set()) {
   let html = '<option value="">—</option>';
   for (const d of mixerDevs()) {
@@ -2574,7 +2590,7 @@ function danteTxOn(ref) {
 }
 // the Dante receive channel that feeds a console channel (from the mixer's internal routing)
 const danteRxFor = (chRef) => prev(chRef).find((r) => { const p = port(r); return p?.g.conn === 'dante' && p.g.dir === 'in'; }) || null;
-function channelOptions() {
+function channelOptions(any = false) {
   const users = new Map();
   for (const s of patch().sources) for (const ch of new Set(sourceChannels(s))) push(users, ch, s.name || 'Untitled');
   let html = '<option value="">— none —</option>';
@@ -2583,7 +2599,7 @@ function channelOptions() {
     for (const g of def.groups.filter((x) => x.conn === 'channel')) {
       html += `<optgroup label="${esc(d.name)}">`;
       for (let n = 1; n <= g.count; n++) {
-        const r = mkRef(d.id, g.id, n); const u = users.get(r); const viaDante = !!danteRxFor(r);
+        const r = mkRef(d.id, g.id, n); const u = users.get(r); const viaDante = any || !!danteRxFor(r);
         html += `<option value="${r}" ${viaDante ? '' : 'disabled'}>${esc(chLabel(r))}${u ? ' · ' + esc(u.join(', ')) : ''}${viaDante ? '' : ' (no Dante Rx feeds it)'}</option>`;
       }
       html += '</optgroup>';
@@ -2624,10 +2640,19 @@ function goesTo(ref) {
 }
 // Console Ch: a picker when the source reaches the network over Dante (so a route can be made),
 // otherwise the channel worked out from the cables
-function consoleChCell(s, chs, chOpts) {
+function consoleChCell(s, chs, chOpts, chOptsAny) {
   const ports = (s.ports || []).filter((r) => r && port(r));
   const text = chs.length ? esc(chs.map(chLabel).join(', ')) : '<span style="color:var(--warn)">none</span>';
-  if (!ports.length || !mixerDevs().length || !danteTxOn(ports[0])) return `<span class="comp" title="Worked out from the cables">${text}</span>`;
+  // no input yet: pick the channel and the input is filled in from the routing
+  if (!ports.length && mixerDevs().length) return `<select id="sch-${s.id}" data-chg="srcChFill" data-id="${s.id}" data-val="" title="Pick the console channel and the input that feeds it is filled in for you">${chOptsAny.replace('— none —', 'Pick a channel…')}</select>`;
+  if (!ports.length || !mixerDevs().length) return `<span class="comp">${text}</span>`;
+  if (!danteTxOn(ports[0])) {
+    const p0 = port(ports[0]);
+    const why = p0.def.mixer && !chs.length
+      ? `${p0.def.model}'s gear definition doesn't say which channel its ${p0.g.label} feeds. Add it in Library → ${p0.def.model} → Internal routing (e.g. ${p0.g.label} 1 → Ch 49).`
+      : `${portLabel(ports[0])} reaches the console by cable, not Dante, so the channel comes from the cabling. Change it on the Rack tab.`;
+    return `<span class="comp" title="${esc(why)}">${text}${p0.def.mixer && !chs.length ? ' <span class="muted" style="cursor:help">ⓘ</span>' : ''}</span>`;
+  }
   const ch0 = consoleChannels(ports[0]).find((r) => idx.def.get(port(r).dev.defId)?.mixer) || '';
   const rest = ports.slice(1).map((r) => consoleChannels(r)[0]).filter(Boolean);
   return `<div class="inputcell" style="min-width:150px"><select id="sch-${s.id}" data-chg="srcCh" data-id="${s.id}" data-val="${ch0}" title="Choosing a channel makes the Dante route for you${ports.length > 1 ? '. The second input goes to the next channel.' : ''}">${chOpts}</select>${rest.length ? `<span class="comp">+ ${esc(rest.map(chLabel).join(', '))}</span>` : ''}</div>`;
@@ -2638,7 +2663,7 @@ function listView() {
   const grpOpts = '<option value="">—</option>' + project.groups.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
   const colOpts = '<option value="">—</option>' + project.cableColors.map((c) => `<option value="${c.id}">${esc(c.name)}${c.length ? ' ' + esc(c.length) : ''}</option>`).join('');
   const cust = project.columns;
-  const chOpts = channelOptions();
+  const chOpts = channelOptions(); const chOptsAny = channelOptions(true);
   const rows = pt.sources.map((s, i) => {
     const g = project.groups.find((x) => x.id === s.groupId);
     const st = (s.ports || []).length > 1;
@@ -2653,30 +2678,31 @@ function listView() {
       <td><input id="spn-${s.id}" value="${esc(s.person)}" data-chg="src" data-id="${s.id}" data-f="person" style="min-width:80px"></td>
       <td><select id="sc-${s.id}" data-chg="src" data-id="${s.id}" data-f="cable" data-val="${s.cable || ''}">${colOpts}</select></td>
       ${cust.map((c) => `<td><input id="cu-${c.id}-${s.id}" value="${esc(s.custom?.[c.id] || '')}" data-chg="srcCustom" data-id="${s.id}" data-c="${c.id}" style="min-width:80px"></td>`).join('')}
-      <td>${consoleChCell(s, chs, chOpts)}</td>
+      <td>${consoleChCell(s, chs, chOpts, chOptsAny)}</td>
       <td><input id="snt-${s.id}" value="${esc(s.notes)}" data-chg="src" data-id="${s.id}" data-f="notes" style="min-width:100px"></td>
       <td class="c"><input type="checkbox" id="spr-${s.id}" data-chg="rowPrint" data-kind="sources" data-id="${s.id}" ${s.noPrint ? '' : 'checked'} title="Show this source on the printout and CSV" aria-label="Print ${esc(s.name)}"></td>
       <td><div class="rowbtns"><button data-act="showSrc" data-id="${s.id}" title="Trace in rack">Trace</button><button data-act="moveSrc" data-id="${s.id}" data-d="-1" title="Move up">↑</button><button data-act="moveSrc" data-id="${s.id}" data-d="1" title="Move down">↓</button>${confirmBtn('delSrc', '✕', `data-id="${s.id}"`)}</div></td>
     </tr>`;
   }).join('');
-  const usedOut = new Set(pt.outputs.map((o) => o.port).filter(Boolean));
+  const usedOut = new Set(pt.outputs.flatMap((o) => [o.port, o.stereo && o.port2]).filter(Boolean));
   const types = outTypesAvailable(); const optCache = new Map();
   const outOpts = (t) => { if (!optCache.has(t)) optCache.set(t, outputPortOptions(t, usedOut)); return optCache.get(t); };
   const typeOpts = '<option value="">Any type</option>' + types.map((k) => `<option value="${k}">${esc(OUT_TYPE_NAMES[k])}</option>`).join('');
   const rxOpts = danteRxOptions();
   const orows = pt.outputs.map((o, i) => {
-    const goes = goesTo(o.port);
+    const goes = outGoes(o);
     const isDante = port(o.port)?.g.conn === 'dante';
-    const sub = isDante ? (idx.out.get(o.port) || []).find((c) => c.kind === 'dante') : null;
+    const subOf = (r) => (r ? (idx.out.get(r) || []).find((c) => c.kind === 'dante') : null);
+    const sub = isDante ? subOf(o.port) : null, sub2 = isDante && o.stereo ? subOf(o.port2) : null;
     const t = outType(o); const pp = port(o.port);
     // keep showing a jack picked before this version, even if it isn't on a mixer
     const extra = pp && !idx.def.get(pp.dev.defId)?.mixer ? `<option value="${o.port}">${esc(portShort(o.port))} (not a mixer)</option>` : '';
     return `<tr class="${o.noPrint ? 'noprint' : ''}"><td class="num">${i + 1}</td>
-      <td><input id="on-${o.id}" value="${esc(o.name)}" data-chg="out" data-id="${o.id}" data-f="name"></td>
+      <td><input id="on-${o.id}" value="${esc(o.name)}" data-chg="out" data-id="${o.id}" data-f="name" style="min-width:130px"></td>
       <td><input id="om-${o.id}" value="${esc(o.mix)}" data-chg="out" data-id="${o.id}" data-f="mix" style="min-width:70px"></td>
       <td><select id="ot-${o.id}" data-chg="out" data-id="${o.id}" data-f="type" data-val="${t}" style="min-width:90px">${typeOpts}</select></td>
-      <td><select id="op-${o.id}" data-chg="out" data-id="${o.id}" data-f="port" data-val="${o.port || ''}" style="min-width:120px">${extra}${outOpts(t)}</select></td>
-      <td>${isDante ? `<select id="od-${o.id}" data-chg="outDante" data-id="${o.id}" data-val="${sub?.b || ''}">${rxOpts}</select>` : '<span class="muted small">—</span>'}</td>
+      <td><div class="inputcell" style="min-width:${o.stereo ? 250 : 150}px"><select id="op-${o.id}" data-chg="out" data-id="${o.id}" data-f="port" data-val="${o.port || ''}" ${o.stereo ? 'title="Left"' : ''}>${extra}${outOpts(t)}</select>${o.stereo ? `<select id="op2-${o.id}" data-chg="out" data-id="${o.id}" data-f="port2" data-val="${o.port2 || ''}" title="Right (filled in as the next output; change it if needed)">${outOpts(t)}</select>` : ''}<button class="st-tog ${o.stereo ? 'on' : ''}" data-act="outStereo" data-id="${o.id}" title="${o.stereo ? 'Stereo: click for mono' : 'Mono: click for stereo (left + right)'}">ST</button></div></td>
+      <td>${isDante ? `<div class="inputcell" style="min-width:${o.stereo ? 260 : 130}px"><select id="od-${o.id}" data-chg="outDante" data-id="${o.id}" data-side="1" data-val="${sub?.b || ''}" ${o.stereo ? 'title="Left"' : ''}>${rxOpts}</select>${o.stereo && port(o.port2)?.g.conn === 'dante' ? `<select id="od2-${o.id}" data-chg="outDante" data-id="${o.id}" data-side="2" data-val="${sub2?.b || ''}" title="Right">${rxOpts}</select>` : ''}</div>` : '<span class="muted small">—</span>'}</td>
       <td class="comp">${esc(goes) || '<span class="muted">—</span>'}</td>
       <td><input id="opn-${o.id}" value="${esc(o.person)}" data-chg="out" data-id="${o.id}" data-f="person"></td>
       <td><input id="ont-${o.id}" value="${esc(o.notes)}" data-chg="out" data-id="${o.id}" data-f="notes"></td>
@@ -2694,7 +2720,7 @@ function listView() {
     </div>
     <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources${pt.sources.some((s) => s.noPrint) ? ` (${pt.sources.filter((s) => !s.noPrint).length} on the printout)` : ''} · Pick a Console Ch and the Dante route is made for you (sources on Dante gear). Otherwise it's worked out from the cables.</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
       ${mixersMissingDanteRouting().map(({ def, rx, ch }) => `<div class="note"><span><b>${esc(def.model)}'s channels can't be picked yet:</b> its gear definition doesn't say which Dante receive channel feeds which console channel.</span><button data-act="fixMixerRouting" data-def="${def.id}">Set ${esc(rx.label)} 1–${Math.min(rx.count, ch.count)} → ${esc(ch.label)} 1–${Math.min(rx.count, ch.count)}</button></div>`).join('')}
-      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Stage input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th title="Untick to leave a source off the printout and CSV. It stays in the patch.">Print</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th title="Untick to leave a source off the printout and CSV. It stays in the patch.">Print</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>
     <div class="card"><div class="card-head"><h3>Outputs</h3>${mixerDevs().length ? '' : '<span class="pill unv">No mixer marked yet: tick “Mixer / console” on your console in the Library</span>'}<span class="muted small">Monitor mixes, mains, stream feeds… Choose the type, then the mixer output it leaves on. For Dante, choose where it goes in “Dante to”.</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
       <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Type</th><th>Leaves on</th><th>Dante to</th><th>Goes to</th><th>Person</th><th>Notes</th><th title="Untick to leave an output off the printout">Print</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="11" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
@@ -3298,8 +3324,8 @@ function cellValue(s, key) {
 const OUT_COLS = [['type', 'Type'], ['mix', 'Mix'], ['leaves', 'Leaves on'], ['goes', 'Goes to'], ['person', 'Person'], ['notes', 'Notes']];
 function outCell(o, k) {
   if (k === 'type') return OUT_TYPE_NAMES[outType(o)] || '';
-  if (k === 'leaves') return o.port ? portShort(o.port) : '';
-  if (k === 'goes') return goesTo(o.port);
+  if (k === 'leaves') return outLeaves(o);
+  if (k === 'goes') return outGoes(o);
   return o[k] || '';
 }
 // sources ticked "Print" in the patchlist (all of them unless some were unticked)
@@ -3602,6 +3628,30 @@ function dropDante(p, drop) {
   return off;
 }
 const offNote = (n) => (n ? ` ${n} rig route${n > 1 ? 's were' : ' was'} switched off for ${patch().name} only (Dante & IP → Routes to turn ${n > 1 ? 'them' : 'it'} back on).` : '');
+// work back from a console channel to the input that feeds it (the furthest one back:
+// a floor pocket jack rather than the stage box input its tie line lands on)
+function inputForChannel(ch) {
+  const t = traceTree(ch, prev); let best = null, depth = -1;
+  for (const r of t.parent.keys()) {
+    const p = port(r); if (!p || !isSourcePoint(p.g, p.def) || r === ch) continue;
+    // jacks marked as sources win; otherwise the furthest-back way in (a Mac's Dante channel, a console local input…)
+    const dd = pathTo(t, r).length + (p.g.src ? 1000 : 0); if (dd > depth) { best = r; depth = dd; }
+  }
+  return best;
+}
+function fillInputFromChannel(s, ch) {
+  if (!s || !ch) return;
+  const stereo = (s.ports || []).length > 1;
+  const chans = stereo ? [ch, stepRef(ch, 1)] : [ch];
+  const found = chans.map((c) => c && inputForChannel(c));
+  if (!found[0]) {
+    toast(`Nothing is routed to ${chLabel(ch)} yet, so there's no input to fill in. Choose the input first (then pick the channel), or route ${chLabel(ch)} in Dante & IP → Matrix.`, 7000);
+    render(); return;
+  }
+  commit(`${s.name || 'Source'} → ${chLabel(ch)}`, () => { s.ports = stereo ? [found[0], found[1] || ''] : [found[0]]; });
+  const users = patch().sources.filter((x) => x !== s && (x.ports || []).includes(found[0]));
+  toast(`Input set to ${portLabel(found[0])}${stereo && found[1] ? ' + ' + portLabel(found[1]) : ''}.${users.length ? ` Note: ${users.map((x) => x.name).join(', ')} uses that input too (see Checks).` : ''}`, 6000);
+}
 function routeToChannel(s, ch) {
   if (!s) return;
   const ports = (s.ports || []).filter((r) => r && port(r));
@@ -3780,6 +3830,11 @@ const actions = {
   delSrc: (el) => { ui.armed = null; commit(`Deleted ${findSrc(el.dataset.id)?.name || 'a source'}`, () => { patch().sources = patch().sources.filter((s) => s.id !== el.dataset.id); }); },
   moveSrc: (el) => commit('', () => moveIn(patch().sources, el.dataset.id, +el.dataset.d)),
   stereo: (el) => commit('', () => { const s = findSrc(el.dataset.id); s.ports ||= []; if (s.ports.length > 1) s.ports = s.ports.slice(0, 1); else s.ports = [s.ports[0] || '', nextSrcPort(s.ports[0])]; }),
+  outStereo: (el) => commit('', () => {
+    const o = patch().outputs.find((x) => x.id === el.dataset.id);
+    o.stereo = !o.stereo;
+    if (o.stereo) o.port2 = o.port ? stepRef(o.port, 1) || '' : ''; else delete o.port2;
+  }),
   addOut: () => commit('Added an output', () => patch().outputs.push({ id: uid('o'), name: '', mix: '', port: '', person: '', notes: '' })),
   delOut: (el) => { ui.armed = null; commit('Deleted an output', () => { patch().outputs = patch().outputs.filter((o) => o.id !== el.dataset.id); }); },
   moveOut: (el) => commit('', () => moveIn(patch().outputs, el.dataset.id, +el.dataset.d)),
@@ -3927,12 +3982,17 @@ const changes = {
   layPhoto: (el) => { ui.layPhoto = el.checked; render(); },
   peJacks: (el) => { pe.jacks = el.checked; peDraw(); },
   outDante: (el) => {
-    const o = patch().outputs.find((x) => x.id === el.dataset.id); const tx = o.port, rx = el.value;
+    const o = patch().outputs.find((x) => x.id === el.dataset.id); const rx = el.value; const right = el.dataset.side === '2';
     const layer = rigMode() ? 'rig' : patch().id;
+    // stereo: setting the left side also routes the right side to the next receive channel
+    const pairs = right ? [[o.port2, rx]] : [[o.port, rx]];
+    if (!right && o.stereo && port(o.port2)?.g.conn === 'dante') pairs.push([o.port2, rx ? stepRef(rx, 1) || '' : '']);
     let off = 0;
-    commit(rx ? `Dante: ${portShort(tx)} → ${portShort(rx)}` : `Dante: cleared ${portShort(tx)}`, (p) => {
-      off = dropDante(p, (c) => c.a === tx || (rx && c.b === rx));
-      if (rx) p.connections.push({ id: uid('c'), a: tx, b: rx, kind: 'dante', layer, color: '' });
+    commit(rx ? `Dante: ${pairs.filter((x) => x[1]).map(([a, b]) => `${portShort(a)} → ${portShort(b)}`).join(', ')}` : `Dante: cleared ${portShort(pairs[0][0])}`, (p) => {
+      for (const [tx, r] of pairs) {
+        off += dropDante(p, (c) => c.a === tx || (r && c.b === r));
+        if (r) p.connections.push({ id: uid('c'), a: tx, b: r, kind: 'dante', layer, color: '' });
+      }
     });
     if (rx || off) toast((rx ? (rigMode() ? 'Dante route saved in the rig.' : `Dante route saved in ${patch().name} only.`) : '') + offNote(off), 6000);
   },
@@ -3968,13 +4028,16 @@ const changes = {
     if (el.checked) delete x.noPrint; else x.noPrint = true;
   }),
   srcCh: (el) => routeToChannel(findSrc(el.dataset.id), el.value),
+  srcChFill: (el) => fillInputFromChannel(findSrc(el.dataset.id), el.value),
   out: (el) => commit('Edited an output', () => {
     const o = patch().outputs.find((x) => x.id === el.dataset.id); const f = el.dataset.f;
     o[f] = el.value;
     const pp = port(o.port);
     // choosing a type clears a jack of another type; choosing a jack sets its type
-    if (f === 'type' && pp && el.value && groupOutType(pp.g) !== el.value) o.port = '';
+    if (f === 'type' && pp && el.value && groupOutType(pp.g) !== el.value) { o.port = ''; o.port2 = ''; }
     if (f === 'port' && pp) o.type = groupOutType(pp.g);
+    // stereo: the right side follows the left (Out 3 → Out 4); it can still be changed by hand
+    if (f === 'port' && o.stereo) o.port2 = el.value ? stepRef(el.value, 1) || '' : '';
   }),
   patchField: (el) => commit('Edited patch details', () => { patch()[el.dataset.f] = el.value; }),
   groupField: (el) => commit('Edited a group', (p) => { p.groups.find((g) => g.id === el.dataset.id)[el.dataset.f] = el.value; }),
