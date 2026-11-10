@@ -3,6 +3,15 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.6 (2026-11-10)
+- **IP addresses:** every network jack (Dante primary/secondary, control port, switch management) gets its own IP and note, so gear like the Avantis and AHM can have several. Edit them in the gear panel (rig mode), on the jack itself, or in the new list on the **Dante & IP** tab. Checks flag duplicate and mistyped addresses. Copy the list as CSV or add it to the printout.
+- **Cable signal types:** analog audio, AES, speaker, network, fiber, power, SDI, HDMI, DMX, antenna/RF, USB, Thunderbolt, control. Worked out from the jacks, changeable per cable, with a Spec field (3G, Cat6, 14 AWG…). Cables are coloured by type; show or hide each type from **View**. Library port groups have a Signal column to override the automatic choice.
+- **Photos on gear:** add front/rear photos to a gear definition from the gear panel or the Library. They show behind the jacks in the rack and in the panel layout editor (so you can line the jacks up). Toggle in View.
+- **Racks inside locations:** locations (Stage, Backstage, FOH…) now hold racks as well as loose gear. Set a rack's location in its panel or add a rack straight into a location. Groundwork for a signal-flow diagram export.
+- **Tidier screen:** view settings moved into a **View ▾** menu; side panel, patchlist settings, print options and the library editor use fold-open sections that remember whether they're open.
+- More connector types: RCA, 3.5 mm, USB-C, Thunderbolt, DisplayPort, fiber LC, opticalCON, TOSLINK.
+- The Avantis definition gains its control network jack; the GigaCore gets a single management IP instead of one per port.
+
 ## v0.0.5 (2026-11-09)
 - **Front + Rear view:** the Front/Rear button now cycles Front → Rear → Front + Rear, showing both sides of a rack (or location) side by side so you can patch front to back directly.
 - **Shift-click to connect:** select a jack, hold Shift and click another jack. The first jack stays selected. Works across a flip too.

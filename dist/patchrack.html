@@ -122,6 +122,30 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .gh-status.clean { color: var(--ok); }
 .gh-status.clean::before { content: "✓ "; }
 .menu { position: relative; }
+.view-pop { width: 300px; gap: 8px; padding: 12px; }
+.view-pop .legend { display: grid; gap: 4px; }
+.typelist { display: grid; gap: 4px; }
+.swl { display: inline-block; width: 20px; height: 4px; border-radius: 2px; background: var(--c); flex: none; }
+details.sec { border-top: 1px solid var(--line); padding-top: 8px; }
+details.sec > summary { cursor: pointer; list-style: none; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary::before { content: "▸"; font-size: 10px; transition: transform .15s; }
+details.sec[open] > summary::before { transform: rotate(90deg); }
+details.sec > summary:hover { color: var(--fg); }
+.sec-body { display: grid; gap: 8px; margin-top: 8px; }
+.iprow { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 4px 8px; align-items: center; font-size: 12px; }
+.iprow input + input { grid-column: 2; }
+.iprow.ro { grid-template-columns: 90px 120px minmax(0, 1fr); }
+input.bad, span.bad { color: var(--err); border-color: var(--err); }
+.photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.photo-slot { display: grid; gap: 4px; align-content: start; }
+.photo-slot img { width: 100%; border-radius: 3px; border: 1px solid var(--line); display: block; }
+.photo-empty { height: 40px; border: 1px dashed var(--line); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted); }
+.dev.photo { background-size: 100% 100%; background-repeat: no-repeat; background-color: #202327; --jack: rgba(0, 0, 0, .15); }
+.dev.photo::before, .dev.photo::after { display: none; }
+.dev.photo .pn, .dev.photo .grp-label { display: none; }
+.dev.photo .dev-label { right: auto; max-width: calc(100% - 84px); background: rgba(10, 12, 14, .72); border-radius: 2px; padding: 0 5px; }
+.dev.photo .port { box-shadow: inset 0 0 0 1.5px var(--ring, var(--ring-in)), 0 0 0 1px rgba(0, 0, 0, .6); }
 .menu > summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r); padding: 5px 10px; }
 .menu > summary::-webkit-details-marker { display: none; }
 .menu-pop {
@@ -169,7 +193,12 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2);
   max-height: calc(100vh - 170px); min-height: 360px; user-select: none; -webkit-user-select: none;
 }
-.stage-inner { position: relative; display: flex; gap: 28px; padding: 18px; align-items: flex-start; width: max-content; }
+.stage-inner { position: relative; display: flex; flex-direction: column; gap: 22px; padding: 18px; align-items: flex-start; width: max-content; }
+.area { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 18px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--panel) 55%, transparent); }
+.area-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.area-title { font-size: 21px; }
+span.area-title { font-family: var(--f-display); font-weight: 600; letter-spacing: .03em; }
+.area-row { display: flex; gap: 28px; align-items: flex-start; }
 .cables { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 5; }
 .cables path.hit { pointer-events: stroke; cursor: pointer; }
 .rack { flex: none; }
@@ -239,7 +268,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .loc-body { position: relative; border: 1px dashed #6b747d; border-radius: 6px; }
 .stage.rig .loc-body { background-image: radial-gradient(circle, rgba(120,128,138,.35) 1px, transparent 1.2px); background-size: 10px 10px; }
 .loc-empty { position: absolute; left: 12px; top: 12px; }
-.stage.rig .loc { padding-bottom: 96px; }  /* room to drop gear below and grow the area */
+.stage.rig .loc-gear { padding-bottom: 96px; }  /* room to drop gear below and grow the area */
 .rack-body { position: relative; }
 .rack-faces { display: flex; gap: 18px; align-items: flex-start; }
 .face-cap { font: 600 11px var(--f-display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
@@ -387,13 +416,13 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.5</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.6</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
     <button data-act="tab" data-tab="rack">Rack</button>
     <button data-act="tab" data-tab="list">Patchlist</button>
-    <button data-act="tab" data-tab="dante">Dante</button>
+    <button data-act="tab" data-tab="dante">Dante &amp; IP</button>
     <button data-act="tab" data-tab="print">Print</button>
     <button data-act="tab" data-tab="library">Library</button>
     <button data-act="tab" data-tab="checks">Checks<span id="checks-badge" class="badge">0</span></button>
@@ -431,9 +460,10 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 <input type="file" id="file-open" accept=".json,application/json" hidden>
 <input type="file" id="file-lib" accept=".json,application/json" hidden>
 <input type="file" id="file-logo" accept="image/*" hidden>
+<input type="file" id="file-photo" accept="image/*" hidden>
 
 <script>
-const APP_VERSION = '0.0.5';
+const APP_VERSION = '0.0.6';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -535,6 +565,7 @@ const DEFAULT_LIBRARY = [
       G('aesi', 'AES In', 1, 'xlr', 'in', 'rear'),
       G('aeso', 'AES Out', 1, 'xlr', 'out', 'rear'),
       G('net', 'Dante card', 2, 'rj45', 'io', 'rear', { names: ['Pri', 'Sec'] }),
+      G('ctl', 'Network', 1, 'rj45', 'io', 'rear'),
       G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
       G('drx', 'Dante Rx', 64, 'dante', 'in', 'dante'),
       G('dtx', 'Dante Tx', 64, 'dante', 'out', 'dante'),
@@ -586,9 +617,10 @@ const DEFAULT_LIBRARY = [
     form: 'rack', ru: 1, width: 'full', watts: 60, verified: false,
     ref: 'Network switch. Port count/type approximate (24 RJ45 + 6 SFP shown).',
     groups: [
-      G('eth', 'Port', 24, 'rj45', 'io', 'front', { rows: 2 }),
-      G('sfp', 'SFP', 6, 'sfp', 'io', 'front', { rows: 2 }),
+      G('eth', 'Port', 24, 'rj45', 'io', 'front', { rows: 2, ip: false }),
+      G('sfp', 'SFP', 6, 'sfp', 'io', 'front', { rows: 2, ip: false }),
       G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('mgmt', 'Management', 1, 'rj45', 'io', 'virtual'),
     ],
     links: [],
   },
@@ -666,7 +698,35 @@ const CONN_NAMES = {
   xlr: 'XLR', combo: 'XLR/TRS combo', trs: '1/4" TRS', headphone: 'Headphone', ethercon: 'etherCON', rj45: 'RJ45',
   bnc: 'BNC', sfp: 'SFP', phoenix: 'Phoenix', speakon: 'speakON', iec: 'IEC', nema: 'NEMA 5-15', dc: 'DC',
   powercon: 'powerCON', usb: 'USB', hdmi: 'HDMI', dmx5: 'DMX 5-pin', dmx3: 'DMX 3-pin',
+  rca: 'RCA', mini: '3.5 mm', usbc: 'USB-C', thunderbolt: 'Thunderbolt', displayport: 'DisplayPort',
+  lc: 'Fiber LC', opticalcon: 'opticalCON', toslink: 'TOSLINK',
   dante: 'Dante channel', rf: 'Wireless channel', channel: 'Console channel',
+};
+
+// Signal types: what a cable carries. Worked out from the jacks (see
+// inferSignal in app.js) unless a port group or a cable says otherwise.
+const SIGNALS = {
+  analog: { name: 'Analog audio', color: '#9fb3c8' },
+  aes: { name: 'AES/EBU digital audio', color: '#b98be6' },
+  speaker: { name: 'Speaker', color: '#8d939a', w: 4 },
+  network: { name: 'Network (Dante, control)', color: '#4fc07f' },
+  fiber: { name: 'Fiber', color: '#ff9d2e' },
+  power: { name: 'Power', color: '#e5534b', w: 3.6 },
+  sdi: { name: 'SDI video', color: '#f4cf3a' },
+  hdmi: { name: 'HDMI', color: '#4d9be6' },
+  dmx: { name: 'DMX', color: '#d070c9' },
+  rf: { name: 'Antenna / RF', color: '#c08850', dash: '9 4' },
+  usb: { name: 'USB', color: '#c6ccd3', dash: '3 3' },
+  thunderbolt: { name: 'Thunderbolt', color: '#eeeeee', dash: '7 2 2 2' },
+  control: { name: 'Control / GPIO / sync', color: '#93a1af', dash: '1 4' },
+  other: { name: 'Other', color: '#9aa3ad' },
+};
+const SPEC_SUGGEST = {
+  analog: ['Mic', 'Line', 'Star-quad', 'Multicore'], aes: ['110 Ω AES'], speaker: ['NL4', 'NL2', '12 AWG', '14 AWG'],
+  network: ['Cat5e', 'Cat6', 'Cat6A', 'Shielded Cat6'], fiber: ['Single-mode', 'Multi-mode OM3', 'Multi-mode OM4'],
+  power: ['IEC', 'Edison', 'powerCON', '14 AWG', '16 AWG'], sdi: ['3G', '6G', '12G', 'HD'], hdmi: ['2.0', '2.1', 'Active'],
+  dmx: ['5-pin', '3-pin', 'Cat5 DMX'], rf: ['RG-8X', 'RG-58', 'LMR-400'], usb: ['USB 2.0', 'USB 3.x', 'USB-C'],
+  thunderbolt: ['TB3', 'TB4', 'Active'], control: ['GPIO', 'RS-232', 'RS-485', 'Word clock'],
 };
 
 const DEFAULT_CABLE_COLORS = [
@@ -690,7 +750,7 @@ function buildSample() {
     cableColors: JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS)),
     print: defaultPrint(), history: [],
   };
-  const rack = (name, ru) => { const r = { id: uid('r'), name, ru }; p.racks.push(r); return r; };
+  const rack = (name, ru, locId) => { const r = { id: uid('r'), name, ru, locId }; p.racks.push(r); return r; };
   const loc = (name) => { const l = { id: uid('l'), name }; p.locations.push(l); return l; };
   const dev = (defId, name, short, place, extra = {}) => {
     const d = { id: uid('d'), defId, name, short, place, portNames: {}, labels: {}, ...extra };
@@ -703,11 +763,16 @@ function buildSample() {
   const ref = (d, g, n) => `${d.id}.${g}:${n}`;
 
   // Racks (layouts are placeholders - move things to match the real racks)
-  const stA = rack('Stage Rack A', 8);
-  const stB = rack('Stage Rack B', 6);
-  const back = rack('Backstage', 4);
-  const rf = rack('RF / IEM', 8);
-  const amp = rack('Amp Rack', 7);
+  // Locations (racks and loose gear live in these)
+  const stage = loc('Stage');
+  const backLoc = loc('Backstage');
+  const foh = loc('FOH');
+
+  const stA = rack('Stage Rack A', 8, stage.id);
+  const stB = rack('Stage Rack B', 6, stage.id);
+  const back = rack('Backstage', 4, backLoc.id);
+  const rf = rack('RF / IEM', 8, foh.id);
+  const amp = rack('Amp Rack', 7, foh.id);
 
   const rioA = dev('yamaha-rio3224-d2', 'Rio A', 'RIO A', R(stA, 1));
   dev('luminex-gigacore30i', 'GigaCore 30i', 'GC30', R(stA, 6));
@@ -738,8 +803,7 @@ function buildSample() {
   dev('cyberpower-or500lcdrm1u', 'UPS Amp', 'UPS AMP', R(amp, 6));
 
   // Locations
-  const pockets = loc('Stage floor pockets');
-  const foh = loc('FOH');
+  const pockets = stage;
   const avantis = dev('ah-avantis', 'Avantis', 'AVANTIS', L(foh));
 
   const pocketDefs = [
@@ -842,7 +906,7 @@ function defaultPrint() {
       { key: 'consoleCh', on: false }, { key: 'cable', on: false }, { key: 'group', on: false },
       { key: 'path', on: false }, { key: 'notes', on: false },
     ],
-    include: { inputs: true, outputs: false, stageMap: true, pull: false },
+    include: { inputs: true, outputs: false, stageMap: true, pull: false, ipList: false },
   };
 }
 
@@ -855,7 +919,7 @@ function defaultPrint() {
    ===================================================================== */
 
 /* ---------- 1. utilities ---------- */
-const SCHEMA = 1;
+const SCHEMA = 2;
 const STORE_KEY = 'patchrack.project';
 const U = 48;      // pixels per rack unit
 const W = 520;     // pixels per 19" panel width
@@ -909,6 +973,21 @@ function migrate(p) {
   p.library ||= []; p.racks ||= []; p.locations ||= []; p.devices ||= []; p.connections ||= [];
   p.patches ||= []; p.groups ||= []; p.columns ||= []; p.history ||= [];
   p.view ||= {}; p.view.cableMode ||= 'all'; p.view.cables ||= {};
+  p.view.colorBy ||= 'type'; p.view.hideTypes ||= {}; if (p.view.photos === undefined) p.view.photos = true;
+  if ((p.schema || 1) < 2) {
+    // v0.0.6: the Avantis gets its own control network jack (separate from the Dante card)
+    const av = p.library.find((d) => d.id === 'ah-avantis');
+    if (av && !av.groups.some((g) => g.id === 'ctl')) {
+      const i = av.groups.findIndex((g) => g.id === 'pwr');
+      av.groups.splice(i < 0 ? av.groups.length : i, 0, { id: 'ctl', label: 'Network', count: 1, start: 1, conn: 'rj45', dir: 'io', face: 'rear' });
+    }
+    // switch ports don't get IP addresses; the switch gets one management address
+    const gc = p.library.find((d) => d.id === 'luminex-gigacore30i');
+    if (gc && !gc.groups.some((g) => g.id === 'mgmt')) {
+      for (const g of gc.groups) if (g.id === 'eth' || g.id === 'sfp') g.ip = false;
+      gc.groups.push({ id: 'mgmt', label: 'Management', count: 1, start: 1, conn: 'rj45', dir: 'io', face: 'virtual' });
+    }
+  }
   p.cableColors ||= JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS));
   p.print = { ...defaultPrint(), ...(p.print || {}) };
   p.print.include = { ...defaultPrint().include, ...(p.print.include || {}) };
@@ -916,7 +995,7 @@ function migrate(p) {
   for (const d of DEFAULT_LIBRARY) if (!have.has(d.id)) p.library.push(JSON.parse(JSON.stringify(d)));
   if (!p.patches.length) p.patches.push(newPatch('Patch 1'));
   for (const pt of p.patches) { pt.sources ||= []; pt.outputs ||= []; }
-  for (const d of p.devices) { d.portNames ||= {}; d.labels ||= {}; }
+  for (const d of p.devices) { d.portNames ||= {}; d.labels ||= {}; d.ips ||= {}; }
   p.schema = SCHEMA;
   return p;
 }
@@ -1153,10 +1232,86 @@ function sourcePaths(s) {
   return paths;
 }
 
+// ----- signal types -----
+function inferSignal(g) {
+  const L = (g.label || '').toLowerCase(), c = g.conn;
+  if (['iec', 'nema', 'powercon', 'dc'].includes(c)) return 'power';
+  if (['rj45', 'ethercon', 'sfp'].includes(c)) return 'network';
+  if (['lc', 'opticalcon'].includes(c)) return 'fiber';
+  if (c === 'speakon') return 'speaker';
+  if (c === 'hdmi' || c === 'displayport') return 'hdmi';
+  if (c === 'usb' || c === 'usbc') return 'usb';
+  if (c === 'thunderbolt') return 'thunderbolt';
+  if (c === 'dmx5' || c === 'dmx3' || /dmx/.test(L)) return 'dmx';
+  if (c === 'bnc') return /ant|rf|cascade/.test(L) ? 'rf' : /word|clock|sync|ref/.test(L) ? 'control' : 'sdi';
+  if (/aes|spdif|s\/pdif/.test(L) || c === 'toslink') return 'aes';
+  if (c === 'phoenix' && /gpi|gpo|serial|rs-?232|rs-?485|control/.test(L)) return 'control';
+  if (['xlr', 'combo', 'trs', 'phoenix', 'headphone', 'rca', 'mini'].includes(c)) return 'analog';
+  return 'other';
+}
+const sigOf = (g) => g.signal || inferSignal(g);
+function autoType(c) { const a = port(c.a), b = port(c.b); return a ? sigOf(a.g) : b ? sigOf(b.g) : 'other'; }
+const connType = (c) => c.type || autoType(c);
+const sigName = (t) => (SIGNALS[t] || SIGNALS.other).name;
+
+// ----- network jacks & IP addresses -----
+const NET_CONNS = ['rj45', 'ethercon', 'sfp', 'lc', 'opticalcon'];
+// network jacks that can have an IP address (a switch's ports can't: it gets one virtual "Management" entry)
+const isNetGroup = (g) => (isPhysical(g) || g.face === 'virtual') && g.dir === 'io' && NET_CONNS.includes(g.conn) && g.ip !== false;
+function netPorts(d) {
+  const def = idx.def.get(d.defId); if (!def) return [];
+  const out = [];
+  for (const g of def.groups) if (isNetGroup(g)) for (let n = 1; n <= g.count; n++) out.push(mkRef(d.id, g.id, n));
+  return out;
+}
+const IP_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(\/([0-9]|[12]\d|3[0-2]))?$/;
+const ipOf = (ref) => { const p = port(ref); return p ? p.dev.ips?.[`${p.g.id}:${p.n}`]?.ip || '' : ''; };
+
+// ----- fold-open sections (open/closed state remembered in this browser) -----
+const secState = (() => { try { return JSON.parse(localStorage.getItem('patchrack.sections') || '{}'); } catch { return {}; } })();
+function sec(key, title, body, defOpen = true) {
+  const open = key in secState ? secState[key] : defOpen;
+  return `<details class="sec" data-sec="${key}" ${open ? 'open' : ''}><summary>${title}</summary><div class="sec-body">${body}</div></details>`;
+}
+
+// ----- gear photos -----
+const phCls = (id) => id.replace(/[^\w-]/g, '_');
+let photoKey = '';
+function updatePhotoCSS() {
+  const defs = project.library.filter((d) => d.images && (d.images.front || d.images.rear));
+  const key = defs.map((d) => `${d.id}:${d.images.front?.length || 0}:${d.images.rear?.length || 0}`).join('|');
+  if (key === photoKey) return;
+  photoKey = key;
+  let st = document.getElementById('photo-css');
+  if (!st) { st = document.createElement('style'); st.id = 'photo-css'; document.head.appendChild(st); }
+  st.textContent = defs.flatMap((d) => ['front', 'rear'].filter((f) => d.images[f]).map((f) => `.dev.photo.ph-${phCls(d.id)}-${f}{background-image:url("${d.images[f]}")}`)).join('\n');
+}
+function resizeImage(file, maxW = 1040) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, maxW / img.width);
+      const cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+      const cx = cv.getContext('2d'); cx.fillStyle = '#202327'; cx.fillRect(0, 0, cv.width, cv.height);
+      cx.drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+      resolve(cv.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable')); };
+    img.src = url;
+  });
+}
+function photoHTML(def, editable = true) {
+  return `<div class="photos">${['front', 'rear'].map((f) => `<div class="photo-slot"><div class="eyebrow">${f}</div>
+    ${def.images?.[f] ? `<img src="${def.images[f]}" alt="${esc(def.model)} ${f} panel">` : '<div class="photo-empty">No photo</div>'}
+    ${editable ? `<div class="toolbar"><button data-act="addPhoto" data-def="${def.id}" data-face="${f}">${def.images?.[f] ? 'Replace' : 'Add photo'}</button>${def.images?.[f] ? `<button data-act="removePhoto" data-def="${def.id}" data-face="${f}">Remove</button>` : ''}</div>` : ''}</div>`).join('')}</div>
+    <p class="small muted" style="margin:0">Photos belong to the gear definition, so every ${esc(def.model)} shows them. Crop the photo to just the faceplate for the best fit, then line the jacks up in Library → Panel layout. Turn photos off in View.</p>`;
+}
+
 const COMPAT = {
   xlr: ['xlr', 'combo', 'dmx5'], combo: ['xlr', 'trs', 'combo'], trs: ['trs', 'combo', 'headphone'],
   headphone: ['trs', 'headphone'], ethercon: ['ethercon', 'rj45'], rj45: ['rj45', 'ethercon'],
-  iec: ['iec', 'nema'], nema: ['nema', 'iec'],
+  iec: ['iec', 'nema'], nema: ['nema', 'iec'], usbc: ['usbc', 'thunderbolt'], thunderbolt: ['thunderbolt', 'usbc'],
+  lc: ['lc', 'opticalcon'], opticalcon: ['opticalcon', 'lc'],
 };
 const compatible = (a, b) => a === b || (COMPAT[a] || []).includes(b);
 
@@ -1176,7 +1331,17 @@ function runChecks() {
     const a = port(c.a), b = port(c.b);
     if (a.g.dir === b.g.dir && a.g.dir !== 'io') add('error', `${portLong(c.a)} is cabled to ${portLong(c.b)}: that joins two ${a.g.dir === 'in' ? 'inputs' : 'outputs'}.`, { kind: 'conn', id: c.id });
     else if (!compatible(a.g.conn, b.g.conn)) add('info', `${portLong(c.a)} (${CONN_NAMES[a.g.conn] || a.g.conn}) to ${portLong(c.b)} (${CONN_NAMES[b.g.conn] || b.g.conn}) needs an adapter or a different cable.`, { kind: 'conn', id: c.id });
+    else if (!c.type && sigOf(a.g) !== sigOf(b.g) && sigOf(a.g) !== 'other' && sigOf(b.g) !== 'other') add('info', `${portLong(c.a)} carries ${sigName(sigOf(a.g))} but ${portLong(c.b)} expects ${sigName(sigOf(b.g))}.`, { kind: 'conn', id: c.id });
   }
+  const ipUse = new Map();
+  for (const d of project.devices) {
+    for (const r of netPorts(d)) {
+      const ip = ipOf(r); if (!ip) continue;
+      if (!IP_RE.test(ip)) add('warn', `${portLong(r)} has “${ip}”, which isn't a valid IP address.`, { kind: 'port', ref: r });
+      else push(ipUse, ip.split('/')[0], r);
+    }
+  }
+  for (const [ip, refs] of ipUse) if (refs.length > 1) add('error', `IP address ${ip} is used ${refs.length} times: ${refs.map(portLong).join(', ')}.`, { kind: 'port', ref: refs[0] });
   const chUse = new Map();
   for (const s of pt.sources) {
     const nm = s.name || 'Untitled source';
@@ -1209,6 +1374,7 @@ function render() {
   const keep = $$('[data-keep-scroll]').map((el) => [el.id, el.scrollLeft, el.scrollTop]);
   buildIndex();
   checks = runChecks();
+  updatePhotoCSS();
   renderTop();
   const main = $('#main');
   const views = { rack: rackView, list: listView, dante: danteView, print: printView, library: libraryView, checks: checksView };
@@ -1230,7 +1396,7 @@ function renderTop() {
 }
 
 /* ---------- 6. rack view ---------- */
-const PITCH = { xlr: 26, combo: 26, dmx5: 26, dmx3: 26, ethercon: 24, rj45: 19, trs: 18, headphone: 18, bnc: 17, sfp: 19, phoenix: 13, iec: 28, nema: 28, dc: 16, speakon: 28, powercon: 28, usb: 15, hdmi: 20 };
+const PITCH = { rca: 18, mini: 14, usbc: 14, thunderbolt: 14, displayport: 18, lc: 16, opticalcon: 26, toslink: 16, xlr: 26, combo: 26, dmx5: 26, dmx3: 26, ethercon: 24, rj45: 19, trs: 18, headphone: 18, bnc: 17, sfp: 19, phoenix: 13, iec: 28, nema: 28, dc: 16, speakon: 28, powercon: 28, usb: 15, hdmi: 20 };
 const layoutCache = new Map();
 function groupDims(g, s, h, top) {
   const p = (PITCH[g.conn] || 20) * s;
@@ -1292,6 +1458,7 @@ function portShape(conn, p) {
   if (conn === 'phoenix') return { w: p * 0.62, h: p * 0.5 };
   if (conn === 'iec' || conn === 'nema') return { w: p * 0.7, h: p * 0.52 };
   if (conn === 'rj45' || conn === 'sfp') return { w: p * 0.66, h: p * 0.56 };
+  if (['hdmi', 'usb', 'usbc', 'thunderbolt', 'displayport', 'lc', 'toslink'].includes(conn)) return { w: p * 0.72, h: p * 0.38 };
   return { w: d, h: d };
 }
 
@@ -1389,33 +1556,69 @@ function modeSeg() {
   return `<div class="seg"><span>Editing</span>${b('patch', 'Patch: ' + esc(patch().name))}${b('rig', 'The rig')}</div>`;
 }
 
+function viewMenuHTML() {
+  const v = project.view;
+  const present = new Set(idx.active.filter((c) => c.kind !== 'dante').map(connType));
+  const types = Object.keys(SIGNALS).filter((k) => present.has(k));
+  return `<details class="menu view-menu" id="view-menu" ${ui.viewOpen ? 'open' : ''}><summary>View ▾</summary><div class="menu-pop view-pop">
+    <label class="field"><span>Cables</span><select id="cable-mode" data-chg="cableMode" data-val="${v.cableMode}"><option value="all">All units</option><option value="picked">Only units I pick</option><option value="none">Hidden</option></select></label>
+    <label class="field"><span>Colour cables by</span><select id="color-by" data-chg="viewField" data-f="colorBy" data-val="${v.colorBy}"><option value="type">Signal type</option><option value="cable">Cable colour (length)</option></select></label>
+    <div class="eyebrow">Cable types</div>
+    <div class="typelist">${types.length ? types.map((k) => `<label class="tog"><input type="checkbox" id="ty-${k}" data-chg="typeVis" data-t="${k}" ${v.hideTypes[k] ? '' : 'checked'}><span class="swl" style="--c:${SIGNALS[k].color}"></span>${esc(SIGNALS[k].name)}</label>`).join('') : '<span class="muted small">No cables in this patch yet.</span>'}</div>
+    <hr>
+    <label class="tog"><input type="checkbox" id="tg-ties" data-chg="showTies" ${ui.showTies ? 'checked' : ''}> Show in-wall tie lines</label>
+    <label class="tog"><input type="checkbox" id="tg-photos" data-chg="viewField" data-f="photos" ${v.photos !== false ? 'checked' : ''}> Show gear photos</label>
+    <hr>
+    <div class="eyebrow">Jack rings</div>
+    <div class="legend"><span><i style="--ring:var(--ring-in)"></i>Input</span><span><i style="--ring:var(--ring-out)"></i>Output</span><span><i style="--ring:var(--ring-io)"></i>Network / two-way</span><span>Filled = source colour · white dot = plugged in</span></div>
+  </div></details>`;
+}
 function rackView() {
   const pt = patch();
   return `<section class="view">
     ${project.sample ? `<div class="note"><span><b>Sample rig built from your Nov 8 patchlist.</b> The inputs match your PDF. Rack layouts, the pocket-to-Rio tie lines and the Dante numbering are placeholders, so move gear and fix routes to match the real thing. Gear marked <span class="pill unv">unverified</span> needs checking against the manual.</span><button data-act="dismissSample">Got it</button></div>` : ''}
     <div class="toolbar">
-      <label class="tog">Cables <select id="cable-mode" data-chg="cableMode" data-val="${project.view.cableMode}"><option value="all">All units</option><option value="picked">Only units I pick</option><option value="none">Hidden</option></select></label>
-      <label class="tog"><input type="checkbox" id="tg-ties" data-chg="showTies" ${ui.showTies ? 'checked' : ''}> Show in-wall tie lines</label>
       ${modeSeg()}
       ${rigMode() ? `<div class="seg"><span>New connections</span><button data-act="newKind" data-k="cable" class="${ui.newKind !== 'tie' ? 'on' : ''}">Cables</button><button data-act="newKind" data-k="tie" class="${ui.newKind === 'tie' ? 'on' : ''}">Tie lines</button></div>` : ''}
       <span class="spacer"></span>
+      ${viewMenuHTML()}
       ${rigMode() ? '<button data-act="addRack">+ Rack</button><button data-act="addLoc">+ Location</button>' : ''}
     </div>
     ${ui.pick && port(ui.pick) ? `<div class="note pick"><span><b>Click the jack to connect to ${esc(portLong(ui.pick))}.</b> Use Front / Rear / Front + Rear to reach the other side of a rack. Esc cancels.</span><button data-act="cancelPick">Cancel</button></div>` : ''}
     <div class="mode-hint ${rigMode() ? 'rig' : ''}">${rigMode()
-      ? '<b>Editing the rig.</b> Changes apply to every patch. Drag gear by its name strip to move it (gear in the way slides over), click an empty space to add gear, and cables you draw are permanent.'
-      : `<b>Editing ${esc(pt.name)}.</b> Gear is locked. Cables you draw and sources you assign belong to this patch only.`}</div>
-    <div class="legend"><span><i style="--ring:var(--ring-in)"></i>Input</span><span><i style="--ring:var(--ring-out)"></i>Output</span><span><i style="--ring:var(--ring-io)"></i>Network / two-way</span><span>Filled jack = source colour · white dot = cable plugged in · drag from one jack to another to patch</span></div>
+      ? '<b>Editing the rig.</b> Changes apply to every patch. Drag gear by its name strip; drag from jack to jack (or Shift-click) to connect.'
+      : `<b>Editing ${esc(pt.name)}.</b> Gear is locked. Cables and sources you add belong to this patch only.`}</div>
     <div class="rack-split">
       <div class="stage ${rigMode() ? 'rig' : ''}" id="stage" data-keep-scroll>
         <div class="stage-inner" id="stage-inner">
-          ${project.racks.map(rackHTML).join('')}
-          <div class="locs">${project.locations.map(locHTML).join('')}</div>
+          ${stageHTML()}
           <svg class="cables" id="cables"></svg>
         </div>
       </div>
       <aside class="inspector" id="inspector">${inspectorHTML()}</aside>
     </div>
+  </section>`;
+}
+// The stage is a stack of locations (Stage, FOH…). Each shows its racks and its
+// loose gear. Racks not yet in a location are shown first.
+function stageHTML() {
+  const locIds = new Set(project.locations.map((l) => l.id));
+  const loose = project.racks.filter((r) => !r.locId || !locIds.has(r.locId));
+  let html = loose.length ? areaHTML(null, loose) : '';
+  for (const l of project.locations) html += areaHTML(l, project.racks.filter((r) => r.locId === l.id));
+  return html || `<p class="muted" style="margin:0">Nothing here yet.${rigMode() ? ' Use + Location and + Rack above.' : ' Switch to The rig to add locations and racks.'}</p>`;
+}
+function areaHTML(loc, racks) {
+  if (!loc) {
+    return `<section class="area"><div class="area-head"><span class="area-title muted">Racks not in a location</span>${rigMode() ? '<span class="small muted">Choose a location in each rack’s panel (click the rack name).</span>' : ''}</div>
+      <div class="area-row">${racks.map(rackHTML).join('')}</div></section>`;
+  }
+  const sel = ui.sel?.kind === 'loc' && ui.sel.id === loc.id;
+  const gear = project.devices.some((d) => d.place?.type === 'loc' && d.place.locId === loc.id);
+  return `<section class="area loc" data-loc="${loc.id}">
+    <div class="area-head"><button class="rack-title area-title" data-act="selLoc" data-id="${loc.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(loc.name)}</button>
+      ${rigMode() ? `<button class="face-btn" data-act="addRack" data-loc="${loc.id}">+ Rack</button><button class="face-btn" data-act="locAdd" data-id="${loc.id}">+ Gear</button><span class="reorder"><button data-act="moveLoc" data-id="${loc.id}" data-d="-1" title="Move up" aria-label="Move location up">▲</button><button data-act="moveLoc" data-id="${loc.id}" data-d="1" title="Move down" aria-label="Move location down">▼</button></span>` : ''}</div>
+    <div class="area-row">${racks.map(rackHTML).join('')}${gear || rigMode() ? locGearHTML(loc, racks.length > 0) : ''}${!racks.length && !gear && !rigMode() ? '<span class="muted small">Empty</span>' : ''}</div>
   </section>`;
 }
 function faceBtn(id) {
@@ -1426,7 +1629,7 @@ function rackHTML(rack) {
   const view = ui.faces[rack.id] || 'front';
   const faces = view === 'both' ? ['front', 'rear'] : [view];
   const sel = ui.sel?.kind === 'rack' && ui.sel.id === rack.id;
-  return `<div class="rack">
+  return `<div class="rack" data-rack-id="${rack.id}">
     <div class="rack-head"><button class="rack-title" data-act="selRack" data-id="${rack.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(rack.name)}</button><span class="muted small mono">${rack.ru}U</span>${faceBtn(rack.id)}${rigMode() ? `<span class="reorder"><button data-act="moveRack" data-id="${rack.id}" data-d="-1" title="Move rack left" aria-label="Move rack left">◀</button><button data-act="moveRack" data-id="${rack.id}" data-d="1" title="Move rack right" aria-label="Move rack right">▶</button></span>` : ''}</div>
     <div class="rack-faces">${faces.map((f) => rackFaceHTML(rack, f, faces.length > 1)).join('')}</div>
     ${rigMode() ? `<div class="rack-foot"><button data-act="rackRU" data-id="${rack.id}" data-d="-1" ${rack.ru <= rackMinRU(rack) ? 'disabled title="Gear is in the bottom space"' : ''}>− 1U</button><span class="muted small">drag the bottom edge or use the buttons</span><button data-act="rackRU" data-id="${rack.id}" data-d="1">+ 1U</button></div>` : ''}
@@ -1490,7 +1693,7 @@ function locLayout(loc, ov = null) {
   }
   return { map, devs, w: Math.max(LOC_MIN_W, right + LOC_GRID), h: Math.max(64, bottom + LOC_GRID) };
 }
-function locHTML(loc) {
+function locGearHTML(loc, withCaption) {
   const view = ui.faces[loc.id] || 'front';
   const faces = view === 'both' ? ['front', 'rear'] : [view];
   const lay = locLayout(loc);
@@ -1498,10 +1701,9 @@ function locHTML(loc) {
     const def = idx.def.get(d.defId); const b = lay.map.get(d.id); if (!def || !b) return '';
     return devHTML(d, def, face, { top: b.y, left: b.x, w: b.w, h: b.h, cls: 'free' });
   }).join('');
-  const sel = ui.sel?.kind === 'loc' && ui.sel.id === loc.id;
-  return `<div class="loc" data-loc="${loc.id}">
-    <div class="loc-head"><button class="rack-title" data-act="selLoc" data-id="${loc.id}" ${sel ? 'style="color:var(--accent)"' : ''}>${esc(loc.name)}</button>${faceBtn(loc.id)}${rigMode() ? `<button class="face-btn" data-act="locAdd" data-id="${loc.id}">+ Gear</button><span class="reorder"><button data-act="moveLoc" data-id="${loc.id}" data-d="-1" title="Move up" aria-label="Move location up">▲</button><button data-act="moveLoc" data-id="${loc.id}" data-d="1" title="Move down" aria-label="Move location down">▼</button></span>` : ''}</div>
-    <div class="rack-faces">${faces.map((f) => `<div class="rack-face">${faces.length > 1 ? `<div class="face-cap">${f}</div>` : ''}<div class="loc-body" data-face="${f}" style="width:${lay.w}px;height:${lay.h}px">${bodyFor(f) || `<span class="loc-empty">Nothing here yet.${rigMode() ? ' Use “+ Gear”, or drag gear in.' : ''}</span>`}</div></div>`).join('')}</div>
+  return `<div class="loc-gear">
+    <div class="rack-head">${withCaption ? '<span class="face-cap" style="margin:0">Gear outside racks</span>' : ''}${lay.devs.length ? faceBtn(loc.id) : ''}</div>
+    <div class="rack-faces">${faces.map((f) => `<div class="rack-face">${faces.length > 1 ? `<div class="face-cap">${f}</div>` : ''}<div class="loc-body" data-face="${f}" style="width:${lay.w}px;height:${lay.h}px">${bodyFor(f) || `<span class="loc-empty">No loose gear.${rigMode() ? ' Use “+ Gear”, or drag gear here.' : ''}</span>`}</div></div>`).join('')}</div>
   </div>`;
 }
 function devHTML(d, def, face, box) {
@@ -1509,7 +1711,8 @@ function devHTML(d, def, face, box) {
   const selDev = ui.sel?.kind === 'device' && ui.sel.id === d.id;
   const hl = highlightSet();
   const sub = d.zone ? `${d.zone} · ${d.position || ''}` : `${def.make} ${def.model}`;
-  let html = `<div class="dev ${box.cls || ''} ${def.style ? 'st-' + def.style : ''} ${selDev ? 'sel' : ''}" data-dev="${d.id}" style="${box.free ? '' : `top:${box.top}px;left:${box.left}px;`}width:${box.w}px;height:${box.h}px">`;
+  const photo = project.view.photos !== false && def.images?.[face] ? ` photo ph-${phCls(def.id)}-${face}` : '';
+  let html = `<div class="dev ${box.cls || ''} ${def.style ? 'st-' + def.style : ''} ${selDev ? 'sel' : ''}${photo}" data-dev="${d.id}" style="${box.free ? '' : `top:${box.top}px;left:${box.left}px;`}width:${box.w}px;height:${box.h}px">`;
   html += `<div class="dev-label" data-act="selDev" data-id="${d.id}" title="${esc(def.make + ' ' + def.model)}"><b>${esc(d.name)}</b> <em>${esc(sub)}</em>${def.verified ? '' : '<span class="unv">· unverified</span>'}</div>`;
   const mode = project.view.cableMode;
   if (mode !== 'none' && !def.style && !box.preview && def.groups.some(isPhysical)) {
@@ -1532,7 +1735,7 @@ function devHTML(d, def, face, box) {
     else if (hl.has(ref)) cls.push('hl');
     const p = port(ref);
     const num = p ? portNum(p) : pp.n;
-    const tip = [portLong(ref), src ? `Source: ${src.name}` : '', ...(idx.out.get(ref) || []).concat(idx.in.get(ref) || []).filter((c) => c.kind !== 'dante').map((c) => '↔ ' + portLong(c.a === ref ? c.b : c.a))].filter(Boolean).join('\n');
+    const tip = [portLong(ref), ipOf(ref) ? `IP ${ipOf(ref)}` : '', src ? `Source: ${src.name}` : '', ...(idx.out.get(ref) || []).concat(idx.in.get(ref) || []).filter((c) => c.kind !== 'dante').map((c) => '↔ ' + portLong(c.a === ref ? c.b : c.a))].filter(Boolean).join('\n');
     html += `<div class="${cls.join(' ')}" data-ref="${ref}" title="${esc(tip)}" style="${fill}left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${sh.w.toFixed(1)}px;height:${sh.h.toFixed(1)}px"></div>`;
     if (lay.s > 0.45) html += `<div class="pn" style="left:${pp.x.toFixed(1)}px;width:${pp.p.toFixed(1)}px;top:${(pp.y + pp.p * 0.72).toFixed(1)}px;font-size:${Math.max(6.5, 8 * lay.s).toFixed(1)}px">${esc(num)}</div>`;
   }
@@ -1572,17 +1775,22 @@ function drawCables() {
     if (c.kind === 'tie' && !ui.showTies) continue;
     const da = parseRef(c.a).devId, db = parseRef(c.b).devId;
     if (project.view.cableMode === 'picked' ? !(cablesOn(da) || cablesOn(db)) : !(cablesOn(da) && cablesOn(db))) continue;
+    const t = connType(c); if (project.view.hideTypes[t]) continue;
+    const S = SIGNALS[t] || SIGNALS.other;
     const proxy = (r) => pos.get(r) || (c.kind === 'tie' ? [...prev(r), ...next(r)].filter((x) => parseRef(x).devId === parseRef(r).devId).map((x) => pos.get(x)).find(Boolean) : null);
     const a = proxy(c.a), b = proxy(c.b); if (!a || !b) continue;
     const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
     const sag = Math.min(140, 24 + dist * 0.22);
     const d = `M${a[0]},${a[1]} C${a[0]},${a[1] + sag} ${b[0]},${b[1] + sag} ${b[0]},${b[1]}`;
-    const col = project.cableColors.find((x) => x.id === c.color)?.hex || (c.kind === 'tie' ? '#7b8590' : c.layer === 'rig' ? '#9fb3c8' : '#e07bd0');
-    const dash = c.kind === 'tie' ? 'stroke-dasharray="3 4"' : c.layer !== 'rig' ? '' : '';
+    const physical = project.cableColors.find((x) => x.id === c.color)?.hex;
+    const col = project.view.colorBy === 'cable' ? (physical || (c.kind === 'tie' ? '#7b8590' : S.color)) : S.color;
+    const dash = c.kind === 'tie' ? 'stroke-dasharray="3 4"' : S.dash ? `stroke-dasharray="${S.dash}"` : '';
+    const wd = S.w || 2.6;
     const sel = c.id === selConn;
-    html += `<path d="${d}" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="${sel ? 7 : 5}" stroke-linecap="round"/>`;
-    html += `<path d="${d}" fill="none" stroke="${sel ? '#f2a900' : col}" stroke-width="${sel ? 4 : 2.6}" stroke-linecap="round" ${dash}/>`;
-    html += `<path class="hit" data-conn="${c.id}" d="${d}" fill="none" stroke="transparent" stroke-width="12"><title>${esc(portLong(c.a) + ' → ' + portLong(c.b))}</title></path>`;
+    // rig cables get a dark outline; cables that belong to this patch only get a light one
+    html += `<path d="${d}" fill="none" stroke="${c.layer === 'rig' ? '#000' : '#fff'}" stroke-opacity="${c.layer === 'rig' ? '.55' : '.7'}" stroke-width="${(sel ? 4.5 : 2.4) + wd}" stroke-linecap="round"/>`;
+    html += `<path d="${d}" fill="none" stroke="${sel ? '#f2a900' : col}" stroke-width="${sel ? wd + 1.4 : wd}" stroke-linecap="round" ${dash}/>`;
+    html += `<path class="hit" data-conn="${c.id}" d="${d}" fill="none" stroke="transparent" stroke-width="12"><title>${esc(`${portLong(c.a)} → ${portLong(c.b)}\n${sigName(t)}${c.spec ? ' · ' + c.spec : ''}${c.kind === 'tie' ? ' · tie line' : ''}${c.layer === 'rig' ? '' : ' · this patch only'}`)}</title></path>`;
   }
   html += `<path id="cable-temp" fill="none" stroke="#6fbf8e" stroke-width="3" stroke-dasharray="6 4" d=""/>`;
   svg.innerHTML = html;
@@ -1658,7 +1866,8 @@ function devDropTarget(e) {
   }
   const loc = hit?.closest('.loc');
   if (loc) {
-    const body = hit.closest('.loc-body') || loc.querySelector('.loc-body'); const br = body.getBoundingClientRect(); const sz = devSize(def);
+    const body = hit.closest('.loc-body') || loc.querySelector('.loc-body'); if (!body) return null;
+    const br = body.getBoundingClientRect(); const sz = devSize(def);
     const snap = (v) => Math.round(v / LOC_GRID) * LOC_GRID;
     const x = Math.max(0, Math.min(1200 - sz.w, snap(e.clientX - br.left - devDrag.grabX)));
     const y = Math.max(0, Math.min(br.height + 2 * U, snap(e.clientY - br.top - devDrag.grabY)));
@@ -1849,36 +2058,47 @@ function addGearHTML(title, s) {
 function deviceInspector(d) {
   if (!d) return inspectorHome();
   const def = idx.def.get(d.defId);
+  const head = `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${def.form === 'rack' ? def.ru + 'U' + (def.width === 'half' ? ' half-width' : '') : def.form}</div>
+    <h3>${esc(d.name)}</h3> ${def.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified gear definition</span>'}</div>`;
+  const nets = netPorts(d);
+  const ipRows = nets.map((r) => {
+    const p = port(r); const key = `${p.g.id}:${p.n}`; const v = d.ips?.[key] || {};
+    const lab = `${esc(p.g.label)} ${esc(portNum(p))}`;
+    return rigMode()
+      ? `<div class="iprow"><label for="ip-${p.g.id}-${p.n}">${lab}</label><input id="ip-${p.g.id}-${p.n}" class="mono" value="${esc(v.ip || '')}" placeholder="192.168.1.10" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="ip"><input id="ipn-${p.g.id}-${p.n}" value="${esc(v.note || '')}" placeholder="note, e.g. Dante primary" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="note"></div>`
+      : `<div class="iprow ro"><span>${lab}</span><span class="mono">${esc(v.ip || '—')}</span><span class="muted small">${esc(v.note || '')}</span></div>`;
+  }).join('');
+  const ipSec = nets.length ? sec('dev-ip', 'Network &amp; IP addresses', ipRows + '<p class="small muted" style="margin:0">One address per network jack. Every address in the rig is listed in the Dante &amp; IP tab.</p>', true) : '';
+  const ref = def.ref ? sec('dev-ref', 'Reference', `<p class="small muted" style="margin:0">${esc(def.ref)}</p>`, false) : '';
   if (!rigMode()) {
     const where = d.place.type === 'rack' ? project.racks.find((r) => r.id === d.place.rackId)?.name : project.locations.find((l) => l.id === d.place.locId)?.name;
-    return `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${def.form === 'rack' ? def.ru + 'U' + (def.width === 'half' ? ' half-width' : '') : def.form}</div>
-      <h3>${esc(d.name)}</h3> ${def.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified gear definition</span>'}</div>
+    return `${head}
       <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd>${d.place.type === 'rack' ? `<dt>Position</dt><dd>U${d.place.u}${d.place.side === 'full' ? '' : d.place.side === 'L' ? ', left half' : ', right half'}</dd>` : ''}${d.zone ? `<dt>Stage</dt><dd>${esc(d.zone)} · ${esc(d.position || '')}</dd>` : ''}</dl>
-      ${def.ref ? `<p class="small muted" style="margin:0">${esc(def.ref)}</p>` : ''}
+      ${ipSec}${ref}
       ${lockNote('rename, move, relabel or remove it')}`;
   }
   const containers = [...project.racks.map((r) => `<option value="r:${r.id}">Rack: ${esc(r.name)}</option>`), ...project.locations.map((l) => `<option value="l:${l.id}">Location: ${esc(l.name)}</option>`)].join('');
   const cur = d.place.type === 'rack' ? 'r:' + d.place.rackId : 'l:' + d.place.locId;
-  const srcGroups = def.groups.filter((g) => g.src || g.id === 'tie');
-  const labelRows = srcGroups.filter(isPhysical).map((g) => {
+  const labelRows = def.groups.filter((g) => (g.src || g.id === 'tie') && isPhysical(g)).map((g) => {
     const ov = d.labels?.[g.id] || {};
     return `<div class="row"><label>${esc(g.label)} label</label><div class="inline-fields" style="gap:4px;flex-wrap:nowrap"><input id="lp-${g.id}" style="width:90px" placeholder="${esc(d.short + ' ' + g.label)}" value="${esc(ov.prefix ?? '')}" data-chg="devLabel" data-g="${g.id}" data-f="prefix"><input id="ls-${g.id}" type="number" style="width:64px" placeholder="1" value="${esc(ov.start ?? '')}" data-chg="devLabel" data-g="${g.id}" data-f="start"></div></div>`;
   }).join('');
   let pb = '';
   if (def.patchbay) {
     const n = def.groups.find((g) => g.id === def.patchbay.rt)?.count || 0;
-    pb = `<div class="eyebrow">Normalling per point</div><div class="tbl-wrap"><table class="grid"><tr><th>Pt</th><th>Mode</th></tr>${Array.from({ length: n }, (_, i) => `<tr><td class="num">${i + 1}</td><td><select id="nm-${i + 1}" data-chg="normal" data-n="${i + 1}" data-val="${d.normalling?.[i + 1] || def.patchbay.mode || 'half'}"><option value="normal">Full normal</option><option value="half">Half normal</option><option value="thru">Isolated (no normal)</option></select></td></tr>`).join('')}</table></div>`;
+    pb = sec('dev-normal', 'Normalling per point', `<div class="tbl-wrap"><table class="grid"><tr><th>Pt</th><th>Mode</th></tr>${Array.from({ length: n }, (_, i) => `<tr><td class="num">${i + 1}</td><td><select id="nm-${i + 1}" data-chg="normal" data-n="${i + 1}" data-val="${d.normalling?.[i + 1] || def.patchbay.mode || 'half'}"><option value="normal">Full normal</option><option value="half">Half normal</option><option value="thru">Isolated (no normal)</option></select></td></tr>`).join('')}</table></div>`, false);
   }
-  return `<div><div class="eyebrow">${esc(def.make)} ${esc(def.model)} · ${def.form === 'rack' ? def.ru + 'U' + (def.width === 'half' ? ' half-width' : '') : def.form}</div>
-    <h3>${esc(d.name)}</h3> ${def.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified gear definition</span>'}</div>
+  return `${head}
     <div class="row"><label for="dv-name">Name</label><input id="dv-name" value="${esc(d.name)}" data-chg="devField" data-f="name"></div>
     <div class="row"><label for="dv-short">Short label</label><input id="dv-short" value="${esc(d.short)}" data-chg="devField" data-f="short"></div>
     <div class="row"><label for="dv-where">Where</label><select id="dv-where" data-chg="devMove" data-val="${cur}">${containers}</select></div>
     ${d.place.type === 'rack' ? `<div class="row"><label for="dv-u">Top U</label><div class="inline-fields" style="gap:4px;flex-wrap:nowrap"><input id="dv-u" type="number" min="1" style="width:70px" value="${d.place.u}" data-chg="devU">${def.width === 'half' ? `<select id="dv-side" data-chg="devSide" data-val="${d.place.side}"><option value="L">Left half</option><option value="R">Right half</option></select>` : ''}</div></div>` : ''}
-    ${def.category === 'pocket' || d.zone ? `<div class="row"><label for="dv-zone">Stage zone</label><input id="dv-zone" value="${esc(d.zone || '')}" placeholder="Down-stage" data-chg="devField" data-f="zone"></div><div class="row"><label for="dv-pos">Position</label><input id="dv-pos" value="${esc(d.position || '')}" placeholder="Stage Right" data-chg="devField" data-f="position"></div>` : `<div class="row"><label for="dv-zone">Stage zone</label><input id="dv-zone" value="" placeholder="optional, for the stage map" data-chg="devField" data-f="zone"></div>`}
-    ${labelRows ? `<div class="eyebrow">Jack labels</div><p class="small muted" style="margin:0">What volunteers see printed. For example, prefix “RIO” and start 31 makes these jacks RIO 31–36.</p>${labelRows}` : ''}
-    ${pb}
-    ${def.ref ? `<p class="small muted" style="margin:0">${esc(def.ref)}</p>` : ''}
+    ${ipSec}
+    ${labelRows || def.category === 'pocket' || d.zone ? sec('dev-labels', 'Jack labels &amp; stage position', `${labelRows ? `<p class="small muted" style="margin:0">What volunteers see printed. For example, prefix “RIO” and start 31 makes these jacks RIO 31–36.</p>${labelRows}` : ''}
+      <div class="row"><label for="dv-zone">Stage zone</label><input id="dv-zone" value="${esc(d.zone || '')}" placeholder="Down-stage" data-chg="devField" data-f="zone"></div>
+      <div class="row"><label for="dv-pos">Position</label><input id="dv-pos" value="${esc(d.position || '')}" placeholder="Stage Right" data-chg="devField" data-f="position"></div>`, false) : ''}
+    ${sec('dev-photo', 'Photos', photoHTML(def), !!def.images?.front || !!def.images?.rear)}
+    ${pb}${ref}
     <div class="toolbar"><button data-act="dupDev" data-id="${d.id}">Duplicate</button><button data-act="editDef" data-def="${def.id}">Edit gear definition</button>${confirmBtn('delDev', 'Remove', `data-id="${d.id}"`)}</div>`;
 }
 function traceHTML(paths) {
@@ -1897,23 +2117,25 @@ function portInspector(ref) {
   const bpaths = bw.ends.filter((e) => e !== ref).slice(0, 3).map((e) => pathTo(bw, e).reverse());
   const key = `${p.g.id}:${p.n}`;
   const canSrc = p.g.dir === 'in' || p.g.conn === 'dante';
+  const net = isNetGroup(p.g); const ipv = p.dev.ips?.[key] || {};
   const srcOpts = patch().sources.map((s) => `<option value="${s.id}">${esc(s.name || 'Untitled')}${(s.ports || []).some(Boolean) ? ' · ' + esc(stereoLabel(s.ports)) : ''}</option>`).join('');
-  return `<div><div class="eyebrow">${esc(p.dev.name)} · ${esc(CONN_NAMES[p.g.conn] || p.g.conn)} ${p.g.dir === 'in' ? 'input' : p.g.dir === 'out' ? 'output' : 'two-way'}</div>
-    <h3>${esc(portLabel(ref))}</h3><div class="small muted">${esc(portLong(ref))}</div></div>
-    ${rigMode() ? `<div class="row"><label for="pt-name">Custom name</label><input id="pt-name" value="${esc(p.dev.portNames?.[key] || '')}" placeholder="e.g. PREACH MIC" data-chg="portName" data-ref="${ref}"></div>` : ''}
-    ${canSrc ? `<div class="eyebrow">Source plugged in here</div>
+  const more = rigMode() ? `<div class="row"><label for="pt-name">Custom name</label><input id="pt-name" value="${esc(p.dev.portNames?.[key] || '')}" placeholder="e.g. PREACH MIC" data-chg="portName" data-ref="${ref}"></div>
+    ${net ? `<div class="row"><label for="pt-ip">IP address</label><input id="pt-ip" class="mono" value="${esc(ipv.ip || '')}" placeholder="192.168.1.10" data-chg="devIp" data-dev="${p.dev.id}" data-k="${key}" data-f="ip"></div>
+    <div class="row"><label for="pt-ipn">IP note</label><input id="pt-ipn" value="${esc(ipv.note || '')}" placeholder="e.g. Dante primary" data-chg="devIp" data-dev="${p.dev.id}" data-k="${key}" data-f="note"></div>` : ''}` : '';
+  return `<div><div class="eyebrow">${esc(p.dev.name)} · ${esc(CONN_NAMES[p.g.conn] || p.g.conn)} ${p.g.dir === 'in' ? 'input' : p.g.dir === 'out' ? 'output' : 'two-way'}${isPhysical(p.g) ? ' · ' + esc(sigName(sigOf(p.g))) : ''}</div>
+    <h3>${esc(portLabel(ref))}</h3><div class="small muted">${esc(portLong(ref))}</div>${net && ipv.ip ? `<div class="small mono">IP ${esc(ipv.ip)}${ipv.note ? ` · ${esc(ipv.note)}` : ''}</div>` : ''}</div>
+    ${canSrc ? sec('pt-src', 'Source plugged in here', `
       ${srcs.length ? srcs.map((s) => `<div class="chips"><span class="chip"><span class="sw" style="background:${project.groups.find((g) => g.id === s.groupId)?.color || '#ccc'}"></span>${esc(s.name)}</span><span class="small muted">${esc(s.mic || '')}</span><button data-act="unassign" data-src="${s.id}" data-ref="${ref}" style="padding:1px 6px">Remove</button></div>`).join('') : '<p class="small muted" style="margin:0">None in this patch.</p>'}
       <div class="inline-fields" style="gap:4px"><select id="pt-assign" style="flex:1"><option value="">Assign a source…</option>${srcOpts}</select><button data-act="assign" data-ref="${ref}">Assign</button></div>
-      <button data-act="newSrcHere" data-ref="${ref}">+ New source on this jack</button>` : ''}
-    ${isPhysical(p.g) ? `<div class="eyebrow">Connect to</div>
+      <button data-act="newSrcHere" data-ref="${ref}">+ New source on this jack</button>`) : ''}
+    ${isPhysical(p.g) ? sec('pt-connect', 'Connect to', `
       <input id="pt-q" data-inp="connQuery" data-ref="${ref}" placeholder="Search, e.g. PSM or Out 3" value="${esc(ui.connQuery || '')}" autocomplete="off">
       <select id="pt-target" size="7" style="width:100%" aria-label="Jack to connect to">${connectOptions(ref, ui.connQuery)}</select>
       <div class="toolbar"><button class="primary" data-act="connectPicked" data-ref="${ref}">Connect${rigMode() && ui.newKind === 'tie' ? ' tie line' : ''}</button><button data-act="pickMode" data-ref="${ref}">Pick on the rack…</button></div>
-      <p class="small muted" style="margin:0">Shortcut: with this jack selected, hold <b>Shift</b> and click another jack. New connections go in ${rigMode() ? '<b>the rig</b>' : `<b>${esc(patch().name)}</b>`}.</p>` : ''}
-    <div class="eyebrow">Cables</div>
-    ${conns.length ? conns.map((c) => `<div class="chips"><span class="pill ${c.layer === 'rig' ? 'rig' : 'patch'}">${c.kind === 'dante' ? 'Dante' : c.kind === 'tie' ? 'Tie line' : c.layer === 'rig' ? 'Rig' : 'Patch'}</span><span class="chip" data-act="selConn" data-id="${c.id}" style="cursor:pointer">${c.a === ref ? '→' : '←'} ${esc(portLong(c.a === ref ? c.b : c.a))}</span></div>`).join('') : '<p class="small muted" style="margin:0">Nothing plugged in.</p>'}
-    <div class="eyebrow">Signal comes from</div>${traceHTML(bpaths)}
-    <div class="eyebrow">Signal goes to</div>${traceHTML(fpaths)}`;
+      <p class="small muted" style="margin:0">Shortcut: with this jack selected, hold <b>Shift</b> and click another jack. New connections go in ${rigMode() ? '<b>the rig</b>' : `<b>${esc(patch().name)}</b>`}.</p>`) : ''}
+    ${sec('pt-cables', `Cables (${conns.length})`, conns.length ? conns.map((c) => `<div class="chips"><span class="pill ${c.layer === 'rig' ? 'rig' : 'patch'}">${c.kind === 'dante' ? 'Dante' : c.kind === 'tie' ? 'Tie line' : c.layer === 'rig' ? 'Rig' : 'Patch'}</span>${c.kind === 'dante' ? '' : `<span class="swl" style="--c:${(SIGNALS[connType(c)] || SIGNALS.other).color}" title="${esc(sigName(connType(c)))}"></span>`}<span class="chip" data-act="selConn" data-id="${c.id}" style="cursor:pointer">${c.a === ref ? '→' : '←'} ${esc(portLong(c.a === ref ? c.b : c.a))}</span></div>`).join('') : '<p class="small muted" style="margin:0">Nothing plugged in.</p>')}
+    ${sec('pt-trace', 'Signal trace', `<div class="small muted">Comes from</div>${traceHTML(bpaths)}<div class="small muted">Goes to</div>${traceHTML(fpaths)}`)}
+    ${more ? sec('pt-more', net ? 'Name &amp; IP address' : 'Custom name', more, net) : ''}`;
 }
 // jacks that `ref` could be cabled to, for the "Connect to" list
 function connectOptions(ref, q = '') {
@@ -1942,10 +2164,14 @@ function connectOptions(ref, q = '') {
 function connInspector(c) {
   if (!c) return inspectorHome();
   const colors = project.cableColors.map((x) => `<option value="${x.id}">${esc(x.name)}${x.length ? ' · ' + esc(x.length) : ''}</option>`).join('');
-  return `<div><div class="eyebrow">${c.kind === 'dante' ? 'Dante subscription' : c.kind === 'tie' ? 'In-wall tie line' : 'Cable'}</div>
+  const t = connType(c);
+  const typeOpts = `<option value="">Automatic (${esc(sigName(autoType(c)))})</option>` + Object.entries(SIGNALS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
+  return `<div><div class="eyebrow">${c.kind === 'dante' ? 'Dante subscription' : c.kind === 'tie' ? 'In-wall tie line' : 'Cable'}${c.kind === 'dante' ? '' : ' · ' + esc(sigName(t))}</div>
     <h3>${esc(portLabel(c.a))} → ${esc(portLabel(c.b))}</h3></div>
     <dl class="kv"><dt>From</dt><dd><a href="#" data-act="selPort" data-ref="${c.a}">${esc(portLong(c.a))}</a></dd><dt>To</dt><dd><a href="#" data-act="selPort" data-ref="${c.b}">${esc(portLong(c.b))}</a></dd></dl>
-    ${c.kind === 'cable' ? `<div class="row"><label for="cn-col">Cable</label><select id="cn-col" data-chg="connColor" data-id="${c.id}" data-val="${c.color || ''}"><option value="">Not set</option>${colors}</select></div>` : ''}
+    ${c.kind !== 'dante' ? `<div class="row"><label for="cn-type">Signal</label><select id="cn-type" data-chg="connType" data-id="${c.id}" data-val="${c.type || ''}">${typeOpts}</select></div>
+      <div class="row"><label for="cn-spec">Spec</label><input id="cn-spec" list="spec-list" value="${esc(c.spec || '')}" placeholder="e.g. ${esc((SPEC_SUGGEST[t] || ['3G', 'Cat6'])[0])}" data-chg="connSpec" data-id="${c.id}"><datalist id="spec-list">${(SPEC_SUGGEST[t] || []).map((x) => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>` : ''}
+    ${c.kind === 'cable' ? `<div class="row"><label for="cn-col">Cable colour</label><select id="cn-col" data-chg="connColor" data-id="${c.id}" data-val="${c.color || ''}"><option value="">Not set</option>${colors}</select></div>` : ''}
     ${c.kind !== 'dante' && rigMode() ? `<div class="row"><label for="cn-kind">Type</label><select id="cn-kind" data-chg="connKind" data-id="${c.id}" data-val="${c.kind}"><option value="cable">Cable</option><option value="tie">Tie line (installed)</option></select></div>` : ''}
     ${c.kind === 'tie' ? '<p class="small muted" style="margin:0">Tie lines are part of the rig and appear in every patch.</p>' : `<div class="row"><label for="cn-layer">Belongs to</label><select id="cn-layer" data-chg="connLayer" data-id="${c.id}" data-val="${c.layer === 'rig' ? 'rig' : 'patch'}"><option value="patch">${esc(patch().name)} only</option><option value="rig">The rig (every patch)</option></select></div>`}
     <div class="toolbar">${confirmBtn('delConn', 'Remove cable', `data-id="${c.id}"`)}</div>`;
@@ -1953,9 +2179,11 @@ function connInspector(c) {
 function rackInspector(r) {
   if (!r) return inspectorHome();
   const n = project.devices.filter((d) => d.place?.type === 'rack' && d.place.rackId === r.id).length;
-  if (!rigMode()) return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3><dl class="kv"><dt>Size</dt><dd>${r.ru}U</dd><dt>Gear</dt><dd>${n} items</dd></dl>${lockNote('rename, resize, reorder or delete it')}`;
+  const locName = project.locations.find((l) => l.id === r.locId)?.name;
+  if (!rigMode()) return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3><dl class="kv"><dt>Location</dt><dd>${esc(locName || 'Not in a location')}</dd><dt>Size</dt><dd>${r.ru}U</dd><dt>Gear</dt><dd>${n} items</dd></dl>${lockNote('rename, resize, move or delete it')}`;
   return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3>
     <div class="row"><label for="rk-name">Name</label><input id="rk-name" value="${esc(r.name)}" data-chg="rackField" data-f="name" data-id="${r.id}"></div>
+    <div class="row"><label for="rk-loc">Location</label><select id="rk-loc" data-chg="rackLoc" data-id="${r.id}" data-val="${r.locId && locName ? r.locId : ''}"><option value="">Not in a location</option>${project.locations.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></div>
     <div class="row"><label for="rk-ru">Size (U)</label><input id="rk-ru" type="number" min="1" max="60" value="${r.ru}" data-chg="rackField" data-f="ru" data-id="${r.id}"></div>
     <div class="toolbar"><button data-act="moveRack" data-id="${r.id}" data-d="-1">◀ Move left</button><button data-act="moveRack" data-id="${r.id}" data-d="1">Move right ▶</button></div>
     <div class="toolbar">${confirmBtn('delRack', n ? `Delete rack and its ${n} items` : 'Delete rack', `data-id="${r.id}"`)}</div>`;
@@ -1963,12 +2191,15 @@ function rackInspector(r) {
 function locInspector(l) {
   if (!l) return inspectorHome();
   const n = project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === l.id).length;
-  if (!rigMode()) return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3><dl class="kv"><dt>Gear</dt><dd>${n} items</dd></dl>${lockNote('rename, reorder or delete it, or add gear')}`;
+  const nr = project.racks.filter((r) => r.locId === l.id).length;
+  if (!rigMode()) return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3><dl class="kv"><dt>Racks</dt><dd>${nr}</dd><dt>Loose gear</dt><dd>${n} items</dd></dl>${lockNote('rename, reorder or delete it, or add racks and gear')}`;
   return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3>
-    <p class="small muted" style="margin:0">Locations hold gear that isn't in a rack: floor pockets, wall plates, the console, a stage-box on a shelf.</p>
+    <p class="small muted" style="margin:0">A location is a place in the building (Stage, FOH, Backstage, the amp room). It holds racks, plus loose gear like floor pockets, wall plates and the console.</p>
     <div class="row"><label for="lc-name">Name</label><input id="lc-name" value="${esc(l.name)}" data-chg="locField" data-id="${l.id}"></div>
     <div class="toolbar"><button data-act="moveLoc" data-id="${l.id}" data-d="-1">▲ Move up</button><button data-act="moveLoc" data-id="${l.id}" data-d="1">Move down ▼</button></div>
-    <div class="toolbar"><button data-act="locAdd" data-id="${l.id}">+ Gear</button>${confirmBtn('delLoc', n ? `Delete location and its ${n} items` : 'Delete location', `data-id="${l.id}"`)}</div>`;
+    <div class="toolbar"><button data-act="addRack" data-loc="${l.id}">+ Rack here</button><button data-act="locAdd" data-id="${l.id}">+ Gear</button></div>
+    <div class="toolbar">${confirmBtn('delLoc', n ? `Delete location and its ${n} loose items` : 'Delete location', `data-id="${l.id}"`)}</div>
+    ${nr ? `<p class="small muted" style="margin:0">Deleting keeps its ${nr} rack${nr > 1 ? 's' : ''}; they move to “not in a location”.</p>` : ''}`;
 }
 function sourceInspector(s) {
   if (!s) return inspectorHome();
@@ -2067,7 +2298,7 @@ function listView() {
     <div class="card"><div class="card-head"><h3>Outputs</h3><span class="muted small">Monitor mixes, mains, stream feeds…</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
       <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Leaves on</th><th>Goes to</th><th>Person</th><th>Notes</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="8" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
     </div>
-    <div class="editor-grid">
+    ${sec('list-settings', 'Groups, custom columns &amp; cable colours', `<div class="editor-grid">
       <div class="card"><div class="card-head"><h3>Groups &amp; row colours</h3><span class="spacer"></span><button data-act="addGroup">+ Group</button></div>
         ${project.groups.map((g) => `<div class="inline-fields" style="gap:6px;align-items:center"><input type="color" id="gc-${g.id}" value="${esc(g.color)}" data-chg="groupField" data-id="${g.id}" data-f="color"><input id="gn-${g.id}" value="${esc(g.name)}" data-chg="groupField" data-id="${g.id}" data-f="name" style="flex:1">${confirmBtn('delGroup', '✕', `data-id="${g.id}"`)}</div>`).join('')}
       </div>
@@ -2077,7 +2308,7 @@ function listView() {
       <div class="card"><div class="card-head"><h3>Cable colours</h3><span class="spacer"></span><button data-act="addCableColor">+ Colour</button></div>
         ${project.cableColors.map((c) => `<div class="inline-fields" style="gap:6px;align-items:center;flex-wrap:nowrap"><input type="color" id="cc-${c.id}" value="${esc(c.hex)}" data-chg="ccField" data-id="${c.id}" data-f="hex"><input id="ccn-${c.id}" value="${esc(c.name)}" data-chg="ccField" data-id="${c.id}" data-f="name" style="flex:1;min-width:0"><input id="ccl-${c.id}" value="${esc(c.length)}" data-chg="ccField" data-id="${c.id}" data-f="length" style="width:60px" placeholder="length">${confirmBtn('delCC', '✕', `data-id="${c.id}"`)}</div>`).join('')}
       </div>
-    </div>
+    </div>`, false)}
   </section>`;
 }
 
@@ -2112,11 +2343,38 @@ function danteView() {
       return `<tr><td class="num">${i + 1}</td><td><input id="tn-${d.id}-${i}" value="${esc(d.portNames?.[`${g.id}:${i + 1}`] || '')}" placeholder="—" data-chg="portName" data-ref="${r}" ${rigMode() ? '' : 'disabled'}></td><td class="comp">${src ? esc(src.name) : ''}</td></tr>`;
     }).join('')}</tbody></table></div></details>`).join('');
   return `<section class="view">
-    <div class="card"><div class="card-head"><h2>Dante routing</h2><span class="spacer"></span>${modeSeg()}</div>
+    <div class="card"><div class="card-head"><h2>Dante &amp; IP</h2><span class="spacer"></span>${modeSeg()}</div>
+      ${sec('ip-table', 'IP addresses', ipTableHTML())}
+    </div>
+    <div class="card"><div class="card-head"><h3>Dante routing</h3></div>
       <p class="small muted" style="margin:0">${rigMode() ? 'Routes you set now are permanent (every patch). Channel names can be edited.' : `Routes you set now apply to ${esc(patch().name)} only. Switch to The rig to make permanent routes or rename channels.`} Click a “Subscribed to” cell to choose which transmitter feeds that receive channel. The signal trace and Console Ch columns follow these routes. Importing and exporting Dante Controller preset files is planned for a later phase.</p></div>
-    <h3>Receivers</h3>${rxHTML}
-    <h3>Transmitters</h3>${txHTML}
+    ${sec('dante-rx', 'Receivers', rxHTML)}
+    ${sec('dante-tx', 'Transmitters', txHTML, false)}
   </section>`;
+}
+function ipTableHTML() {
+  const rows = [];
+  for (const d of project.devices) for (const r of netPorts(d)) rows.push([d, r]);
+  if (!rows.length) return '<p class="small muted" style="margin:0">No network jacks in the rig yet.</p>';
+  const dup = new Map();
+  for (const [, r] of rows) { const ip = ipOf(r).split('/')[0]; if (ip) dup.set(ip, (dup.get(ip) || 0) + 1); }
+  return `<p class="small muted" style="margin:0">${rigMode() ? 'Type an address next to each network jack. Duplicates and typos show up in Checks.' : 'Switch to The rig to edit addresses.'}</p>
+    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Gear</th><th>Jack</th><th>IP address</th><th>Note</th></tr></thead><tbody>${rows.map(([d, r]) => {
+      const p = port(r); const key = `${p.g.id}:${p.n}`; const v = d.ips?.[key] || {};
+      const bad = v.ip && (!IP_RE.test(v.ip) || dup.get(v.ip.split('/')[0]) > 1);
+      return `<tr><td>${esc(d.name)}</td><td>${esc(p.g.label)} ${esc(portNum(p))}</td>
+        <td>${rigMode() ? `<input id="ipt-${d.id}-${p.g.id}-${p.n}" class="mono ${bad ? 'bad' : ''}" value="${esc(v.ip || '')}" placeholder="—" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="ip">` : `<span class="mono ${bad ? 'bad' : ''}">${esc(v.ip || '—')}</span>`}</td>
+        <td>${rigMode() ? `<input id="iptn-${d.id}-${p.g.id}-${p.n}" value="${esc(v.note || '')}" placeholder="—" data-chg="devIp" data-dev="${d.id}" data-k="${key}" data-f="note">` : esc(v.note || '')}</td></tr>`;
+    }).join('')}</tbody></table></div>
+    <div class="toolbar"><button data-act="copyIps">Copy IP list (CSV)</button></div>`;
+}
+function ipListRows() {
+  const out = [];
+  for (const d of project.devices) for (const r of netPorts(d)) {
+    const p = port(r); const v = d.ips?.[`${p.g.id}:${p.n}`];
+    if (v?.ip) out.push([d.name, `${p.g.label} ${portNum(p)}`, v.ip, v.note || '']);
+  }
+  return out;
 }
 let txOptCache = null;
 function danteTxOptions(txDevs) {
@@ -2206,6 +2464,10 @@ function paperHTML() {
       body += '</div>';
     }
   }
+  if (pr.include.ipList) {
+    const rows = ipListRows();
+    if (rows.length) body += `<h4>IP addresses</h4><table><thead><tr>${['Gear', 'Jack', 'IP address', 'Note'].map((h) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td class="c" style="font-family:var(--f-mono)">${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')}</tbody></table>`;
+  }
   if (pr.include.pull) {
     const mics = new Map(), cables = new Map();
     for (const s of pt.sources) {
@@ -2237,11 +2499,9 @@ function printView() {
       <div class="print-opts card">
         <div class="card-head"><h3>Layout</h3></div>
         <div class="seg"><span>Preset</span><button data-act="preset" data-p="volunteer" class="${pr.preset === 'volunteer' ? 'on' : ''}">Volunteer</button><button data-act="preset" data-p="tech" class="${pr.preset === 'tech' ? 'on' : ''}">Technical</button></div>
-        <div class="eyebrow">Columns (order top to bottom)</div>
-        <div class="colpick">${cols.map((c, i) => `<div><label><input type="checkbox" id="pc-${i}" data-chg="printCol" data-k="${esc(c.key)}" ${c.on ? 'checked' : ''}> ${esc(colLabel(c.key))}</label><button data-act="printColMove" data-k="${esc(c.key)}" data-d="-1" aria-label="Move up">↑</button><button data-act="printColMove" data-k="${esc(c.key)}" data-d="1" aria-label="Move down">↓</button></div>`).join('')}</div>
-        <div class="eyebrow">Include</div>
-        <div style="display:grid;gap:4px">${inc('inputs', 'Input list')}${inc('outputs', 'Output list')}${inc('stageMap', 'Stage box map')}${inc('pull', 'Equipment pull list')}</div>
-        <div class="eyebrow">Look</div>
+        ${sec('pr-cols', 'Columns (order top to bottom)', `<div class="colpick">${cols.map((c, i) => `<div><label><input type="checkbox" id="pc-${i}" data-chg="printCol" data-k="${esc(c.key)}" ${c.on ? 'checked' : ''}> ${esc(colLabel(c.key))}</label><button data-act="printColMove" data-k="${esc(c.key)}" data-d="-1" aria-label="Move up">↑</button><button data-act="printColMove" data-k="${esc(c.key)}" data-d="1" aria-label="Move down">↓</button></div>`).join('')}</div>`)}
+        ${sec('pr-inc', 'Include', `<div style="display:grid;gap:4px">${inc('inputs', 'Input list')}${inc('outputs', 'Output list')}${inc('stageMap', 'Stage box map')}${inc('pull', 'Equipment pull list')}${inc('ipList', 'IP address list')}</div>`)}
+        ${sec('pr-look', 'Look', `
         <label class="field"><span>Title</span><input id="pr-title" value="${esc(pr.title)}" data-chg="printField" data-f="title"></label>
         <label class="field"><span>Header name (shown when there's no logo)</span><input id="pr-org" value="${esc(pr.org)}" data-chg="printField" data-f="org"></label>
         <div class="inline-fields"><label class="field"><span>Header colour</span><input type="color" id="pr-hc" value="${esc(pr.headerColor)}" data-chg="printField" data-f="headerColor"></label>
@@ -2249,7 +2509,7 @@ function printView() {
         <div class="inline-fields"><label class="field"><span>Paper</span><select id="pr-or" data-chg="printField" data-f="orientation" data-val="${pr.orientation}" style="width:130px"><option value="portrait">Letter portrait</option><option value="landscape">Letter landscape</option></select></label>
           <label class="field"><span>Row colours</span><select id="pr-cm" data-chg="printField" data-f="colorMode" data-val="${pr.colorMode}" style="width:150px"><option value="cells">Source &amp; Mic cells</option><option value="row">Whole row</option><option value="none">None</option></select></label></div>
         <label class="tog"><input type="checkbox" id="pr-merge" data-chg="printField" data-f="mergePerson" ${pr.mergePerson ? 'checked' : ''}> Merge repeated names in Person</label>
-        <div class="toolbar"><button data-act="pickLogo">${pr.logo ? 'Replace logo' : 'Add logo'}</button>${pr.logo ? '<button data-act="clearLogo">Remove logo</button>' : ''}</div>
+        <div class="toolbar"><button data-act="pickLogo">${pr.logo ? 'Replace logo' : 'Add logo'}</button>${pr.logo ? '<button data-act="clearLogo">Remove logo</button>' : ''}</div>`, false)}
         <div class="eyebrow">Output</div>
         <div class="toolbar"><button class="primary" data-act="print">Print / Save as PDF</button><button data-act="csv">Download CSV</button><button data-act="copyCsv">Copy CSV</button></div>
         ${inFrame ? '<p class="small muted" style="margin:0">This preview inside Claude blocks printing and downloads. They work when the app runs in its own browser tab or from the file on your Mac.</p>' : '<p class="small muted" style="margin:0">To make a PDF, choose “Save as PDF” in the print dialog.</p>'}
@@ -2298,6 +2558,7 @@ function defEditor(d) {
     <td><select id="gface-${i}" data-chg="grpField" data-i="${i}" data-f="face">${opt({ front: 'Front', rear: 'Rear', dante: 'Dante', virtual: 'Virtual' }, g.face)}</select></td>
     <td><input id="grows-${i}" type="number" min="0" max="8" value="${g.rows || ''}" placeholder="auto" data-chg="grpField" data-i="${i}" data-f="rows" style="width:56px"></td>
     <td><input id="gnames-${i}" value="${esc((g.names || []).join(', '))}" placeholder="1, 2, 3…" data-chg="grpField" data-i="${i}" data-f="names" style="min-width:90px"></td>
+    <td>${isPhysical(g) ? `<select id="gsig-${i}" data-chg="grpField" data-i="${i}" data-f="signal" data-val="${g.signal || ''}"><option value="">Auto: ${esc(sigName(inferSignal(g)))}</option>${Object.entries(SIGNALS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('')}</select>` : '<span class="muted small">—</span>'}</td>
     <td style="text-align:center"><input type="checkbox" id="gsrc-${i}" data-chg="grpField" data-i="${i}" data-f="src" ${g.src ? 'checked' : ''}></td>
     <td><div class="rowbtns"><button data-act="grpMove" data-i="${i}" data-d="-1">↑</button><button data-act="grpMove" data-i="${i}" data-d="1">↓</button>${confirmBtn('grpDel', '✕', `data-i="${i}"`)}</div></td></tr>`).join('');
   const gopt = (v) => d.groups.map((g) => `<option value="${g.id}" ${g.id === v ? 'selected' : ''}>${esc(g.label)}</option>`).join('');
@@ -2315,10 +2576,10 @@ function defEditor(d) {
     <label class="field"><span>Reference / notes</span><input id="df-ref" value="${esc(d.ref || '')}" data-chg="defField" data-f="ref"></label>
     <div class="card-head"><h3>Connectors &amp; channels</h3><span class="spacer"></span><button data-act="grpAdd">+ Port group</button></div>
     <p class="small muted" style="margin:0">One row per set of identical jacks. “Sources” marks jacks a mic or instrument can be assigned to in the patchlist. “Dante” and “Virtual” groups aren't drawn on the panel.</p>
-    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Label</th><th>Count</th><th>Connector</th><th>Direction</th><th>Side</th><th>Rows</th><th>Names</th><th>Sources</th><th></th></tr></thead><tbody>${groupRows}</tbody></table></div>
-    <div class="card-head"><h3>Internal routing</h3><span class="spacer"></span><button data-act="linkAdd" ${d.groups.length < 2 ? 'disabled' : ''}>+ Route</button></div>
-    <p class="small muted" style="margin:0">What feeds what inside the box, number for number. Example: In 1 → Dante Tx 1 means input 5 comes out on Dante Tx 5.</p>
-    <div class="tbl-wrap"><table class="grid"><thead><tr><th>From</th><th>Start</th><th></th><th>To</th><th>Start</th><th>How many</th><th></th></tr></thead><tbody>${linkRows || '<tr><td colspan="7" class="muted small">No internal routing.</td></tr>'}</tbody></table></div>
+    <div class="tbl-wrap"><table class="grid"><thead><tr><th>Label</th><th>Count</th><th>Connector</th><th>Direction</th><th>Side</th><th>Rows</th><th>Names</th><th>Signal</th><th>Sources</th><th></th></tr></thead><tbody>${groupRows}</tbody></table></div>
+    ${sec('lib-routing', 'Internal routing', `<div class="toolbar"><span class="small muted" style="flex:1">What feeds what inside the box, number for number. Example: In 1 → Dante Tx 1 means input 5 comes out on Dante Tx 5.</span><button data-act="linkAdd" ${d.groups.length < 2 ? 'disabled' : ''}>+ Route</button></div>
+    <div class="tbl-wrap"><table class="grid"><thead><tr><th>From</th><th>Start</th><th></th><th>To</th><th>Start</th><th>How many</th><th></th></tr></thead><tbody>${linkRows || '<tr><td colspan="7" class="muted small">No internal routing.</td></tr>'}</tbody></table></div>`, false)}
+    ${sec('lib-photos', 'Photos', photoHTML(d), !!d.images?.front || !!d.images?.rear)}
     <div class="card-head"><h3>Panel layout</h3><span class="muted small">Drag a block of ports to move it. It snaps to a ${GRID}px grid.</span></div>
     <div style="overflow-x:auto"><div style="display:grid;gap:14px">${['front', 'rear'].map((face) => {
       const sz = devSize(d); const lay = layoutFace(d, face, sz.w, sz.h);
@@ -2369,7 +2630,7 @@ const actions = {
   dismissSample: () => commit('', (p) => { p.sample = false; }),
   layer: (el) => { ui.layer = el.dataset.layer; render(); },
   flip: (el) => { const next = { front: 'rear', rear: 'both', both: 'front' }; ui.faces[el.dataset.id] = next[ui.faces[el.dataset.id] || 'front']; render(); },
-  addRack: () => { const id = uid('r'); commit('Added a rack', (p) => p.racks.push({ id, name: `Rack ${p.racks.length + 1}`, ru: 12 })); select({ kind: 'rack', id }); },
+  addRack: (el) => { const id = uid('r'); const locId = el?.dataset?.loc || undefined; commit('Added a rack', (p) => p.racks.push({ id, name: `Rack ${p.racks.length + 1}`, ru: 12, locId })); select({ kind: 'rack', id }); },
   addLoc: () => { const id = uid('l'); commit('Added a location', (p) => p.locations.push({ id, name: `Location ${p.locations.length + 1}` })); select({ kind: 'loc', id }); },
   slot: (el) => select({ kind: 'slot', rackId: el.dataset.rack, u: +el.dataset.u, side: el.dataset.side }),
   locAdd: (el) => { ui.tab = 'rack'; select({ kind: 'locAdd', id: el.dataset.id }); },
@@ -2414,7 +2675,16 @@ const actions = {
     if (ru > 60) return;
     commit(`Resized ${r.name} to ${ru}U`, () => { r.ru = ru; });
   },
-  moveRack: (el) => commit('Reordered racks', (p) => moveIn(p.racks, el.dataset.id, +el.dataset.d)),
+  moveRack: (el) => commit('Reordered racks', (p) => {
+    // swap with the next rack in the same location
+    const r = p.racks.find((x) => x.id === el.dataset.id); const locIds = new Set(p.locations.map((l) => l.id));
+    const same = (x) => (locIds.has(x.locId) ? x.locId : null) === (locIds.has(r.locId) ? r.locId : null);
+    const i = p.racks.indexOf(r); const d = +el.dataset.d;
+    for (let j = i + d; j >= 0 && j < p.racks.length; j += d) if (same(p.racks[j])) { [p.racks[i], p.racks[j]] = [p.racks[j], p.racks[i]]; break; }
+  }),
+  addPhoto: (el) => { ui.photoTarget = { defId: el.dataset.def, face: el.dataset.face }; $('#file-photo').click(); },
+  removePhoto: (el) => commit('Removed a photo', (p) => { const d = p.library.find((x) => x.id === el.dataset.def); if (d?.images) delete d.images[el.dataset.face]; }),
+  copyIps: () => copyText(['Gear,Jack,IP address,Note', ...ipListRows().map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n'), 'IP list copied.'),
   moveLoc: (el) => commit('Reordered locations', (p) => moveIn(p.locations, el.dataset.id, +el.dataset.d)),
   dupDev: (el) => {
     const d = idx.dev.get(el.dataset.id); const def = idx.def.get(d.defId);
@@ -2429,7 +2699,7 @@ const actions = {
   delDev: (el) => { const d = idx.dev.get(el.dataset.id); ui.armed = null; commit(`Removed ${d.name}`, (p) => { p.devices = p.devices.filter((x) => x.id !== d.id); p.connections = p.connections.filter((c) => !c.a.startsWith(d.id + '.') && !c.b.startsWith(d.id + '.')); }); select(null); },
   delConn: (el) => { ui.armed = null; commit('Removed a cable', (p) => { p.connections = p.connections.filter((c) => c.id !== el.dataset.id); }); select(null); },
   delRack: (el) => { ui.armed = null; const id = el.dataset.id; commit('Deleted a rack', (p) => { const gone = new Set(p.devices.filter((d) => d.place.type === 'rack' && d.place.rackId === id).map((d) => d.id)); p.racks = p.racks.filter((r) => r.id !== id); p.devices = p.devices.filter((d) => !gone.has(d.id)); p.connections = p.connections.filter((c) => !gone.has(parseRef(c.a)?.devId) && !gone.has(parseRef(c.b)?.devId)); }); select(null); },
-  delLoc: (el) => { ui.armed = null; const id = el.dataset.id; commit('Deleted a location', (p) => { const gone = new Set(p.devices.filter((d) => d.place.type === 'loc' && d.place.locId === id).map((d) => d.id)); p.locations = p.locations.filter((r) => r.id !== id); p.devices = p.devices.filter((d) => !gone.has(d.id)); p.connections = p.connections.filter((c) => !gone.has(parseRef(c.a)?.devId) && !gone.has(parseRef(c.b)?.devId)); }); select(null); },
+  delLoc: (el) => { ui.armed = null; const id = el.dataset.id; commit('Deleted a location', (p) => { for (const r of p.racks) if (r.locId === id) delete r.locId; const gone = new Set(p.devices.filter((d) => d.place.type === 'loc' && d.place.locId === id).map((d) => d.id)); p.locations = p.locations.filter((r) => r.id !== id); p.devices = p.devices.filter((d) => !gone.has(d.id)); p.connections = p.connections.filter((c) => !gone.has(parseRef(c.a)?.devId) && !gone.has(parseRef(c.b)?.devId)); }); select(null); },
   assign: (el) => {
     const sid = $('#pt-assign').value; if (!sid) return; const ref = el.dataset.ref;
     commit(`Assigned ${findSrc(sid)?.name} to ${portLabel(ref)}`, () => { const s = findSrc(sid); s.ports = (s.ports || []).filter(Boolean); if (s.ports.length >= 2) s.ports[1] = ref; else if (s.ports.length === 1 && s.ports[0] !== ref) s.ports[0] = ref; else s.ports = [ref]; });
@@ -2519,7 +2789,7 @@ const actions = {
   showHistory: () => { closeMenu(); openModal('Change history', `<div class="hist">${project.history.slice(0, 300).map((h) => `<div><span class="mono small muted">${esc(new Date(h.t).toLocaleString('en-CA'))}</span><span>${esc(h.msg)}${h.patch ? ` <span class="muted small">· ${esc(h.patch)}</span>` : ''}</span></div>`).join('') || '<p class="muted">No changes yet.</p>'}</div>`); },
   theme: () => { closeMenu(); const r = document.documentElement; const cur = r.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); r.dataset.theme = cur === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('patchrack.theme', r.dataset.theme); } catch { } requestAnimationFrame(drawCables); },
 };
-function closeMenu() { $('#file-menu').open = false; }
+function closeMenu() { $('#file-menu').open = false; const vm = $('#view-menu'); if (vm) vm.open = false; ui.viewOpen = false; }
 function revealFace(p) {
   const id = p.dev.place.type === 'rack' ? p.dev.place.rackId : p.dev.place.locId;
   if ((p.g.face === 'front' || p.g.face === 'rear') && ui.faces[id] !== 'both') ui.faces[id] = p.g.face;
@@ -2555,6 +2825,19 @@ const changes = {
   },
   normal: (el) => commit('Changed normalling', () => { const d = project.devices.find((y) => y.id === ui.sel.id); (d.normalling ||= {})[el.dataset.n] = el.value; }),
   portName: (el) => { const p = port(el.dataset.ref); commit(`Renamed ${portShort(el.dataset.ref)}`, () => { const d = project.devices.find((y) => y.id === p.dev.id); const k = `${p.g.id}:${p.n}`; if (el.value.trim()) d.portNames[k] = el.value.trim(); else delete d.portNames[k]; }); },
+  connType: (el) => commit('Changed a cable’s signal type', (p) => { const c = p.connections.find((x) => x.id === el.dataset.id); if (el.value) c.type = el.value; else delete c.type; }),
+  connSpec: (el) => commit('Changed a cable’s spec', (p) => { const c = p.connections.find((x) => x.id === el.dataset.id); if (el.value.trim()) c.spec = el.value.trim(); else delete c.spec; }),
+  rackLoc: (el) => commit('Moved a rack to a location', (p) => { const r = p.racks.find((x) => x.id === el.dataset.id); if (el.value) r.locId = el.value; else delete r.locId; }),
+  devIp: (el) => {
+    const d = project.devices.find((x) => x.id === el.dataset.dev); const v = el.value.trim();
+    if (el.dataset.f === 'ip' && v && !IP_RE.test(v)) toast(`“${v}” doesn't look like an IP address (e.g. 192.168.1.10). Saved anyway; it shows in Checks.`, 5000);
+    commit(`Set ${el.dataset.f === 'ip' ? 'IP' : 'IP note'} on ${d.name}`, () => {
+      const cur = { ...(d.ips[el.dataset.k] || {}) }; if (v) cur[el.dataset.f] = v; else delete cur[el.dataset.f];
+      if (cur.ip || cur.note) d.ips[el.dataset.k] = cur; else delete d.ips[el.dataset.k];
+    });
+  },
+  viewField: (el) => { project.view[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; save(); render(); },
+  typeVis: (el) => { if (el.checked) delete project.view.hideTypes[el.dataset.t]; else project.view.hideTypes[el.dataset.t] = true; save(); render(); },
   connKind: (el) => commit(el.value === 'tie' ? 'Made a cable into a tie line' : 'Made a tie line into a cable', (p) => {
     const c = p.connections.find((x) => x.id === el.dataset.id); c.kind = el.value;
     if (c.kind === 'tie') { c.layer = 'rig'; ui.showTies = true; }
@@ -2602,6 +2885,7 @@ const changes = {
     else if (f === 'rows') { if (+el.value > 0) g.rows = +el.value; else delete g.rows; }
     else if (f === 'names') { const n = el.value.split(',').map((x) => x.trim()).filter(Boolean); if (n.length) g.names = n; else delete g.names; }
     else if (f === 'src') g.src = el.checked;
+    else if (f === 'signal') { if (el.value) g.signal = el.value; else delete g.signal; }
     else { if (f === 'face' && g.face !== el.value) delete g.pos; g[f] = el.value; }
     layoutCache.clear();
   }),
@@ -2649,6 +2933,8 @@ document.addEventListener('dblclick', (e) => {
 });
 document.addEventListener('toggle', (e) => {
   const d = e.target; if (d.classList?.contains('dgrp') && d.dataset.dev) (ui.danteOpen ||= {})[d.dataset.dev] = d.open;
+  if (d.classList?.contains('sec') && d.dataset.sec) { secState[d.dataset.sec] = d.open; try { localStorage.setItem('patchrack.sections', JSON.stringify(secState)); } catch { /* storage unavailable */ } }
+  if (d.id === 'view-menu') ui.viewOpen = d.open;
 }, true);
 document.addEventListener('keydown', (e) => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '');
@@ -2680,6 +2966,15 @@ $('#file-lib').addEventListener('change', (e) => readFile(e.target, (txt) => {
     layoutCache.clear(); toast(`Library imported: ${added} new, ${updated} updated.`);
   } catch { toast("That file isn't a gear library."); }
 }));
+$('#file-photo').addEventListener('change', async (e) => {
+  const f = e.target.files?.[0]; const t = ui.photoTarget; e.target.value = ''; if (!f || !t) return;
+  try {
+    const url = await resizeImage(f);
+    const def = project.library.find((d) => d.id === t.defId);
+    commit(`Added a ${t.face} photo to ${def.model}`, () => { def.images ||= {}; def.images[t.face] = url; });
+    toast(`Photo added (${Math.round(url.length * 0.75 / 1024)} KB).`);
+  } catch { toast("That file couldn't be read as an image. Try a JPG or PNG."); }
+});
 $('#file-logo').addEventListener('change', (e) => {
   const f = e.target.files?.[0]; if (!f) return;
   if (f.size > 1.5e6) { toast('Please use a logo image under 1.5 MB.'); return; }

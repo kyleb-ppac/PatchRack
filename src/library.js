@@ -99,6 +99,7 @@ const DEFAULT_LIBRARY = [
       G('aesi', 'AES In', 1, 'xlr', 'in', 'rear'),
       G('aeso', 'AES Out', 1, 'xlr', 'out', 'rear'),
       G('net', 'Dante card', 2, 'rj45', 'io', 'rear', { names: ['Pri', 'Sec'] }),
+      G('ctl', 'Network', 1, 'rj45', 'io', 'rear'),
       G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
       G('drx', 'Dante Rx', 64, 'dante', 'in', 'dante'),
       G('dtx', 'Dante Tx', 64, 'dante', 'out', 'dante'),
@@ -150,9 +151,10 @@ const DEFAULT_LIBRARY = [
     form: 'rack', ru: 1, width: 'full', watts: 60, verified: false,
     ref: 'Network switch. Port count/type approximate (24 RJ45 + 6 SFP shown).',
     groups: [
-      G('eth', 'Port', 24, 'rj45', 'io', 'front', { rows: 2 }),
-      G('sfp', 'SFP', 6, 'sfp', 'io', 'front', { rows: 2 }),
+      G('eth', 'Port', 24, 'rj45', 'io', 'front', { rows: 2, ip: false }),
+      G('sfp', 'SFP', 6, 'sfp', 'io', 'front', { rows: 2, ip: false }),
       G('pwr', 'AC', 1, 'iec', 'in', 'rear'),
+      G('mgmt', 'Management', 1, 'rj45', 'io', 'virtual'),
     ],
     links: [],
   },
@@ -230,7 +232,35 @@ const CONN_NAMES = {
   xlr: 'XLR', combo: 'XLR/TRS combo', trs: '1/4" TRS', headphone: 'Headphone', ethercon: 'etherCON', rj45: 'RJ45',
   bnc: 'BNC', sfp: 'SFP', phoenix: 'Phoenix', speakon: 'speakON', iec: 'IEC', nema: 'NEMA 5-15', dc: 'DC',
   powercon: 'powerCON', usb: 'USB', hdmi: 'HDMI', dmx5: 'DMX 5-pin', dmx3: 'DMX 3-pin',
+  rca: 'RCA', mini: '3.5 mm', usbc: 'USB-C', thunderbolt: 'Thunderbolt', displayport: 'DisplayPort',
+  lc: 'Fiber LC', opticalcon: 'opticalCON', toslink: 'TOSLINK',
   dante: 'Dante channel', rf: 'Wireless channel', channel: 'Console channel',
+};
+
+// Signal types: what a cable carries. Worked out from the jacks (see
+// inferSignal in app.js) unless a port group or a cable says otherwise.
+const SIGNALS = {
+  analog: { name: 'Analog audio', color: '#9fb3c8' },
+  aes: { name: 'AES/EBU digital audio', color: '#b98be6' },
+  speaker: { name: 'Speaker', color: '#8d939a', w: 4 },
+  network: { name: 'Network (Dante, control)', color: '#4fc07f' },
+  fiber: { name: 'Fiber', color: '#ff9d2e' },
+  power: { name: 'Power', color: '#e5534b', w: 3.6 },
+  sdi: { name: 'SDI video', color: '#f4cf3a' },
+  hdmi: { name: 'HDMI', color: '#4d9be6' },
+  dmx: { name: 'DMX', color: '#d070c9' },
+  rf: { name: 'Antenna / RF', color: '#c08850', dash: '9 4' },
+  usb: { name: 'USB', color: '#c6ccd3', dash: '3 3' },
+  thunderbolt: { name: 'Thunderbolt', color: '#eeeeee', dash: '7 2 2 2' },
+  control: { name: 'Control / GPIO / sync', color: '#93a1af', dash: '1 4' },
+  other: { name: 'Other', color: '#9aa3ad' },
+};
+const SPEC_SUGGEST = {
+  analog: ['Mic', 'Line', 'Star-quad', 'Multicore'], aes: ['110 Ω AES'], speaker: ['NL4', 'NL2', '12 AWG', '14 AWG'],
+  network: ['Cat5e', 'Cat6', 'Cat6A', 'Shielded Cat6'], fiber: ['Single-mode', 'Multi-mode OM3', 'Multi-mode OM4'],
+  power: ['IEC', 'Edison', 'powerCON', '14 AWG', '16 AWG'], sdi: ['3G', '6G', '12G', 'HD'], hdmi: ['2.0', '2.1', 'Active'],
+  dmx: ['5-pin', '3-pin', 'Cat5 DMX'], rf: ['RG-8X', 'RG-58', 'LMR-400'], usb: ['USB 2.0', 'USB 3.x', 'USB-C'],
+  thunderbolt: ['TB3', 'TB4', 'Active'], control: ['GPIO', 'RS-232', 'RS-485', 'Word clock'],
 };
 
 const DEFAULT_CABLE_COLORS = [
@@ -254,7 +284,7 @@ function buildSample() {
     cableColors: JSON.parse(JSON.stringify(DEFAULT_CABLE_COLORS)),
     print: defaultPrint(), history: [],
   };
-  const rack = (name, ru) => { const r = { id: uid('r'), name, ru }; p.racks.push(r); return r; };
+  const rack = (name, ru, locId) => { const r = { id: uid('r'), name, ru, locId }; p.racks.push(r); return r; };
   const loc = (name) => { const l = { id: uid('l'), name }; p.locations.push(l); return l; };
   const dev = (defId, name, short, place, extra = {}) => {
     const d = { id: uid('d'), defId, name, short, place, portNames: {}, labels: {}, ...extra };
@@ -267,11 +297,16 @@ function buildSample() {
   const ref = (d, g, n) => `${d.id}.${g}:${n}`;
 
   // Racks (layouts are placeholders - move things to match the real racks)
-  const stA = rack('Stage Rack A', 8);
-  const stB = rack('Stage Rack B', 6);
-  const back = rack('Backstage', 4);
-  const rf = rack('RF / IEM', 8);
-  const amp = rack('Amp Rack', 7);
+  // Locations (racks and loose gear live in these)
+  const stage = loc('Stage');
+  const backLoc = loc('Backstage');
+  const foh = loc('FOH');
+
+  const stA = rack('Stage Rack A', 8, stage.id);
+  const stB = rack('Stage Rack B', 6, stage.id);
+  const back = rack('Backstage', 4, backLoc.id);
+  const rf = rack('RF / IEM', 8, foh.id);
+  const amp = rack('Amp Rack', 7, foh.id);
 
   const rioA = dev('yamaha-rio3224-d2', 'Rio A', 'RIO A', R(stA, 1));
   dev('luminex-gigacore30i', 'GigaCore 30i', 'GC30', R(stA, 6));
@@ -302,8 +337,7 @@ function buildSample() {
   dev('cyberpower-or500lcdrm1u', 'UPS Amp', 'UPS AMP', R(amp, 6));
 
   // Locations
-  const pockets = loc('Stage floor pockets');
-  const foh = loc('FOH');
+  const pockets = stage;
   const avantis = dev('ah-avantis', 'Avantis', 'AVANTIS', L(foh));
 
   const pocketDefs = [
@@ -406,6 +440,6 @@ function defaultPrint() {
       { key: 'consoleCh', on: false }, { key: 'cable', on: false }, { key: 'group', on: false },
       { key: 'path', on: false }, { key: 'notes', on: false },
     ],
-    include: { inputs: true, outputs: false, stageMap: true, pull: false },
+    include: { inputs: true, outputs: false, stageMap: true, pull: false, ipList: false },
   };
 }
