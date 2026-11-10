@@ -517,11 +517,15 @@ td.mx-cell.on::after { content: ""; display: inline-block; width: 12px; height: 
 td.mx-cell.on.pt::after { background: var(--mx-pt); }
 td.mx-cell.pending { box-shadow: inset 0 0 0 2px var(--trace); }
 .mx-count { font: 600 10px/1 var(--f-mono); color: var(--mx-rig); }
+/* rows left off the printout */
+table.grid tr.noprint td { opacity: .55; }
+table.grid tr.noprint td:nth-last-child(2), table.grid tr.noprint td:last-child { opacity: 1; }
+table.grid td.c { text-align: center; }
 
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.13</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.14</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -567,9 +571,10 @@ td.mx-cell.pending { box-shadow: inset 0 0 0 2px var(--trace); }
 <input type="file" id="file-lib" accept=".json,application/json" hidden>
 <input type="file" id="file-logo" accept="image/*" hidden>
 <input type="file" id="file-photo" accept="image/*" hidden>
+<input type="file" id="file-dante" accept=".xml,text/xml,application/xml" hidden>
 
 <script>
-const APP_VERSION = '0.0.13';
+const APP_VERSION = '0.0.14';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -2614,7 +2619,7 @@ function listView() {
     const st = (s.ports || []).length > 1;
     const chs = sourceChannels(s);
     const sel = ui.sel?.kind === 'source' && ui.sel.id === s.id;
-    return `<tr class="${sel ? 'sel' : ''}">
+    return `<tr class="${sel ? 'sel' : ''} ${s.noPrint ? 'noprint' : ''}">
       <td class="num">${i + 1}</td>
       <td><div class="grpcell"><span class="sw" style="background:${g?.color || 'transparent'}"></span><select id="sg-${s.id}" data-chg="src" data-id="${s.id}" data-f="groupId" data-val="${s.groupId || ''}">${grpOpts}</select></div></td>
       <td><input id="sn-${s.id}" value="${esc(s.name)}" data-chg="src" data-id="${s.id}" data-f="name" style="min-width:120px"></td>
@@ -2625,6 +2630,7 @@ function listView() {
       ${cust.map((c) => `<td><input id="cu-${c.id}-${s.id}" value="${esc(s.custom?.[c.id] || '')}" data-chg="srcCustom" data-id="${s.id}" data-c="${c.id}" style="min-width:80px"></td>`).join('')}
       <td>${consoleChCell(s, chs, chOpts)}</td>
       <td><input id="snt-${s.id}" value="${esc(s.notes)}" data-chg="src" data-id="${s.id}" data-f="notes" style="min-width:100px"></td>
+      <td class="c"><input type="checkbox" id="spr-${s.id}" data-chg="rowPrint" data-kind="sources" data-id="${s.id}" ${s.noPrint ? '' : 'checked'} title="Show this source on the printout and CSV" aria-label="Print ${esc(s.name)}"></td>
       <td><div class="rowbtns"><button data-act="showSrc" data-id="${s.id}" title="Trace in rack">Trace</button><button data-act="moveSrc" data-id="${s.id}" data-d="-1" title="Move up">↑</button><button data-act="moveSrc" data-id="${s.id}" data-d="1" title="Move down">↓</button>${confirmBtn('delSrc', '✕', `data-id="${s.id}"`)}</div></td>
     </tr>`;
   }).join('');
@@ -2640,7 +2646,7 @@ function listView() {
     const t = outType(o); const pp = port(o.port);
     // keep showing a jack picked before this version, even if it isn't on a mixer
     const extra = pp && !idx.def.get(pp.dev.defId)?.mixer ? `<option value="${o.port}">${esc(portShort(o.port))} (not a mixer)</option>` : '';
-    return `<tr><td class="num">${i + 1}</td>
+    return `<tr class="${o.noPrint ? 'noprint' : ''}"><td class="num">${i + 1}</td>
       <td><input id="on-${o.id}" value="${esc(o.name)}" data-chg="out" data-id="${o.id}" data-f="name"></td>
       <td><input id="om-${o.id}" value="${esc(o.mix)}" data-chg="out" data-id="${o.id}" data-f="mix" style="min-width:70px"></td>
       <td><select id="ot-${o.id}" data-chg="out" data-id="${o.id}" data-f="type" data-val="${t}" style="min-width:90px">${typeOpts}</select></td>
@@ -2649,6 +2655,7 @@ function listView() {
       <td class="comp">${esc(goes) || '<span class="muted">—</span>'}</td>
       <td><input id="opn-${o.id}" value="${esc(o.person)}" data-chg="out" data-id="${o.id}" data-f="person"></td>
       <td><input id="ont-${o.id}" value="${esc(o.notes)}" data-chg="out" data-id="${o.id}" data-f="notes"></td>
+      <td class="c"><input type="checkbox" id="opr-${o.id}" data-chg="rowPrint" data-kind="outputs" data-id="${o.id}" ${o.noPrint ? '' : 'checked'} title="Show this output on the printout" aria-label="Print ${esc(o.name)}"></td>
       <td><div class="rowbtns"><button data-act="showOut" data-id="${o.id}">Trace</button><button data-act="moveOut" data-id="${o.id}" data-d="-1">↑</button><button data-act="moveOut" data-id="${o.id}" data-d="1">↓</button>${confirmBtn('delOut', '✕', `data-id="${o.id}"`)}</div></td></tr>`;
   }).join('');
   return `<section class="view">
@@ -2660,12 +2667,12 @@ function listView() {
       </div>
       <p class="small muted" style="margin:0">Templates: keep a patch called “Template – Full Band” and use “Save a copy as new patch” each week, then fine-tune.</p>
     </div>
-    <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources · Pick a Console Ch and the Dante route is made for you (sources on Dante gear). Otherwise it's worked out from the cables.</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
+    <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources${pt.sources.some((s) => s.noPrint) ? ` (${pt.sources.filter((s) => !s.noPrint).length} on the printout)` : ''} · Pick a Console Ch and the Dante route is made for you (sources on Dante gear). Otherwise it's worked out from the cables.</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
       ${mixersMissingDanteRouting().map(({ def, rx, ch }) => `<div class="note"><span><b>${esc(def.model)}'s channels can't be picked yet:</b> its gear definition doesn't say which Dante receive channel feeds which console channel.</span><button data-act="fixMixerRouting" data-def="${def.id}">Set ${esc(rx.label)} 1–${Math.min(rx.count, ch.count)} → ${esc(ch.label)} 1–${Math.min(rx.count, ch.count)}</button></div>`).join('')}
-      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Stage input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Stage input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th title="Untick to leave a source off the printout and CSV. It stays in the patch.">Print</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>
     <div class="card"><div class="card-head"><h3>Outputs</h3>${mixerDevs().length ? '' : '<span class="pill unv">No mixer marked yet: tick “Mixer / console” on your console in the Library</span>'}<span class="muted small">Monitor mixes, mains, stream feeds… Choose the type, then the mixer output it leaves on. For Dante, choose where it goes in “Dante to”.</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
-      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Type</th><th>Leaves on</th><th>Dante to</th><th>Goes to</th><th>Person</th><th>Notes</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="10" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
+      <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Name</th><th>Mix</th><th>Type</th><th>Leaves on</th><th>Dante to</th><th>Goes to</th><th>Person</th><th>Notes</th><th title="Untick to leave an output off the printout">Print</th><th></th></tr></thead><tbody>${orows || '<tr><td colspan="11" class="muted small">No outputs yet.</td></tr>'}</tbody></table></div>
     </div>
     ${sec('list-settings', 'Groups, custom columns &amp; cable colours', `<div class="editor-grid">
       <div class="card"><div class="card-head"><h3>Groups &amp; row colours</h3><span class="spacer"></span><button data-act="addGroup">+ Group</button></div>
@@ -3034,6 +3041,105 @@ function mxHover(e) {
   st.textContent = [col && `#mx [data-c="${CSS.escape(col)}"]{background:var(--mx-hl)}`, row && `#mx tr[data-r="${CSS.escape(row)}"] > *{background:var(--mx-hl)}`].filter(Boolean).join('\n');
 }
 
+// ----- Dante Controller preset import -----
+// Dante Controller → File → Save Preset writes every device it can see: channel names and subscriptions.
+function parseDantePreset(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('That file isn’t valid XML.');
+  const kids = (el, tag) => [...el.children].filter((c) => c.tagName.toLowerCase() === tag);
+  const txt = (el, ...tags) => { for (const t of tags) { const k = kids(el, t)[0]; if (k?.textContent.trim()) return k.textContent.trim(); } return ''; };
+  const devices = [...doc.getElementsByTagName('device')].map((dv) => {
+    const num = (c, i) => +(c.getAttribute('danteId') || c.getAttribute('dante_id') || c.getAttribute('id')) || i + 1;
+    const tx = kids(dv, 'txchannel').map((c, i) => ({ n: num(c, i), label: txt(c, 'label', 'name') }));
+    const rx = kids(dv, 'rxchannel').map((c, i) => ({ n: num(c, i), name: txt(c, 'name', 'label'), subDev: txt(c, 'subscribed_device'), subCh: txt(c, 'subscribed_channel') }));
+    // addresses, if Dante Controller saved them (only fields that look like an address, in file order)
+    const ips = [...dv.getElementsByTagName('*')].filter((e) => !e.children.length && /ip|addr/i.test(e.tagName)).map((e) => e.textContent.trim()).filter((v) => IP_RE.test(v) && v !== '0.0.0.0');
+    return { name: txt(dv, 'name'), model: txt(dv, 'model_name', 'model', 'default_name'), maker: txt(dv, 'manufacturer_name', 'manufacturer'), tx, rx, ips: [...new Set(ips)] };
+  }).filter((d) => d.name && (d.tx.length || d.rx.length));
+  if (!devices.length) throw new Error('No Dante devices found in that file. Save it from Dante Controller with File → Save Preset.');
+  return devices;
+}
+const normName = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+// guess which PatchRack unit each preset device is: same name first, then same model, in order
+function guessDanteMap(pdevs) {
+  const ours = project.devices.filter((d) => idx.def.get(d.defId)?.groups.some((g) => g.conn === 'dante'));
+  const used = new Set();
+  const take = (pd, test) => { const d = ours.find((o) => !used.has(o.id) && test(o)); if (d) used.add(d.id); return d?.id; };
+  const map = pdevs.map((pd) => take(pd, (o) => normName(o.name) === normName(pd.name) || normName(o.short) === normName(pd.name)) || '');
+  pdevs.forEach((pd, i) => {
+    if (map[i]) return;
+    const hay = normName(pd.model + ' ' + pd.name);
+    map[i] = take(pd, (o) => { const def = idx.def.get(o.defId); const m = normName(def.model); return m.length >= 3 && (hay.includes(m) || hay.includes(normName(def.short))); }) || 'skip';
+  });
+  return map;
+}
+// "01", "CH 5", "Tx 3" are just numbers: don't import them as names
+const defaultChName = (x) => !x || /^(ch(annel)?|tx|rx|in(put)?|out(put)?)?[\s._-]*0*\d+$/i.test(x.trim());
+function danteImportHTML() {
+  const st = ui.dimp; const ours = project.devices.filter((d) => idx.def.get(d.defId)?.groups.some((g) => g.conn === 'dante'));
+  const rows = st.devices.map((pd, i) => `<tr><td><b>${esc(pd.name)}</b><div class="small muted">${esc([pd.maker, pd.model].filter(Boolean).join(' '))}</div></td><td class="comp">${pd.tx.length} / ${pd.rx.length}</td>
+    <td><select id="dim-${i}" data-chg="dimpMap" data-i="${i}" data-val="${esc(st.map[i])}"><option value="skip">Skip</option>${ours.map((d) => { const def = idx.def.get(d.defId); return `<option value="${d.id}">${esc(d.name)} (${esc(def.model)})</option>`; }).join('')}<option value="new">+ Add as new Dante gear</option></select></td></tr>`).join('');
+  const o = st.opts; const ck = (k, t) => `<label class="tog"><input type="checkbox" id="dio-${k}" data-chg="dimpOpt" data-k="${k}" ${o[k] ? 'checked' : ''}> ${t}</label>`;
+  return `<p class="small muted" style="margin:0">Match each device in the preset to the unit it is in PatchRack. Matches by name and model are filled in already; check them. Unmatched devices are skipped unless you add them as new gear.</p>
+    <div class="tbl-wrap" style="max-height:50vh;overflow:auto"><table class="grid"><thead><tr><th>In the preset</th><th>Tx / Rx</th><th>Is this unit in PatchRack</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="display:grid;gap:4px">${ck('routes', 'Routes (subscriptions), saved in the rig')}${ck('replace', 'Clear existing rig routes on the matched receivers first, so they match the preset exactly')}${ck('txNames', 'Transmit channel names')}${ck('rxNames', 'Receive channel names')}${ck('ips', 'IP addresses (if the preset has them)')}</div>
+    <div class="toolbar"><button class="primary" data-act="dimpGo">Import</button><span class="spacer"></span><button data-act="closeModal">Cancel</button></div>`;
+}
+function runDanteImport() {
+  const st = ui.dimp; const o = st.opts; const rep = { devs: 0, txNames: 0, rxNames: 0, routes: 0, cleared: 0, skippedRoutes: 0, cut: 0, ips: 0, added: 0 };
+  commit('Imported a Dante Controller preset', (p) => {
+    const at = new Map();   // preset device name → { dev, tx group, rx group }
+    st.devices.forEach((pd, i) => {
+      let target = st.map[i]; if (target === 'skip') return;
+      if (target === 'new') {
+        const defId = uid('def'); const groups = [];
+        if (pd.tx.length) groups.push({ id: 'dtx', label: 'Dante Tx', count: Math.max(...pd.tx.map((c) => c.n)), start: 1, conn: 'dante', dir: 'out', face: 'dante' });
+        if (pd.rx.length) groups.push({ id: 'drx', label: 'Dante Rx', count: Math.max(...pd.rx.map((c) => c.n)), start: 1, conn: 'dante', dir: 'in', face: 'dante' });
+        p.library.push({ id: defId, make: pd.maker || 'Dante', model: pd.model || pd.name, short: pd.name.slice(0, 10).toUpperCase(), category: 'other', form: 'desk', ru: 1, width: 'full', watts: 0, verified: false, ref: 'Added from a Dante Controller preset. Add its physical jacks in the Library.', groups, links: [], ipSlots: [{ id: 'ip1', label: 'Dante primary', port: '' }] });
+        let loc = p.locations.find((l) => l.name === 'Dante network');
+        if (!loc) { loc = { id: uid('l'), name: 'Dante network' }; p.locations.push(loc); }
+        target = uid('d');
+        p.devices.push({ id: target, defId, name: pd.name, short: pd.name.slice(0, 10).toUpperCase(), place: { type: 'loc', locId: loc.id }, portNames: {}, labels: {}, ips: {}, fields: [] });
+        rep.added++;
+      }
+      const dev = p.devices.find((d) => d.id === target); const def = p.library.find((d) => d.id === dev?.defId); if (!dev || !def) return;
+      at.set(pd.name, { dev, tx: def.groups.find((g) => g.conn === 'dante' && g.dir === 'out'), rx: def.groups.find((g) => g.conn === 'dante' && g.dir === 'in'), pd, def });
+      rep.devs++;
+    });
+    for (const { dev, tx, rx, pd, def } of at.values()) {
+      const name = (g, c, v) => { if (!g || c.n > g.count) return false; if (defaultChName(v)) return false; dev.portNames[`${g.id}:${c.n}`] = v; return true; };
+      if (o.txNames) for (const c of pd.tx) if (name(tx, c, c.label)) rep.txNames++;
+      if (o.rxNames) for (const c of pd.rx) if (name(rx, c, c.name)) rep.rxNames++;
+      rep.cut += pd.tx.filter((c) => !tx || c.n > tx.count).length + pd.rx.filter((c) => !rx || c.n > rx.count).length;
+      if (o.ips && pd.ips.length) {
+        const slots = def.ipSlots || []; dev.ips ||= {};
+        const pri = slots.find((x) => /primary/i.test(x.label)) || slots[0], sec = slots.find((x) => /secondary/i.test(x.label));
+        [[pri, pd.ips[0]], [sec, pd.ips[1]]].forEach(([sl, ip]) => { if (sl && ip) { dev.ips[sl.id] = { ...(dev.ips[sl.id] || {}), ip }; rep.ips++; } });
+      }
+    }
+    if (o.routes) {
+      for (const { dev, rx, pd } of at.values()) {
+        if (!rx) continue;
+        if (o.replace) { const before = p.connections.length; p.connections = p.connections.filter((c) => !(c.kind === 'dante' && c.layer === 'rig' && parseRef(c.b)?.devId === dev.id)); rep.cleared += before - p.connections.length; }
+        for (const c of pd.rx) {
+          if (!c.subDev || !c.subCh || c.n > rx.count) continue;
+          const src = at.get(c.subDev);
+          // the subscription names the transmit channel by its label; fall back to a plain number
+          const tc = src?.pd.tx.find((t) => t.label === c.subCh) || (/^\d+$/.test(c.subCh) ? { n: +c.subCh } : null);
+          if (!src?.tx || !tc || tc.n > src.tx.count) { rep.skippedRoutes++; continue; }
+          const a = mkRef(src.dev.id, src.tx.id, tc.n), b = mkRef(dev.id, rx.id, c.n);
+          p.connections = p.connections.filter((x) => !(x.kind === 'dante' && x.layer === 'rig' && x.b === b));
+          p.connections.push({ id: uid('c'), a, b, kind: 'dante', layer: 'rig', color: '' }); rep.routes++;
+        }
+      }
+    }
+  });
+  closeModal();
+  const parts = [`${rep.devs} device${rep.devs === 1 ? '' : 's'}`, o.routes && `${rep.routes} routes`, o.txNames && `${rep.txNames} Tx names`, o.rxNames && `${rep.rxNames} Rx names`, o.ips && rep.ips && `${rep.ips} IP addresses`].filter(Boolean);
+  const notes = [rep.added && `${rep.added} added as new gear in “Dante network”`, rep.skippedRoutes && `${rep.skippedRoutes} routes skipped (from devices you skipped)`, rep.cut && `${rep.cut} channels beyond what the gear definition has were left out`].filter(Boolean);
+  openModal('Dante preset imported', `<p style="margin:0">Imported ${parts.join(', ')}.</p>${notes.length ? `<ul class="small help-list">${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}<p class="small muted" style="margin:0">Undo takes it all back in one step.</p><div class="toolbar"><button class="primary" data-act="closeModal">Done</button></div>`);
+}
+
 function danteView() {
   const devs = danteDevs();
   const tab = ui.danteTab || 'matrix';
@@ -3070,9 +3176,11 @@ function danteView() {
   return `<section class="view">
     <div class="card"><div class="card-head"><h2>Dante &amp; IP</h2><span class="spacer"></span>
         <div class="seg"><span>New routes go in</span><button data-act="layer" data-layer="rig" class="rigbtn ${rig ? 'on' : ''}">The rig (every patch)</button><button data-act="layer" data-layer="patch" class="${rig ? '' : 'on'}">${esc(patch().name)} only</button></div></div>
+      <div class="toolbar"><button data-act="danteImport" title="In Dante Controller: File → Save Preset, then choose that file here">Import Dante Controller preset…</button><span class="small muted">Brings in every device's channel names and routes at once.</span></div>
       ${sec('dante-help', 'How Dante works here', `<ul class="small help-list">
         <li>Dante gear sends audio over the network as numbered channels. <b>Transmit (Tx)</b> channels leave a unit: a Rio's input 5 goes out on its Tx 5. <b>Receive (Rx)</b> channels arrive at a unit: the Avantis's Rx 17 feeds console channel 17.</li>
         <li>A <b>route</b> joins one Tx channel to one Rx channel, the same as ticking a box in Dante Controller. One Tx can feed many receivers; each Rx takes only one.</li>
+        <li>Fastest start: in Dante Controller choose <b>File → Save Preset</b>, then <b>Import Dante Controller preset</b> here. Every device's channel names and routes come in at once.</li>
         <li><b>Matrix</b> works like Dante Controller: transmitters across the top, receivers down the side, click squares to route. Open only the units you're working on.</li>
         <li>Also: <b>Routes</b> makes a whole block at once (e.g. Rio A Tx 1–32 → Avantis Rx 17–48). Or pick a <b>Console Ch</b> in the Patchlist and the route is made for you.</li>
         <li><b>Receivers</b> lists every Rx channel to fix one at a time. <b>Transmitters</b> is where you name channels (in The rig) so the names show everywhere.</li>
@@ -3143,13 +3251,15 @@ function outCell(o, k) {
   if (k === 'goes') return goesTo(o.port);
   return o[k] || '';
 }
+// sources ticked "Print" in the patchlist (all of them unless some were unticked)
+const printedSources = () => patch().sources.filter((s) => !s.noPrint);
 function paperHTML() {
   const pr = project.print, pt = patch();
   const cols = printColumns().filter((c) => c.on).map((c) => c.key);
   const hc = pr.headerColor || '#3a5068';
   let body = '';
   if (pr.include.inputs && cols.length) {
-    const srcs = pt.sources;
+    const srcs = printedSources();
     const span = new Map();
     if (pr.mergePerson && cols.includes('person')) {
       for (let i = 0; i < srcs.length;) {
@@ -3171,10 +3281,11 @@ function paperHTML() {
     });
     body += '</tbody></table>';
   }
-  if (pr.include.outputs && pt.outputs.length) {
+  const outs = pt.outputs.filter((o) => !o.noPrint);
+  if (pr.include.outputs && outs.length) {
     const oc = OUT_COLS.filter(([k]) => pr.outCols[k]);
     body += `<h4>Outputs</h4><table><thead><tr>${[['name', 'Output'], ...oc].map(([, h]) => `<th style="background:${esc(hc)}">${h}</th>`).join('')}</tr></thead><tbody>`;
-    for (const o of pt.outputs) body += `<tr><td>${esc(o.name)}</td>${oc.map(([k]) => `<td class="${k === 'mix' || k === 'person' || k === 'type' ? 'c' : ''}">${esc(outCell(o, k))}</td>`).join('')}</tr>`;
+    for (const o of outs) body += `<tr><td>${esc(o.name)}</td>${oc.map(([k]) => `<td class="${k === 'mix' || k === 'person' || k === 'type' ? 'c' : ''}">${esc(outCell(o, k))}</td>`).join('')}</tr>`;
     body += '</tbody></table>';
   }
   if (pr.include.stageMap) {
@@ -3198,7 +3309,7 @@ function paperHTML() {
   }
   if (pr.include.pull) {
     const mics = new Map(), cables = new Map();
-    for (const s of pt.sources) {
+    for (const s of printedSources()) {
       const n = (s.ports || []).filter(Boolean).length > 1 && /L\s*[+/&]\s*R/i.test(s.name + ' ' + s.mic) ? 2 : 1;
       for (const part of (s.mic || '').split(/\s*\+\s*/)) {
         const k = part.trim(); if (!k || /dante|direct/i.test(k)) continue;
@@ -3249,7 +3360,7 @@ function printView() {
 function csvText() {
   const cols = printColumns().filter((c) => c.on).map((c) => c.key);
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  return [cols.map((k) => q(colLabel(k))).join(','), ...patch().sources.map((s) => cols.map((k) => q(cellValue(s, k))).join(','))].join('\n');
+  return [cols.map((k) => q(colLabel(k))).join(','), ...printedSources().map((s) => cols.map((k) => q(cellValue(s, k))).join(','))].join('\n');
 }
 
 /* ---------- 11. library ---------- */
@@ -3516,6 +3627,8 @@ const actions = {
     const rx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in'), ch = def.groups.find((g) => g.conn === 'channel');
     (def.links ||= []).push({ from: rx.id, to: ch.id, count: Math.min(rx.count, ch.count) });
   }),
+  danteImport: () => $('#file-dante').click(),
+  dimpGo: () => runDanteImport(),
   mxToggle: (el) => { const v = mxState()[el.dataset.side]; v[el.dataset.id] = !v[el.dataset.id]; save(); render(); },
   mxAll: (el) => { const devs = danteDevs()[el.dataset.side]; const v = mxState()[el.dataset.side]; for (const [d] of devs) v[d.id] = !!el.dataset.on; save(); render(); },
   mxExpand: (el) => {
@@ -3780,6 +3893,12 @@ const changes = {
     // stereo: the second input follows the first (In 7 → In 8). It can still be changed by hand.
     if (i === 0 && s.ports.length > 1) s.ports[1] = nextSrcPort(el.value);
   }),
+  dimpMap: (el) => { ui.dimp.map[+el.dataset.i] = el.value; },
+  dimpOpt: (el) => { ui.dimp.opts[el.dataset.k] = el.checked; },
+  rowPrint: (el) => commit(el.checked ? 'Added a row to the printout' : 'Left a row off the printout', () => {
+    const x = patch()[el.dataset.kind].find((r) => r.id === el.dataset.id);
+    if (el.checked) delete x.noPrint; else x.noPrint = true;
+  }),
   srcCh: (el) => routeToChannel(findSrc(el.dataset.id), el.value),
   out: (el) => commit('Edited an output', () => {
     const o = patch().outputs.find((x) => x.id === el.dataset.id); const f = el.dataset.f;
@@ -3931,6 +4050,14 @@ $('#file-photo').addEventListener('change', async (e) => {
     openPhotoEditor(t.defId, t.face, url, null);
   } catch { toast("That file couldn't be read as an image. Try a JPG or PNG."); }
 });
+$('#file-dante').addEventListener('change', (e) => readFile(e.target, (txt) => {
+  try {
+    const devices = parseDantePreset(txt);
+    ui.dimp = { devices, map: guessDanteMap(devices), opts: { routes: true, replace: true, txNames: true, rxNames: true, ips: true } };
+    openModal(`Import Dante preset · ${devices.length} devices`, danteImportHTML());
+    for (const sel of $$('#modal select[data-val]')) sel.value = sel.dataset.val;
+  } catch (err) { toast(err.message || "That file couldn't be read.", 6000); }
+}));
 $('#file-logo').addEventListener('change', (e) => {
   const f = e.target.files?.[0]; if (!f) return;
   if (f.size > 1.5e6) { toast('Please use a logo image under 1.5 MB.'); return; }

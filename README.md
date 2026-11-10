@@ -61,5 +61,5 @@ python3 build.py
 1. Core rack view, patchlist sync, signal tracing, checks (first version done)
 2. Print/export polish
 3. Templates, history, read-only share link for volunteers
-4. Dante Controller preset import/export, with a preview of every change before export
+4. Dante Controller preset import (done in v0.0.14); export, with a preview of every change before export
 5. Lighting (fixtures, universes, DMX/Art-Net/sACN), video, power circuits and load warnings

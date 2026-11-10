@@ -3,6 +3,14 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.14 (2026-11-10)
+- **Print column in the patchlist:** untick a source (or output) to leave it off the printout and CSV. It stays in the patch, still traces to the console and still shows in Checks; it's just greyed in the list. The Inputs heading says how many are on the printout.
+- **Import a Dante Controller preset** (Dante & IP → Import Dante Controller preset…). In Dante Controller choose File → Save Preset, then pick that file. Every device in it is matched to a unit in PatchRack (by name, then model; you can change any match, skip it, or add it as new Dante-only gear in a "Dante network" location). Brings in, as you choose:
+  - every route (subscription), into the rig, optionally clearing the matched receivers' old rig routes first so they match the preset exactly;
+  - transmit and receive channel names (plain numbers like "01" or "CH 5" are left out);
+  - IP addresses, where the preset has them.
+  A summary lists anything left out. One Undo takes the whole import back.
+
 ## v0.0.13 (2026-11-10)
 - **Dante routing matrix** (Dante & IP → Matrix, now the first view): transmitters across the top, receivers down the left, like Dante Controller.
   - Click a unit's name to open or close its channels. Closed units take one row or column and show a count (or dot) wherever routes exist; click one to open both units. Expand all / Collapse all for each side. Open/closed is remembered.
