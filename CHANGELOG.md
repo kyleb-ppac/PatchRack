@@ -3,6 +3,13 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.13 (2026-11-10)
+- **Dante routing matrix** (Dante & IP → Matrix, now the first view): transmitters across the top, receivers down the left, like Dante Controller.
+  - Click a unit's name to open or close its channels. Closed units take one row or column and show a count (or dot) wherever routes exist; click one to open both units. Expand all / Collapse all for each side. Open/closed is remembered.
+  - Click a square to route that Tx to that Rx; click again to remove. Drag across squares to make or remove many at once. Shift-click a second square to fill the diagonal from the last one (e.g. Tx 1–16 → Rx 17–32 in two clicks).
+  - The row and column under the pointer light up, and the headers stay put while you scroll.
+  - Green dots are rig routes, pink are this patch only. In a patch, replacing a rig route switches it off for that patch only, as elsewhere. Every change is one Undo step.
+
 ## v0.0.12 (2026-11-10)
 - **Fix: console channels greyed out in the patchlist.** If a mixer's Internal routing ran from its network jacks (e.g. "Dante card → Ch") instead of its Dante receive channels, no channel could be picked. Projects are repaired automatically when opened (it becomes "Dante Rx → Ch").
 - Internal routing in the Library no longer offers network jacks or power as a From/To, since they don't carry audio. A Dante card's audio is its Dante Rx / Tx groups.

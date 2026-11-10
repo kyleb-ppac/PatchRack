@@ -477,10 +477,51 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 .pv.with-photo .port { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ring, var(--ring-in)), 0 0 0 1px rgba(0,0,0,.7); }
 .pv-zoom { overflow: visible; }
 
+/* v0.0.13: Dante routing matrix */
+:root { --mx-hl: rgba(58, 80, 104, .10); --mx-rig: #2f9d5f; --mx-pt: #c25aa8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --mx-hl: rgba(141, 177, 214, .13); --mx-rig: #4fc07f; --mx-pt: #e07fcb; } }
+:root[data-theme="dark"] { --mx-hl: rgba(141, 177, 214, .13); --mx-rig: #4fc07f; --mx-pt: #e07fcb; }
+.mx-card { gap: 8px; }
+.mx-card .card-head button { font-size: 12px; padding: 2px 8px; }
+.mx-key { display: inline-flex; align-items: center; gap: 4px; margin-left: 12px; white-space: nowrap; }
+.mx-wrap { overflow: auto; max-height: calc(100vh - 250px); min-height: 200px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+table.mx { border-collapse: separate; border-spacing: 0; font-size: 11px; user-select: none; }
+table.mx th, table.mx td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0; background-clip: padding-box; }
+table.mx thead th { position: sticky; top: 0; z-index: 2; background: var(--panel-2); font-weight: 600; }
+table.mx thead tr.r1 th { height: 26px; }
+table.mx thead tr.r2 th { top: 26px; }
+table.mx .mx-left { position: sticky; left: 0; z-index: 1; background: var(--panel-2); min-width: 200px; max-width: 200px; text-align: left; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.mx thead th.mx-corner { z-index: 3; vertical-align: bottom; padding: 6px; color: var(--muted); font-weight: 500; }
+table.mx thead th.mx-corner span { display: block; }
+table.mx button { border: 0; background: none; padding: 2px 4px; font: inherit; font-weight: 600; color: var(--fg); cursor: pointer; white-space: nowrap; }
+table.mx button:hover { color: var(--accent); text-decoration: underline; }
+.mx-tdev { text-align: left; }
+.mx-tdev.mx-collapsed { vertical-align: bottom; min-width: 26px; width: 26px; }
+.mx-tdev.mx-collapsed span, th.mx-ch span { writing-mode: vertical-rl; transform: rotate(180deg); display: inline-block; white-space: nowrap; }
+.mx-tdev.mx-collapsed span { max-height: 150px; overflow: hidden; text-overflow: ellipsis; padding: 4px 0; }
+th.mx-ch { vertical-align: bottom; width: 20px; min-width: 20px; font-weight: 500; }
+th.mx-ch span { max-height: 96px; overflow: hidden; text-overflow: ellipsis; padding: 3px 0; font-family: var(--f-mono); font-size: 10px; }
+.mx-rch { font-weight: 400; } .mx-rch b { font-family: var(--f-mono); display: inline-block; min-width: 22px; color: var(--muted); font-weight: 500; }
+.mx-rdev { font-weight: 600; } .mx-rdev .muted { font-weight: 400; margin-left: 4px; }
+tr.mx-devrow > * { background: var(--panel-2); }
+tr.mx-devrow.open > * { border-bottom: 1px solid var(--muted); }
+td.mx-cell, td.mx-sum, td.mx-band { width: 20px; min-width: 20px; height: 20px; text-align: center; vertical-align: middle; }
+td.mx-cell { cursor: pointer; touch-action: none; }
+td.mx-cell:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+td.mx-sum { cursor: pointer; }
+table.mx .dstart { border-left: 2px solid var(--muted); }
+.mx-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--mx-rig); vertical-align: middle; }
+.mx-dot.pt { background: var(--mx-pt); }
+.mx-dot.sum { width: 7px; height: 7px; opacity: .75; }
+td.mx-cell.on::after { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--mx-rig); vertical-align: middle; }
+td.mx-cell.on.pt::after { background: var(--mx-pt); }
+td.mx-cell.pending { box-shadow: inset 0 0 0 2px var(--trace); }
+.mx-count { font: 600 10px/1 var(--f-mono); color: var(--mx-rig); }
+
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.12</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.13</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -528,7 +569,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 <input type="file" id="file-photo" accept="image/*" hidden>
 
 <script>
-const APP_VERSION = '0.0.12';
+const APP_VERSION = '0.0.13';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -2023,6 +2064,8 @@ function onPointerDown(e) {
   if (grip && rigMode()) { startRackResize(e, grip); return; }
   const gb = e.target.closest('.grp-box, .jack-box');
   if (gb) { startGroupDrag(e, gb); return; }
+  const mxc = e.target.closest('td.mx-cell');
+  if (mxc) { startMxPaint(e, mxc); return; }
   const lab = e.target.closest('.dev-label');
   if (lab && rigMode() && lab.closest('#stage-inner')) { startDevDrag(e, lab); return; }
   const el = e.target.closest('.port'); if (!el || !el.closest('#stage-inner')) return;
@@ -2859,12 +2902,145 @@ function danteRoutesHTML(devs) {
   return `<div class="card"><div class="card-head"><h3>Make routes</h3><span class="muted small">a whole block at once</span></div>${form}</div>
     <div class="card"><div class="card-head"><h3>All routes</h3><span class="muted small">${idx.active.filter((c) => c.kind === 'dante').length} routes in ${runs.length} block${runs.length === 1 ? '' : 's'}</span></div>${list}</div>${offList}`;
 }
+// ----- routing matrix: transmitters across the top, receivers down the left -----
+// Each unit can be collapsed to one row / column (a dot there means "some routes between these").
+// Click a cell to route or unroute it, drag across cells to do many at once, Shift-click to fill a diagonal.
+const mxState = () => (project.view.mx ||= { tx: {}, rx: {} });
+const mxOpen = (side, id) => !!mxState()[side][id];
+function matrixHTML(devs) {
+  if (!devs.tx.length || !devs.rx.length) return '<div class="card"><p class="small muted" style="margin:0">The matrix needs gear with Dante transmit and receive channels in the rig.</p></div>';
+  const routes = new Map(), pair = new Map(), txInto = new Map(), rxFrom = new Map();
+  const inc = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+  for (const c of idx.active) {
+    if (c.kind !== 'dante') continue;
+    const a = parseRef(c.a).devId, b = parseRef(c.b).devId;
+    push(routes, c.b, c); inc(pair, a + '|' + b); inc(txInto, c.a + '|' + b); inc(rxFrom, c.b + '|' + a);
+  }
+  const nm = (d, g, n) => d.portNames?.[`${g.id}:${n}`] || '';
+  const dot = (n, title) => (n ? `<span class="mx-dot sum" title="${esc(title)}"></span>` : '');
+  // header rows
+  let h1 = '', h2 = '';
+  for (const [d, g] of devs.tx) {
+    if (mxOpen('tx', d.id)) {
+      h1 += `<th class="mx-tdev dstart" colspan="${g.count}"><button data-act="mxToggle" data-side="tx" data-id="${d.id}" title="Collapse ${esc(d.name)}">▾ ${esc(d.name)}</button></th>`;
+      for (let n = 1; n <= g.count; n++) { const r = mkRef(d.id, g.id, n); h2 += `<th class="mx-ch ${n === 1 ? 'dstart' : ''}" data-c="${r}" title="${esc(`${d.name} Tx ${n}${nm(d, g, n) ? ' · ' + nm(d, g, n) : ''}`)}"><span>${n}${nm(d, g, n) ? ' ' + esc(nm(d, g, n)) : ''}</span></th>`; }
+    } else h1 += `<th class="mx-tdev mx-collapsed dstart" rowspan="2"><button data-act="mxToggle" data-side="tx" data-id="${d.id}" title="Show ${esc(d.name)}'s ${g.count} channels"><span>▸ ${esc(d.name)}</span></button></th>`;
+  }
+  // body
+  let body = '';
+  for (const [rd, rg] of devs.rx) {
+    const open = mxOpen('rx', rd.id);
+    let used = 0; for (let n = 1; n <= rg.count; n++) if (routes.has(mkRef(rd.id, rg.id, n))) used++;
+    // the unit's own row: a summary when collapsed, a divider when open
+    let row = `<tr class="mx-devrow ${open ? 'open' : ''}"><th class="mx-left mx-rdev"><button data-act="mxToggle" data-side="rx" data-id="${rd.id}" title="${open ? 'Collapse' : `Show ${esc(rd.name)}'s channels`}">${open ? '▾' : '▸'} ${esc(rd.name)}</button><span class="muted">${used}/${rg.count}</span></th>`;
+    for (const [td, tg] of devs.tx) {
+      if (mxOpen('tx', td.id)) for (let n = 1; n <= tg.count; n++) {
+        const t = mkRef(td.id, tg.id, n); const k = txInto.get(t + '|' + rd.id) || 0;
+        row += open ? `<td class="mx-band ${n === 1 ? 'dstart' : ''}"></td>` : `<td class="mx-sum ${n === 1 ? 'dstart' : ''}" data-act="mxExpand" data-rx="${rd.id}" data-c="${t}">${dot(k, `${td.short} Tx ${n} → ${rd.name} (${k})`)}</td>`;
+      } else {
+        const k = pair.get(td.id + '|' + rd.id) || 0;
+        row += open ? '<td class="mx-band dstart"></td>' : `<td class="mx-sum dstart" data-act="mxExpand" data-tx="${td.id}" data-rx="${rd.id}">${k ? `<span class="mx-count" title="${esc(`${k} route${k > 1 ? 's' : ''} from ${td.name} to ${rd.name}`)}">${k}</span>` : ''}</td>`;
+      }
+    }
+    body += row + '</tr>';
+    if (!open) continue;
+    for (let n = 1; n <= rg.count; n++) {
+      const r = mkRef(rd.id, rg.id, n); const here = routes.get(r) || [];
+      let tr = `<tr data-r="${r}"><th class="mx-left mx-rch" title="${esc(`${rd.name} Rx ${n}${nm(rd, rg, n) ? ' · ' + nm(rd, rg, n) : ''}`)}"><b>${n}</b> ${esc(nm(rd, rg, n))}</th>`;
+      for (const [td, tg] of devs.tx) {
+        if (!mxOpen('tx', td.id)) { const k = rxFrom.get(r + '|' + td.id) || 0; tr += `<td class="mx-sum dstart" data-act="mxExpand" data-tx="${td.id}" data-r="${r}">${dot(k, `${rd.short} Rx ${n} ← ${td.name}`)}</td>`; continue; }
+        for (let m = 1; m <= tg.count; m++) {
+          const t = mkRef(td.id, tg.id, m); const c = here.find((x) => x.a === t);
+          tr += `<td class="mx-cell ${m === 1 ? 'dstart' : ''} ${c ? 'on ' + (c.layer === 'rig' ? 'rig' : 'pt') : ''}" data-c="${t}" data-r="${r}"></td>`;
+        }
+      }
+      body += tr + '</tr>';
+    }
+  }
+  const all = (side, on) => `<button data-act="mxAll" data-side="${side}" data-on="${on ? 1 : ''}">${on ? 'Expand' : 'Collapse'} all</button>`;
+  return `<div class="card mx-card">
+    <div class="card-head"><h3>Routing matrix</h3><span class="muted small">Transmitters → across the top · Receivers ↓ down the side</span><span class="spacer"></span>
+      <span class="small muted">Transmitters</span>${all('tx', 1)}${all('tx', 0)}<span class="small muted">Receivers</span>${all('rx', 1)}${all('rx', 0)}</div>
+    <p class="small muted" style="margin:0"><b>Click</b> a unit's name to open or close its channels. <b>Click</b> a square to route that Tx to that Rx (click again to remove). <b>Drag</b> across squares to do many at once. <b>Shift-click</b> a second square to fill the diagonal from the last one (Tx 1–16 → Rx 17–32 in two clicks). A closed unit shows a dot or count where routes exist; click it to open.
+      <span class="mx-key"><span class="mx-dot"></span> rig</span><span class="mx-key"><span class="mx-dot pt"></span> ${esc(patch().name)} only</span></p>
+    <div class="mx-wrap" id="mx-wrap" data-keep-scroll><table class="mx" id="mx"><thead>
+      <tr class="r1"><th class="mx-left mx-corner" rowspan="2"><span>Receivers ↓</span><span>Transmitters →</span></th>${h1}</tr>
+      <tr class="r2">${h2}</tr></thead><tbody>${body}</tbody></table></div>
+  </div>`;
+}
+// painting routes by clicking / dragging across matrix squares
+let mxPaint = null;
+function startMxPaint(e, cell) {
+  e.preventDefault();
+  const tx = cell.dataset.c, rx = cell.dataset.r;
+  const last = ui.mxLast;
+  if (e.shiftKey && last) {
+    const a0 = parseRef(last.tx), b0 = parseRef(last.rx), a1 = parseRef(tx), b1 = parseRef(rx);
+    const dn = a1.n - a0.n;
+    if (a0.devId === a1.devId && b0.devId === b1.devId && dn === b1.n - b0.n && dn !== 0) {
+      const st = Math.sign(dn); const pairs = [];
+      for (let k = 0; k !== dn + st; k += st) pairs.push([mkRef(a0.devId, a0.gid, a0.n + k), mkRef(b0.devId, b0.gid, b0.n + k)]);
+      ui.mxLast = { tx, rx }; applyMx(pairs, 'on'); return;
+    }
+    toast('Shift-click a square on the same diagonal as the last one (same units, one step across for each step down).', 5000);
+    return;
+  }
+  mxPaint = { mode: cell.classList.contains('on') ? 'off' : 'on', pairs: new Map(), last: null };
+  mxMark(cell);
+  window.addEventListener('pointermove', onMxMove);
+  window.addEventListener('pointerup', endMxPaint, { once: true });
+}
+function mxMark(cell) {
+  const k = cell.dataset.c + '>' + cell.dataset.r; if (mxPaint.pairs.has(k)) return;
+  mxPaint.pairs.set(k, [cell.dataset.c, cell.dataset.r]); mxPaint.last = { tx: cell.dataset.c, rx: cell.dataset.r };
+  if (mxPaint.mode === 'on') {
+    // a receive channel takes one transmitter, so anything else in its row goes
+    for (const o of $$(`#mx tr[data-r="${CSS.escape(cell.dataset.r)}"] td.mx-cell.on`)) if (o !== cell) o.classList.remove('on', 'rig', 'pt');
+    cell.classList.add('on', rigMode() ? 'rig' : 'pt');
+  } else cell.classList.remove('on', 'rig', 'pt');
+  cell.classList.add('pending');
+}
+function onMxMove(e) {
+  if (!mxPaint) return;
+  const c = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('td.mx-cell');
+  if (c) mxMark(c);
+}
+function endMxPaint() {
+  window.removeEventListener('pointermove', onMxMove);
+  const mp = mxPaint; mxPaint = null; if (!mp) return;
+  suppressNextClick();
+  ui.mxLast = mp.last;
+  applyMx([...mp.pairs.values()], mp.mode);
+}
+function applyMx(pairs, mode) {
+  const has = (tx, rx) => (idx.out.get(tx) || []).some((c) => c.kind === 'dante' && c.b === rx);
+  pairs = pairs.filter(([tx, rx]) => (mode === 'on' ? !has(tx, rx) : has(tx, rx)));
+  if (!pairs.length) { render(); return; }
+  const layer = rigMode() ? 'rig' : patch().id; let off = 0;
+  const msg = pairs.length === 1 ? `Dante: ${portShort(pairs[0][0])} ${mode === 'on' ? '→' : '✕'} ${portShort(pairs[0][1])}` : `Dante: ${mode === 'on' ? 'made' : 'removed'} ${pairs.length} routes`;
+  commit(msg, (p) => {
+    for (const [tx, rx] of pairs) {
+      if (mode === 'on') { off += dropDante(p, (c) => c.b === rx); p.connections.push({ id: uid('c'), a: tx, b: rx, kind: 'dante', layer, color: '' }); }
+      else off += dropDante(p, (c) => c.a === tx && c.b === rx);
+    }
+  });
+  if (off || pairs.length > 1) toast(`${pairs.length} route${pairs.length > 1 ? 's' : ''} ${mode === 'on' ? 'made' : 'removed'}${layer === 'rig' ? ' in the rig' : ` in ${patch().name} only`}.` + offNote(off), 5000);
+}
+// crosshair: light up the row and column under the pointer
+function mxHover(e) {
+  const c = e.target.closest?.('#mx td, #mx th.mx-ch'); let st = $('#mx-hl');
+  if (!st) { st = document.createElement('style'); st.id = 'mx-hl'; document.head.appendChild(st); }
+  const col = c?.dataset.c, row = c?.closest('tr')?.dataset.r;
+  st.textContent = [col && `#mx [data-c="${CSS.escape(col)}"]{background:var(--mx-hl)}`, row && `#mx tr[data-r="${CSS.escape(row)}"] > *{background:var(--mx-hl)}`].filter(Boolean).join('\n');
+}
+
 function danteView() {
   const devs = danteDevs();
-  const tab = ui.danteTab || 'routes';
+  const tab = ui.danteTab || 'matrix';
   const subOf = (ref) => (idx.in.get(ref) || []).filter((c) => c.kind === 'dante');
   const rig = rigMode();
   let body = '';
+  if (tab === 'matrix') body = matrixHTML(devs);
   if (tab === 'routes') body = danteRoutesHTML(devs);
   if (tab === 'rx') {
     body = devs.rx.map(([d, g]) => {
@@ -2897,10 +3073,11 @@ function danteView() {
       ${sec('dante-help', 'How Dante works here', `<ul class="small help-list">
         <li>Dante gear sends audio over the network as numbered channels. <b>Transmit (Tx)</b> channels leave a unit: a Rio's input 5 goes out on its Tx 5. <b>Receive (Rx)</b> channels arrive at a unit: the Avantis's Rx 17 feeds console channel 17.</li>
         <li>A <b>route</b> joins one Tx channel to one Rx channel, the same as ticking a box in Dante Controller. One Tx can feed many receivers; each Rx takes only one.</li>
-        <li>Quickest: <b>Routes</b> below makes a whole block at once (e.g. Rio A Tx 1–32 → Avantis Rx 17–48). Or pick a <b>Console Ch</b> in the Patchlist and the route is made for you.</li>
+        <li><b>Matrix</b> works like Dante Controller: transmitters across the top, receivers down the side, click squares to route. Open only the units you're working on.</li>
+        <li>Also: <b>Routes</b> makes a whole block at once (e.g. Rio A Tx 1–32 → Avantis Rx 17–48). Or pick a <b>Console Ch</b> in the Patchlist and the route is made for you.</li>
         <li><b>Receivers</b> lists every Rx channel to fix one at a time. <b>Transmitters</b> is where you name channels (in The rig) so the names show everywhere.</li>
         <li>Routes in <b>The rig</b> are in every patch. Routes made while editing a patch belong to that patch only, and replacing a rig route there just switches it off for that patch.</li></ul>`)}
-      <div class="seg subtabs">${tabBtn('routes', `Routes (${nRoutes})`)}${tabBtn('rx', 'Receivers')}${tabBtn('tx', 'Transmitters')}${tabBtn('ip', `IP addresses (${ipEntries().filter((x) => x.v.ip).length})`)}</div>
+      <div class="seg subtabs">${tabBtn('matrix', 'Matrix')}${tabBtn('routes', `Routes (${nRoutes})`)}${tabBtn('rx', 'Receivers')}${tabBtn('tx', 'Transmitters')}${tabBtn('ip', `IP addresses (${ipEntries().filter((x) => x.v.ip).length})`)}</div>
     </div>
     ${body}
   </section>`;
@@ -3339,6 +3516,12 @@ const actions = {
     const rx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in'), ch = def.groups.find((g) => g.conn === 'channel');
     (def.links ||= []).push({ from: rx.id, to: ch.id, count: Math.min(rx.count, ch.count) });
   }),
+  mxToggle: (el) => { const v = mxState()[el.dataset.side]; v[el.dataset.id] = !v[el.dataset.id]; save(); render(); },
+  mxAll: (el) => { const devs = danteDevs()[el.dataset.side]; const v = mxState()[el.dataset.side]; for (const [d] of devs) v[d.id] = !!el.dataset.on; save(); render(); },
+  mxExpand: (el) => {
+    const v = mxState(); const tx = el.dataset.tx || (el.dataset.c && parseRef(el.dataset.c).devId); const rx = el.dataset.rx || (el.dataset.r && parseRef(el.dataset.r).devId);
+    if (tx) v.tx[tx] = true; if (rx) v.rx[rx] = true; save(); render();
+  },
   layZoom: (el) => { ui.layZoom = +el.dataset.z; render(); },
   layMode: (el) => { ui.layMode = el.dataset.m; ui.layFocus = null; render(); },
   resetJacks: (el) => commit('Put jacks back in their rows', () => { delete libDef().groups[+el.dataset.i].off; layoutCache.clear(); }),
@@ -3694,6 +3877,7 @@ document.addEventListener('input', (e) => {
   if (el && inputs[el.dataset.inp]) inputs[el.dataset.inp](el, e);
 });
 document.addEventListener('pointerdown', onPointerDown);
+document.addEventListener('pointerover', (e) => { if (ui.tab === 'dante') mxHover(e); });
 document.addEventListener('wheel', (e) => {
   if (e.target.id !== 'pe-canvas' || !pe?.img) return;
   e.preventDefault(); pe.s *= e.deltaY < 0 ? 1.06 : 1 / 1.06; peSync(); peDraw();
