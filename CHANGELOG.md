@@ -3,6 +3,12 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.12 (2026-11-10)
+- **Fix: console channels greyed out in the patchlist.** If a mixer's Internal routing ran from its network jacks (e.g. "Dante card → Ch") instead of its Dante receive channels, no channel could be picked. Projects are repaired automatically when opened (it becomes "Dante Rx → Ch").
+- Internal routing in the Library no longer offers network jacks or power as a From/To, since they don't carry audio. A Dante card's audio is its Dante Rx / Tx groups.
+- If a mixer's channels still can't be reached from Dante, the patchlist shows a note with a one-click fix ("Set Dante Rx 1–64 → Ch 1–64").
+- Greyed-out channels now say "no Dante Rx feeds it" instead of "local input".
+
 ## v0.0.11 (2026-11-10)
 - **Fix: rack proportions.** 19″ is the panel's width across its ears, which is also the outside of the rails. Before, the rails were drawn outside the 19″ panel, as if 19″ were the space between them. Now the rails sit under the ears, the opening between them is 17¾″, and the mounting holes follow the real 3-per-U pattern on 18⅓″ centres. The screws on each unit's ears line up with the centre hole. Gear and photo sizes are unchanged (they were already 19″ ear to ear).
 

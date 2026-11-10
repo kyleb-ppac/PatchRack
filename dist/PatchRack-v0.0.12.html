@@ -480,7 +480,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.11</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.12</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -528,7 +528,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 <input type="file" id="file-photo" accept="image/*" hidden>
 
 <script>
-const APP_VERSION = '0.0.11';
+const APP_VERSION = '0.0.12';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -1000,7 +1000,7 @@ function defaultPrint() {
    ===================================================================== */
 
 /* ---------- 1. utilities ---------- */
-const SCHEMA = 4;
+const SCHEMA = 5;
 const STORE_KEY = 'patchrack.project';
 const U = 48;      // pixels per rack unit
 const W = 520;     // pixels per 19" panel width
@@ -1095,6 +1095,17 @@ function migrate(p) {
   if ((p.schema || 1) < 4) {
     // v0.0.9: gear can be marked as a mixer (console channels and outputs are picked from mixers)
     for (const def of p.library) if (def.mixer === undefined) def.mixer = def.category === 'console';
+  }
+  if ((p.schema || 1) < 5) {
+    // v0.0.12: internal routing can't start at a network jack (e.g. "Dante card → Ch"). Where a
+    // network jack was routed to console channels, it was meant to be the Dante receive channels.
+    for (const def of p.library) {
+      const rx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in');
+      for (const L of def.links || []) {
+        const from = def.groups.find((g) => g.id === L.from), to = def.groups.find((g) => g.id === L.to);
+        if (rx && from?.dir === 'io' && to?.conn === 'channel') L.from = rx.id;
+      }
+    }
   }
   for (const d of p.devices) { d.portNames ||= {}; d.labels ||= {}; d.ips ||= {}; d.fields ||= []; }
   p.sheet = { scope: 'all', ...(p.sheet || {}) };
@@ -2500,12 +2511,22 @@ function channelOptions() {
       html += `<optgroup label="${esc(d.name)}">`;
       for (let n = 1; n <= g.count; n++) {
         const r = mkRef(d.id, g.id, n); const u = users.get(r); const viaDante = !!danteRxFor(r);
-        html += `<option value="${r}" ${viaDante ? '' : 'disabled'}>${esc(chLabel(r))}${u ? ' · ' + esc(u.join(', ')) : ''}${viaDante ? '' : ' (local input)'}</option>`;
+        html += `<option value="${r}" ${viaDante ? '' : 'disabled'}>${esc(chLabel(r))}${u ? ' · ' + esc(u.join(', ')) : ''}${viaDante ? '' : ' (no Dante Rx feeds it)'}</option>`;
       }
       html += '</optgroup>';
     }
   }
   return html;
+}
+// mixers whose console channels can't be reached from Dante, because the definition's internal routing doesn't say so
+function mixersMissingDanteRouting() {
+  const out = [];
+  for (const def of project.library) {
+    if (!def.mixer || !project.devices.some((d) => d.defId === def.id)) continue;
+    const rx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in'), ch = def.groups.find((g) => g.conn === 'channel');
+    if (rx && ch && !(def.links || []).some((L) => L.from === rx.id && L.to === ch.id)) out.push({ def, rx, ch });
+  }
+  return out;
 }
 function nextSrcPort(ref) { return ref ? stepRef(ref, 1) || '' : ''; }
 function danteRxOptions() {
@@ -2597,6 +2618,7 @@ function listView() {
       <p class="small muted" style="margin:0">Templates: keep a patch called “Template – Full Band” and use “Save a copy as new patch” each week, then fine-tune.</p>
     </div>
     <div class="card"><div class="card-head"><h3>Inputs</h3><span class="muted small">${pt.sources.length} sources · Pick a Console Ch and the Dante route is made for you (sources on Dante gear). Otherwise it's worked out from the cables.</span><span class="spacer"></span><button class="primary" data-act="addSrc">+ Add source</button></div>
+      ${mixersMissingDanteRouting().map(({ def, rx, ch }) => `<div class="note"><span><b>${esc(def.model)}'s channels can't be picked yet:</b> its gear definition doesn't say which Dante receive channel feeds which console channel.</span><button data-act="fixMixerRouting" data-def="${def.id}">Set ${esc(rx.label)} 1–${Math.min(rx.count, ch.count)} → ${esc(ch.label)} 1–${Math.min(rx.count, ch.count)}</button></div>`).join('')}
       <div class="tbl-wrap"><table class="grid"><thead><tr><th></th><th>Group</th><th>Source</th><th>Mic/DI</th><th>Stage input</th><th>Person</th><th>Cable</th>${cust.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>Console Ch</th><th>Notes</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>
     <div class="card"><div class="card-head"><h3>Outputs</h3>${mixerDevs().length ? '' : '<span class="pill unv">No mixer marked yet: tick “Mixer / console” on your console in the Library</span>'}<span class="muted small">Monitor mixes, mains, stream feeds… Choose the type, then the mixer output it leaves on. For Dante, choose where it goes in “Dante to”.</span><span class="spacer"></span><button data-act="addOut">+ Add output</button></div>
@@ -3090,7 +3112,9 @@ function defEditor(d) {
     <td>${isPhysical(g) ? `<select id="gsig-${i}" data-chg="grpField" data-i="${i}" data-f="signal" data-val="${g.signal || ''}"><option value="">Auto: ${esc(sigName(inferSignal(g)))}</option>${Object.entries(SIGNALS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('')}</select>` : '<span class="muted small">—</span>'}</td>
     <td style="text-align:center"><input type="checkbox" id="gsrc-${i}" data-chg="grpField" data-i="${i}" data-f="src" ${g.src ? 'checked' : ''}></td>
     <td><div class="rowbtns"><button data-act="grpMove" data-i="${i}" data-d="-1">↑</button><button data-act="grpMove" data-i="${i}" data-d="1">↓</button>${confirmBtn('grpDel', '✕', `data-i="${i}"`)}</div></td></tr>`).join('');
-  const gopt = (v) => d.groups.map((g) => `<option value="${g.id}" ${g.id === v ? 'selected' : ''}>${esc(g.label)}</option>`).join('');
+  // internal routing carries signals, so network jacks and power aren't offered (a Dante card's audio is its Dante Rx / Tx groups)
+  const routable = (g) => g.dir !== 'io' && sigOf(g) !== 'power';
+  const gopt = (v) => d.groups.filter((g) => routable(g) || g.id === v).map((g) => `<option value="${g.id}" ${g.id === v ? 'selected' : ''}>${esc(g.label)}${routable(g) ? '' : ' (network jack: choose another)'}</option>`).join('');
   const linkRows = (d.links || []).map((L, i) => `<tr><td><select id="lf-${i}" data-chg="linkField" data-i="${i}" data-f="from">${gopt(L.from)}</select></td><td><input id="lfs-${i}" type="number" min="1" value="${L.fromStart || 1}" data-chg="linkField" data-i="${i}" data-f="fromStart" style="width:60px"></td><td>→</td><td><select id="lt-${i}" data-chg="linkField" data-i="${i}" data-f="to">${gopt(L.to)}</select></td><td><input id="lts-${i}" type="number" min="1" value="${L.toStart || 1}" data-chg="linkField" data-i="${i}" data-f="toStart" style="width:60px"></td><td><input id="lc-${i}" type="number" min="1" value="${L.count ?? ''}" placeholder="all" data-chg="linkField" data-i="${i}" data-f="count" style="width:60px"></td><td>${confirmBtn('linkDel', '✕', `data-i="${i}"`)}</td></tr>`).join('');
   return `<div class="card-head"><h3>${esc(d.make)} ${esc(d.model)}</h3>${d.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified</span>'}<span class="muted small">${used} in use</span><span class="spacer"></span>
       <button data-act="dupDef" data-def="${d.id}">Duplicate</button>${used ? '' : confirmBtn('delDef', 'Delete', `data-def="${d.id}"`)}</div>
@@ -3309,6 +3333,11 @@ const actions = {
     if (d.layout) delete d.layout[face];
     for (const g of d.groups) if (g.face === face) { delete g.pos; delete g.off; delete g.sx; delete g.sy; }
     layoutCache.clear();
+  }),
+  fixMixerRouting: (el) => commit('Set Dante Rx → console channel routing', (p) => {
+    const def = p.library.find((d) => d.id === el.dataset.def);
+    const rx = def.groups.find((g) => g.conn === 'dante' && g.dir === 'in'), ch = def.groups.find((g) => g.conn === 'channel');
+    (def.links ||= []).push({ from: rx.id, to: ch.id, count: Math.min(rx.count, ch.count) });
   }),
   layZoom: (el) => { ui.layZoom = +el.dataset.z; render(); },
   layMode: (el) => { ui.layMode = el.dataset.m; ui.layFocus = null; render(); },
