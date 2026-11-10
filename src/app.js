@@ -865,8 +865,8 @@ function drawCables() {
     if (project.view.cableMode === 'picked' ? !(cablesOn(da) || cablesOn(db)) : !(cablesOn(da) && cablesOn(db))) continue;
     const t = connType(c); if (project.view.hideTypes[t]) continue;
     const S = SIGNALS[t] || SIGNALS.other;
-    const proxy = (r) => pos.get(r) || (c.kind === 'tie' ? [...prev(r), ...next(r)].filter((x) => parseRef(x).devId === parseRef(r).devId).map((x) => pos.get(x)).find(Boolean) : null);
-    const a = proxy(c.a), b = proxy(c.b); if (!a || !b) continue;
+    // draw a cable only between the jacks it is really plugged into (both must be on screen)
+    const a = pos.get(c.a), b = pos.get(c.b); if (!a || !b) continue;
     const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
     const sag = Math.min(140, 24 + dist * 0.22);
     const d = `M${a[0]},${a[1]} C${a[0]},${a[1] + sag} ${b[0]},${b[1] + sag} ${b[0]},${b[1]}`;

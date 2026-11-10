@@ -3,6 +3,9 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.7 (2026-11-10)
+- Fix: tie lines are drawn only from the jacks they're really connected to. Before, when a tie's own jack was on the hidden side, the line was drawn from the matching front jack instead, so floor-pocket ties looked like they came out of the jacks you plug into. View the Rear or Front + Rear to see tie lines. Signal tracing is unchanged.
+
 ## v0.0.6 (2026-11-10)
 - **IP addresses:** every network jack (Dante primary/secondary, control port, switch management) gets its own IP and note, so gear like the Avantis and AHM can have several. Edit them in the gear panel (rig mode), on the jack itself, or in the new list on the **Dante & IP** tab. Checks flag duplicate and mistyped addresses. Copy the list as CSV or add it to the printout.
 - **Cable signal types:** analog audio, AES, speaker, network, fiber, power, SDI, HDMI, DMX, antenna/RF, USB, Thunderbolt, control. Worked out from the jacks, changeable per cable, with a Spec field (3G, Cat6, 14 AWG…). Cables are coloured by type; show or hide each type from **View**. Library port groups have a Signal column to override the automatic choice.
