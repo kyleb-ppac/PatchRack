@@ -3,6 +3,12 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.11 (2026-11-12)
+- **Line drawing tool: paint out areas.** In step 3, choose *Paint out* and brush over handles, knobs, cables, reflections or anything else you don't want drawn, on either the squared-up photo or the drawing. Painted areas come out empty, and they're ignored when the tool works out what a strong line is, so the rest of the panel can keep more detail.
+  - *Erase* wipes painting away; *Undo stroke* (Ctrl/Cmd+Z) and *Clear all painting* are there too. Brush size slider, or `[` and `]`.
+  - Shortcuts: P paint, E erase, Esc stop painting.
+  - Painting stays in place if you move the corners or change the faceplate size. Choosing a new photo starts fresh.
+
 ## v0.0.10 (2026-11-12)
 - **Line drawing tool opens far more photos:** iPhone HEIC/HEIF (even when named .jpg), TIFF, WebP, AVIF, GIF, BMP and SVG, as well as JPG and PNG. The tool now works out a file's real format from its contents instead of trusting its name or the type the computer reports, which fixes photos being refused when dragged in or downloaded. Phone photos that were taken sideways come in the right way up.
 - HEIC and TIFF are converted inside the tool, with no internet needed.

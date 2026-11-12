@@ -79,7 +79,11 @@ p { margin: 0; }
 .stagewrap { position: relative; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; touch-action: none; }
 #stage { display: block; width: 100%; cursor: crosshair; }
 .out { background: repeating-conic-gradient(var(--panel-2) 0 25%, var(--bg) 0 50%) 0 0 / 16px 16px; border: 1px solid var(--line); border-radius: 4px; padding: 0; line-height: 0; }
+.out { position: relative; }
 .out canvas { width: 100%; height: auto; display: block; }
+.out canvas.ov { position: absolute; inset: 0; height: 100%; pointer-events: none; }
+.painting .out canvas.ov { pointer-events: auto; cursor: none; touch-action: none; }
+.painting .out { outline: 2px solid rgba(226, 60, 50, .55); outline-offset: 1px; }
 .eyebrow { font: 500 11px var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
 .status { font: 12px var(--f-mono); color: var(--muted); min-height: 1em; }
@@ -146,13 +150,27 @@ ol.steps { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 
   <section class="card" id="c-lines" hidden>
     <h2><span class="n">3</span> Line drawing</h2>
-    <div>
-      <div class="eyebrow">Squared-up photo</div>
-      <div class="out"><canvas id="rectview"></canvas></div>
+    <div class="row">
+      <div class="field"><span>Paint out areas</span>
+        <div class="seg" id="paintmode">
+          <button data-v="off" aria-pressed="true">Off</button>
+          <button data-v="paint" aria-pressed="false" title="Paint over things you don't want drawn (P)">Paint out</button>
+          <button data-v="erase" aria-pressed="false" title="Wipe painting away (E)">Erase</button>
+        </div></div>
+      <label class="field" style="min-width:160px"><span>Brush size <b id="v-brush"></b></span><input type="range" id="brush" min="4" max="160" step="1"></label>
+      <button id="btn-paintundo" disabled title="Ctrl/Cmd+Z">Undo stroke</button>
+      <button id="btn-paintclear" disabled>Clear all painting</button>
     </div>
-    <div>
-      <div class="eyebrow">Line drawing <span id="outsize"></span></div>
-      <div class="out"><canvas id="result"></canvas></div>
+    <p class="small muted">Paint over handles, knobs, cables, reflections or anything else you don't want in the drawing. Paint on either picture below. Painted areas are left empty, and they don't count when the tool decides what a strong line is, so the rest of the panel can come out with more detail. Painting stays put if you move the corners. Esc stops painting.</p>
+    <div id="paintviews">
+      <div>
+        <div class="eyebrow">Squared-up photo</div>
+        <div class="out"><canvas id="rectview"></canvas><canvas class="ov" id="ov-rect" aria-hidden="true"></canvas></div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="eyebrow">Line drawing <span id="outsize"></span></div>
+        <div class="out"><canvas id="result"></canvas><canvas class="ov" id="ov-result" aria-hidden="true"></canvas></div>
+      </div>
     </div>
     <div class="status" id="status" aria-live="polite"></div>
     <div class="controls">
@@ -196,7 +214,7 @@ const DEFAULTS = { detail: 55, smooth: 1.4, weight: 1.25, clean: 25, under: 0, b
 const STYLE_COLORS = { dark: '#d7dce1', light: '#18202a', clear: '#d7dce1' };
 const $ = (s) => document.querySelector(s);
 
-let st = { ru: '1', width: 'full', cw: 483, ch: 88, face: 'front', make: '', model: '', ...DEFAULTS };
+let st = { ru: '1', width: 'full', cw: 483, ch: 88, face: 'front', make: '', model: '', brush: 40, ...DEFAULTS };
 try { Object.assign(st, JSON.parse(localStorage.getItem('patchrack.linedrawing') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('patchrack.linedrawing', JSON.stringify(st)); } catch {} };
 
@@ -335,6 +353,7 @@ async function loadFile(file) {
       'Try opening it in Preview (Mac) or Photos (Windows) and using File → Export as JPEG, or take a screenshot of it, then use that file.');
     return;
   }
+  if (paint) { paint = null; paintA = null; paintUndo = []; paintVer++; $('#btn-paintclear').disabled = true; $('#btn-paintundo').disabled = true; }
   try { setSource(cv); } catch (e) { showLoadError(`The photo opened but couldn't be read (${e.message}). If it came from a web page, save it to your computer first.`); return; }
   resetCorners();
   $('#c-square').hidden = false; $('#c-lines').hidden = false;
@@ -543,7 +562,8 @@ function rectifyAndProcess() {
   if (!src) return;
   const o = outSize();
   rect = rectify(o.w * PROC_K, o.h * PROC_K);
-  showRect(rect);
+  ensurePaint(rect.w, rect.h);
+  showRect(rect); drawOverlays();
   scheduleProcess();
 }
 
@@ -589,6 +609,8 @@ function lineMask(r) {
   // ignore the outer edge (the faceplate border and whatever is just outside it)
   const bpx = Math.round(st.border / 100 * Math.min(W, H * 4)) + 1;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (x < bpx || y < bpx || x >= W - bpx || y >= H - bpx) nms[y * W + x] = 0;
+  // painted-out areas: no lines, and they don't set the scale for what counts as a strong edge
+  if (paintA && paintA.length === N) for (let i = 0; i < N; i++) if (paintA[i] > 96) nms[i] = 0;
   // 5. thresholds scaled to this photo's strongest edges (panel outlines, jack rims),
   //    so flat metal with a little grain or JPEG noise stays empty. Detail sets how faint a line may be.
   const samp = []; const step = Math.max(1, Math.floor(N / 250000));
@@ -641,7 +663,7 @@ let maskCache = null, maskKey = '';
 function process() {
   if (!rect) return;
   const t0 = performance.now();
-  const key = [rect.data.length, corners.flat().map((v) => v.toFixed(1)).join(','), st.detail, st.smooth, st.weight, st.clean, st.border, st.ru, st.width, st.cw, st.ch].join('|');
+  const key = [paintVer, rect.data.length, corners.flat().map((v) => v.toFixed(1)).join(','), st.detail, st.smooth, st.weight, st.clean, st.border, st.ru, st.width, st.cw, st.ch].join('|');
   if (key !== maskKey) { maskCache = lineMask(rect); maskKey = key; }
   compose(maskCache);
   const o = outSize();
@@ -652,16 +674,18 @@ function compose(mask) {
   const W = rect.w, H = rect.h, N = W * H;
   const img = new ImageData(W, H); const O = img.data, D = rect.data;
   const bg = st.style === 'light' ? [255, 255, 255] : BG_METAL; const bgA = st.style === 'clear' ? 0 : 255;
-  const lc = hexRGB(st.color); const u = st.under / 100;
+  const lc = hexRGB(st.color); const u0 = st.under / 100; const pa = paintA && paintA.length === N ? paintA : null;
   // layers, bottom to top: background, photo (at "Photo underneath" strength), lines. Premultiplied "over".
   for (let i = 0; i < N; i++) {
     let a = bgA / 255, r = bg[0] * a, g = bg[1] * a, b = bg[2] * a;
+    const keep = pa ? 1 - pa[i] / 255 : 1;
+    const u = u0 * keep;
     if (u > 0) {
       let pr = D[i * 4], pg = D[i * 4 + 1], pb = D[i * 4 + 2];
       if (st.grey) { const v = 0.299 * pr + 0.587 * pg + 0.114 * pb; pr = pg = pb = v; }
       r = pr * u + r * (1 - u); g = pg * u + g * (1 - u); b = pb * u + b * (1 - u); a = u + a * (1 - u);
     }
-    const m = mask[i];
+    const m = mask[i] * keep;
     if (m > 0) { r = lc[0] * m + r * (1 - m); g = lc[1] * m + g * (1 - m); b = lc[2] * m + b * (1 - m); a = m + a * (1 - m); }
     const o = i * 4;
     if (a > 0) { O[o] = r / a; O[o + 1] = g / a; O[o + 2] = b / a; }
@@ -675,6 +699,110 @@ function compose(mask) {
 let procT = 0;
 function scheduleProcess() { $('#status').textContent = 'Working…'; clearTimeout(procT); procT = setTimeout(() => requestAnimationFrame(process), 60); }
 
+/* ---------- painting out areas ----------
+   The painting lives at the processing size, in faceplate coordinates, so it stays put
+   when the corners move and is stretched along if the faceplate size changes. */
+let paint = null, paintA = null, paintVer = 0, paintMode = 'off', paintUndo = [], stroke = null, cursor = null;
+const tint = document.createElement('canvas');
+function ensurePaint(W, H) {
+  if (paint && paint.width === W && paint.height === H) return;
+  const old = paint;
+  paint = document.createElement('canvas'); paint.width = W; paint.height = H;
+  if (old) { const c = paint.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(old, 0, 0, W, H); }
+  paintUndo = []; paintChanged();
+}
+function paintChanged() {
+  if (!paint) { paintA = null; return; }
+  const d = paint.getContext('2d').getImageData(0, 0, paint.width, paint.height).data;
+  let any = false; const a = new Uint8Array(paint.width * paint.height);
+  for (let i = 0; i < a.length; i++) { a[i] = d[i * 4 + 3]; if (a[i]) any = true; }
+  paintA = any ? a : null;
+  paintVer++;
+  $('#btn-paintclear').disabled = !any; $('#btn-paintundo').disabled = !paintUndo.length;
+  updateTint();
+}
+function updateTint() {
+  if (!paint) return;
+  tint.width = paint.width; tint.height = paint.height;
+  const c = tint.getContext('2d'); c.drawImage(paint, 0, 0);
+  c.globalCompositeOperation = 'source-in'; c.fillStyle = 'rgba(226,60,50,.6)'; c.fillRect(0, 0, tint.width, tint.height);
+  c.globalCompositeOperation = 'source-over';
+}
+function drawOverlays() {
+  const o = outSize();
+  for (const id of ['ov-rect', 'ov-result']) {
+    const cv = $('#' + id); if (cv.width !== o.w || cv.height !== o.h) { cv.width = o.w; cv.height = o.h; }
+    const c = cv.getContext('2d'); c.clearRect(0, 0, o.w, o.h);
+    // the photo always shows what's painted; the drawing only while painting (it is what gets saved)
+    if (paint && paintA && (id === 'ov-rect' || paintMode !== 'off')) { c.imageSmoothingQuality = 'high'; c.drawImage(tint, 0, 0, o.w, o.h); }
+    if (cursor?.id === id && paintMode !== 'off') {
+      const r = st.brush / 2;
+      c.lineWidth = 2; c.strokeStyle = 'rgba(0,0,0,.8)'; c.beginPath(); c.arc(cursor.x, cursor.y, r, 0, Math.PI * 2); c.stroke();
+      c.lineWidth = 1; c.strokeStyle = paintMode === 'erase' ? '#ffffff' : '#ff6b5e'; c.setLineDash(paintMode === 'erase' ? [4, 3] : []);
+      c.beginPath(); c.arc(cursor.x, cursor.y, r, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+    }
+  }
+}
+let ovPending = false;
+const drawOverlaysSoon = () => { if (ovPending) return; ovPending = true; requestAnimationFrame(() => { ovPending = false; drawOverlays(); }); };
+function setPaintMode(m) {
+  paintMode = m;
+  document.querySelectorAll('#paintmode button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === m));
+  $('#paintviews').classList.toggle('painting', m !== 'off');
+  if (m === 'off') cursor = null;
+  drawOverlays();
+}
+function ovPos(e, cv) { const r = cv.getBoundingClientRect(); const o = outSize(); return [(e.clientX - r.left) / r.width * o.w, (e.clientY - r.top) / r.height * o.h]; }
+function dab(from, to) {
+  const k = paint.width / outSize().w; const c = paint.getContext('2d');
+  c.globalCompositeOperation = paintMode === 'erase' ? 'destination-out' : 'source-over';
+  c.strokeStyle = c.fillStyle = '#fff'; c.lineCap = c.lineJoin = 'round'; c.lineWidth = st.brush * k;
+  c.beginPath(); c.arc(to[0] * k, to[1] * k, st.brush * k / 2, 0, Math.PI * 2); c.fill();
+  if (from) { c.beginPath(); c.moveTo(from[0] * k, from[1] * k); c.lineTo(to[0] * k, to[1] * k); c.stroke(); }
+  c.globalCompositeOperation = 'source-over';
+}
+for (const id of ['ov-rect', 'ov-result']) {
+  const cv = $('#' + id);
+  cv.addEventListener('pointerdown', (e) => {
+    if (paintMode === 'off' || !paint) return;
+    e.preventDefault(); cv.setPointerCapture(e.pointerId);
+    paintUndo.push(paint.getContext('2d').getImageData(0, 0, paint.width, paint.height)); if (paintUndo.length > 25) paintUndo.shift();
+    const p = ovPos(e, cv); stroke = { last: p }; dab(null, p); updateTint(); cursor = { id, x: p[0], y: p[1] }; drawOverlaysSoon();
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (paintMode === 'off') return;
+    const p = ovPos(e, cv); cursor = { id, x: p[0], y: p[1] };
+    if (stroke) { dab(stroke.last, p); stroke.last = p; updateTint(); }
+    drawOverlaysSoon();
+  });
+  const end = () => { if (!stroke) return; stroke = null; paintChanged(); drawOverlays(); scheduleProcess(); };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerleave', () => { if (!stroke) { cursor = null; drawOverlaysSoon(); } });
+}
+function undoPaint() {
+  const prev = paintUndo.pop(); if (!prev || !paint) return;
+  paint.getContext('2d').putImageData(prev, 0, 0); paintChanged(); drawOverlays(); scheduleProcess();
+}
+function clearPaint(undoable = true) {
+  if (!paint) return;
+  if (undoable && paintA) { paintUndo.push(paint.getContext('2d').getImageData(0, 0, paint.width, paint.height)); }
+  if (!undoable) paintUndo = [];
+  paint.getContext('2d').clearRect(0, 0, paint.width, paint.height); paintChanged(); drawOverlays(); scheduleProcess();
+}
+$('#paintmode').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setPaintMode(b.dataset.v); });
+$('#brush').addEventListener('input', (e) => { st.brush = +e.target.value; $('#v-brush').textContent = `${st.brush} px`; saveSettings(); drawOverlaysSoon(); });
+$('#btn-paintundo').addEventListener('click', undoPaint);
+$('#btn-paintclear').addEventListener('click', () => clearPaint(true));
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches?.('input[type=text], input[type=number], select')) return;
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && paintUndo.length) { e.preventDefault(); undoPaint(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey || !paint) return;
+  if (e.key === 'Escape' && paintMode !== 'off') setPaintMode('off');
+  else if (e.key === 'p' || e.key === 'P') setPaintMode('paint');
+  else if (e.key === 'e' || e.key === 'E') setPaintMode('erase');
+  else if (e.key === '[' || e.key === ']') { st.brush = Math.max(4, Math.min(160, st.brush + (e.key === ']' ? 6 : -6))); $('#brush').value = st.brush; $('#v-brush').textContent = `${st.brush} px`; saveSettings(); drawOverlaysSoon(); }
+});
+
 /* ---------- controls ---------- */
 const RANGES = { detail: (v) => `${v}`, smooth: (v) => (+v).toFixed(1), weight: (v) => `${(+v).toFixed(2).replace(/0$/, '')} px`, clean: (v) => (+v ? `${v} px` : 'off'), under: (v) => `${v}%`, border: (v) => (+v ? `${v}%` : 'off') };
 function syncControls() {
@@ -682,6 +810,7 @@ function syncControls() {
   $('#make').value = st.make; $('#model').value = st.model;
   const custom = st.ru === 'custom'; $('#f-width').hidden = custom; $('#f-cw').hidden = !custom; $('#f-ch').hidden = !custom;
   for (const k in RANGES) { $('#' + k).value = st[k]; $('#v-' + k).textContent = RANGES[k](st[k]); }
+  $('#brush').value = st.brush; $('#v-brush').textContent = `${st.brush} px`;
   $('#color').value = st.color; $('#grey').checked = st.grey; $('#outline').checked = st.outline;
   document.querySelectorAll('#style button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.style));
 }
