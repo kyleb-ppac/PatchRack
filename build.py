@@ -39,5 +39,9 @@ out.write_text(standalone)
 print('built', out.name, len(body) // 1024, 'KB')
 
 tool = (src / 'tools' / 'line-drawing.html').read_text().replace('@@VERSION@@', version)
+for lib in (src / 'tools' / 'vendor').glob('*.js'):
+    code = lib.read_text()
+    assert '</script' not in code.lower(), lib.name
+    tool = tool.replace(f'/*@@LIB:{lib.name}@@*/', code)
 (dist / 'Line-Drawing-Tool.html').write_text(tool)
 print('built Line-Drawing-Tool.html', len(tool) // 1024, 'KB')

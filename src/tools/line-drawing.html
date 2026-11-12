@@ -74,6 +74,7 @@ p { margin: 0; }
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 28px 16px; text-align: center;
   display: grid; gap: 8px; justify-items: center; color: var(--muted);
 }
+.loaderr { color: #c2362f; font-size: 13px; max-width: 640px; text-align: left; background: rgba(194,54,47,.08); border: 1px solid rgba(194,54,47,.35); border-radius: 6px; padding: 8px 10px; white-space: pre-line; }
 .drop.over { border-color: var(--accent); background: var(--accent-soft); }
 .stagewrap { position: relative; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; touch-action: none; }
 #stage { display: block; width: 100%; cursor: crosshair; }
@@ -103,7 +104,9 @@ ol.steps { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
     <div class="drop" id="drop">
       <div>Drop a photo of the front or rear panel here, paste one (Cmd/Ctrl+V), or</div>
       <button class="primary" id="btn-open">Choose a photo…</button>
-      <input type="file" id="file" accept="image/*" hidden>
+      <input type="file" id="file" accept="image/*,.jpg,.jpeg,.jfif,.png,.heic,.heif,.webp,.avif,.gif,.bmp,.tif,.tiff,.svg" hidden>
+      <div class="small">JPG, PNG, iPhone HEIC, WebP, AVIF, TIFF, GIF, BMP and SVG all work.</div>
+      <div class="loaderr" id="loaderr" role="alert" hidden></div>
     </div>
     <div class="row">
       <label class="field"><span>Height</span>
@@ -215,23 +218,136 @@ function outSize() {
 }
 
 /* ---------- loading ---------- */
-function loadFile(file) {
-  if (!file || !/^image\//.test(file.type)) { toast("That file isn't an image. Try a JPG or PNG."); return; }
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    const k = Math.min(1, 3200 / Math.max(img.width, img.height));
-    const cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
-    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-    URL.revokeObjectURL(url);
-    setSource(cv);
-    resetCorners();
-    $('#c-square').hidden = false; $('#c-lines').hidden = false;
-    layoutStage(); drawStage(); rectifyAndProcess();
-    $('#c-square').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-  img.onerror = () => { URL.revokeObjectURL(url); toast("That photo couldn't be opened. Try a JPG or PNG."); };
-  img.src = url;
+/* ---------- opening photos: any format the browser can show, plus HEIC and TIFF ----------
+   The real format is worked out from the file's first bytes, not its name or the type the
+   system reports (drag-and-drop and some downloads report none, or the wrong one). */
+const MAX_SIDE = 3200;
+const FORMATS = {
+  jpeg: ['JPEG', 'image/jpeg'], png: ['PNG', 'image/png'], gif: ['GIF', 'image/gif'], webp: ['WebP', 'image/webp'],
+  bmp: ['BMP', 'image/bmp'], ico: ['ICO', 'image/x-icon'], tiff: ['TIFF', 'image/tiff'], heic: ['HEIC/HEIF', 'image/heic'],
+  avif: ['AVIF', 'image/avif'], svg: ['SVG', 'image/svg+xml'], pdf: ['PDF', ''], psd: ['Photoshop', ''], unknown: ['unknown', ''],
+};
+async function sniff(file) {
+  const b = new Uint8Array(await file.slice(0, 512).arrayBuffer());
+  const at = (o, str) => [...str].every((ch, i) => b[o + i] === ch.charCodeAt(0));
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'jpeg';
+  if (b[0] === 0x89 && at(1, 'PNG')) return 'png';
+  if (at(0, 'GIF8')) return 'gif';
+  if (at(0, 'RIFF') && at(8, 'WEBP')) return 'webp';
+  if (at(0, 'BM')) return 'bmp';
+  if (b[0] === 0 && b[1] === 0 && b[2] === 1 && b[3] === 0) return 'ico';
+  if (at(0, 'II*\0') || at(0, 'MM\0*')) return 'tiff';
+  if (at(4, 'ftyp')) { // HEIC and AVIF share a container; the brand names say which
+    const brands = String.fromCharCode(...b.slice(8, 48));
+    if (/^avi[fs]/.test(brands)) return 'avif';
+    if (/hei[cxms]|hev[cxms]/.test(brands)) return 'heic';
+    if (/avi[fs]/.test(brands)) return 'avif';
+    if (/mif1|msf1/.test(brands)) return 'heic';
+  }
+  if (at(0, '%PDF')) return 'pdf';
+  if (at(0, '8BPS')) return 'psd';
+  const head = new TextDecoder().decode(b).trimStart().toLowerCase();
+  if (head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'))) return 'svg';
+  const ext = (file.name || '').split('.').pop().toLowerCase();
+  return { jpg: 'jpeg', jpeg: 'jpeg', jfif: 'jpeg', png: 'png', heic: 'heic', heif: 'heic', tif: 'tiff', tiff: 'tiff', webp: 'webp', avif: 'avif' }[ext] || 'unknown';
+}
+// draw anything drawable onto a canvas no bigger than MAX_SIDE
+function toCanvas(drawable, w, h) {
+  if (!w || !h) throw new Error('the picture has no size');
+  const k = Math.min(1, MAX_SIDE / Math.max(w, h));
+  const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+  const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height); // see-through PNGs: white behind
+  c.imageSmoothingQuality = 'high'; c.drawImage(drawable, 0, 0, cv.width, cv.height);
+  return cv;
+}
+function viaImgTag(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob); const img = new Image();
+    img.onload = () => { try { const w = img.naturalWidth || img.width || 1600, h = img.naturalHeight || img.height || 1000; resolve(toCanvas(img, w, h)); } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); } };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('the browser could not read it')); };
+    img.src = url;
+  });
+}
+async function decodeNative(file, kind) {
+  // re-label the bytes with their real type: Safari in particular won't open a mislabelled file
+  const mime = FORMATS[kind]?.[1];
+  const blob = mime && file.type !== mime ? new Blob([file], { type: mime }) : file;
+  if (kind !== 'svg' && typeof createImageBitmap === 'function') {
+    try { const bm = await createImageBitmap(blob, { imageOrientation: 'from-image' }); const cv = toCanvas(bm, bm.width, bm.height); bm.close?.(); return cv; } catch {}
+  }
+  return viaImgTag(blob);
+}
+const libsLoaded = {};
+function loadLib(...ids) {
+  return ids.reduce((p, id) => p.then(() => libsLoaded[id] ||= new Promise((resolve, reject) => {
+    const code = document.getElementById(id)?.textContent || '';
+    if (code.length < 1000) { reject(new Error('the converter is missing from this copy of the tool (rebuild with build.py)')); return; }
+    const sc = document.createElement('script'); sc.src = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+    sc.onload = () => resolve(); sc.onerror = () => reject(new Error('the converter would not start'));
+    document.head.appendChild(sc);
+  })), Promise.resolve());
+}
+async function decodeHeic(file) {
+  await loadLib('lib-heic2any');
+  let out = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+  if (Array.isArray(out)) out = out[0];
+  return decodeNative(out, 'jpeg');
+}
+async function decodeTiff(file) {
+  await loadLib('lib-pako', 'lib-utif');
+  const buf = await file.arrayBuffer();
+  const ifds = window.UTIF.decode(buf);
+  let best = null;
+  for (const ifd of ifds) {
+    try { window.UTIF.decodeImage(buf, ifd, ifds); } catch { continue; }
+    if (ifd.width && ifd.height && (!best || ifd.width * ifd.height > best.width * best.height)) best = ifd;
+  }
+  if (!best) throw new Error('no picture found inside the TIFF');
+  const rgba = window.UTIF.toRGBA8(best);
+  const cv = document.createElement('canvas'); cv.width = best.width; cv.height = best.height;
+  cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, best.width * best.height * 4), best.width, best.height), 0, 0);
+  return toCanvas(cv, cv.width, cv.height);
+}
+function showLoadError(msg) { const e = $('#loaderr'); e.textContent = msg; e.hidden = !msg; if (msg) $('#c-photo').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+let loading = 0;
+async function loadFile(file) {
+  if (!file) return;
+  const ticket = ++loading;
+  showLoadError('');
+  const mb = (file.size / 1048576).toFixed(1);
+  let kind = 'unknown';
+  try { kind = await sniff(file); } catch {}
+  const label = FORMATS[kind][0];
+  if (kind === 'pdf' || kind === 'psd') {
+    showLoadError(`“${file.name}” is a ${label} file, not a photo. Export it as JPG or PNG (or take a screenshot of it) and try that.`);
+    return;
+  }
+  const slow = kind === 'heic' || kind === 'tiff';
+  if (slow) toast(`Converting ${label} photo…`);
+  let cv = null, why = '';
+  try { cv = await decodeNative(file, kind); } catch (e) { why = e.message; }
+  if (!cv && kind === 'heic') { try { cv = await decodeHeic(file); } catch (e) { why = e.message || String(e); } }
+  if (!cv && kind === 'tiff') { try { cv = await decodeTiff(file); } catch (e) { why = e.message || String(e); } }
+  if (ticket !== loading) return; // a newer photo was chosen meanwhile
+  if (!cv) {
+    showLoadError(`Couldn't open “${file.name || 'pasted image'}” (${mb} MB, looks like: ${label}${file.type ? `, reported as ${file.type}` : ''}).\nReason: ${why || 'unknown'}.\n` +
+      (kind === 'unknown' ? 'This may not be an image file. ' : '') +
+      'Try opening it in Preview (Mac) or Photos (Windows) and using File → Export as JPEG, or take a screenshot of it, then use that file.');
+    return;
+  }
+  try { setSource(cv); } catch (e) { showLoadError(`The photo opened but couldn't be read (${e.message}). If it came from a web page, save it to your computer first.`); return; }
+  resetCorners();
+  $('#c-square').hidden = false; $('#c-lines').hidden = false;
+  layoutStage(); drawStage(); rectifyAndProcess();
+  if (slow) toast(`${label} photo converted.`);
+  $('#c-square').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// dropping an image straight from a web page gives a link, not a file
+async function loadFromURL(url) {
+  try {
+    const r = await fetch(url); if (!r.ok) throw new Error(r.status);
+    const b = await r.blob(); loadFile(new File([b], url.split('/').pop().split('?')[0] || 'image', { type: b.type }));
+  } catch { showLoadError("That image is on a web page and the site won't hand it over directly. Right-click it → Save Image As…, then drop or choose the saved file."); }
 }
 function setSource(cv) {
   src = { cv, w: cv.width, h: cv.height, data: cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data };
@@ -599,9 +715,16 @@ $('#btn-reset').addEventListener('click', () => { if (!src) return; resetCorners
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); if (t === 'drop' || e.target === document.documentElement) drop.classList.remove('over'); }));
-document.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f) loadFile(f); });
+document.addEventListener('drop', (e) => {
+  const dt = e.dataTransfer; const f = dt?.files?.[0];
+  if (f) { loadFile(f); return; }
+  const html = dt?.getData('text/html') || ''; const m = html.match(/<img[^>]+src=["']([^"']+)/i);
+  const url = m?.[1] || (dt?.getData('text/uri-list') || '').split('\n').find((l) => l && !l.startsWith('#'));
+  if (url) loadFromURL(url.trim());
+});
 document.addEventListener('paste', (e) => {
-  const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+  if (e.target.matches?.('input[type=text], input[type=number]')) return;
+  const it = [...(e.clipboardData?.items || [])].find((i) => i.kind === 'file');
   if (it) { e.preventDefault(); loadFile(it.getAsFile()); }
 });
 window.addEventListener('resize', () => { if (src) { layoutStage(); drawStage(); } });
@@ -628,5 +751,9 @@ $('#btn-copy').addEventListener('click', () => {
 
 syncControls();
 </script>
+<!-- Converters for photos the browser can't open by itself. Filled in by build.py; started only when needed. -->
+<script type="text/plain" id="lib-heic2any">/*@@LIB:heic2any.min.js@@*/</script>
+<script type="text/plain" id="lib-pako">/*@@LIB:pako_inflate.min.js@@*/</script>
+<script type="text/plain" id="lib-utif">/*@@LIB:UTIF.js@@*/</script>
 </body>
 </html>

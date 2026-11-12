@@ -40,6 +40,7 @@ Open the newest `dist/PatchRack-v….html` in a web browser (double-click it on 
 | `src/github.js` | Saving to and opening from GitHub |
 | `src/main.js` | Start-up |
 | `src/tools/line-drawing.html` | The separate photo → line drawing tool (one self-contained page) |
+| `src/tools/vendor/` | Photo converters bundled into the tool (HEIC, TIFF); see the README there |
 | `build.py` | Bundles `src/` into the single files in `dist/`; the version number comes from `VERSION` |
 
 After changing anything in `src/`, rebuild with:

@@ -3,6 +3,12 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.10 (2026-11-12)
+- **Line drawing tool opens far more photos:** iPhone HEIC/HEIF (even when named .jpg), TIFF, WebP, AVIF, GIF, BMP and SVG, as well as JPG and PNG. The tool now works out a file's real format from its contents instead of trusting its name or the type the computer reports, which fixes photos being refused when dragged in or downloaded. Phone photos that were taken sideways come in the right way up.
+- HEIC and TIFF are converted inside the tool, with no internet needed.
+- Dragging an image straight from a web page works when the site allows it; otherwise the tool says to save it first.
+- When a file still won't open, a message stays on screen with what the file looks like and what to try, instead of a quick pop-up.
+
 ## v0.0.9 (2026-11-12)
 - **Line drawing tool** (`dist/Line-Drawing-Tool.html`, a separate page): turns a gear photo into a clean line drawing for a gear definition's front or rear photo.
   - **Square it up:** drag four corners onto the faceplate's corners and the photo is straightened out, so a picture taken at an angle comes out flat and square. A magnifier shows the corner while dragging; arrow keys nudge; guides follow the perspective so you can check rows of jacks are straight.
