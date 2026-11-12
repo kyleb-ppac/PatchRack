@@ -173,9 +173,20 @@ ol.steps { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
       </div>
     </div>
     <div class="status" id="status" aria-live="polite"></div>
-    <div class="controls">
-      <label class="field"><span>Detail <b id="v-detail"></b></span><input type="range" id="detail" min="0" max="100" step="1"></label>
+    <div class="row">
+      <div class="field"><span>The picture is</span>
+        <div class="seg" id="source">
+          <button data-v="photo" aria-pressed="true" title="A photo of the real gear: find outlines, draw text solid">A photo</button>
+          <button data-v="drawing" aria-pressed="false" title="Already a line drawing (from a manual, spec sheet or website): just square it up and clean it">Already a drawing</button>
+        </div></div>
+      <p class="small muted" style="flex:1;min-width:220px">Manufacturers often publish exactly this kind of drawing in the user guide or spec sheet (front-panel diagrams, dimension drawings). If you can find one, screenshot it and choose <b>Already a drawing</b>.</p>
+    </div>
+    <div class="controls" id="photo-controls">
+      <label class="field" title="Printed labels, logos and LEDs drawn solid, like a manufacturer's drawing"><span>Text &amp; markings <b id="v-ink"></b></span><input type="range" id="ink" min="0" max="100" step="1"></label>
+      <label class="field"><span>Markings are</span><select id="inkPol"><option value="auto">Worked out from the panel</option><option value="light">Light on a dark panel</option><option value="dark">Dark on a light panel</option></select></label>
+      <label class="field"><span>Outline detail <b id="v-detail"></b></span><input type="range" id="detail" min="0" max="100" step="1"></label>
       <label class="field"><span>Smoothing <b id="v-smooth"></b></span><input type="range" id="smooth" min="0.5" max="5" step="0.1"></label>
+      <label class="field drawing-only"><span>Line darkness cut-off <b id="v-dcut"></b></span><input type="range" id="dcut" min="10" max="90" step="1"></label>
       <label class="field"><span>Line weight <b id="v-weight"></b></span><input type="range" id="weight" min="0.5" max="4" step="0.25"></label>
       <label class="field"><span>Remove specks <b id="v-clean"></b></span><input type="range" id="clean" min="0" max="150" step="1"></label>
       <label class="field"><span>Photo underneath <b id="v-under"></b></span><input type="range" id="under" min="0" max="100" step="1"></label>
@@ -210,12 +221,18 @@ ol.steps { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 const APP_W = 520, APP_U = 48, OUT_K = 2;
 const PROC_K = 2;           // edge detection runs at 2x the saved size, then is scaled down (smoother lines)
 const BG_METAL = [32, 35, 39];
-const DEFAULTS = { detail: 55, smooth: 1.4, weight: 1.25, clean: 25, under: 0, border: 1, style: 'dark', color: '#d7dce1', grey: true, outline: false };
+const SETTINGS_VER = 2;
+const DEFAULTS = { source: 'photo', dcut: 80, ink: 55, inkPol: 'auto', detail: 85, smooth: 1.4, weight: 1.25, clean: 25, under: 0, border: 1, style: 'dark', color: '#d7dce1', grey: true, outline: true };
 const STYLE_COLORS = { dark: '#d7dce1', light: '#18202a', clear: '#d7dce1' };
 const $ = (s) => document.querySelector(s);
 
 let st = { ru: '1', width: 'full', cw: 483, ch: 88, face: 'front', make: '', model: '', brush: 40, ...DEFAULTS };
-try { Object.assign(st, JSON.parse(localStorage.getItem('patchrack.linedrawing') || '{}')); } catch {}
+try {
+  const saved = JSON.parse(localStorage.getItem('patchrack.linedrawing') || '{}');
+  if ((saved.v || 1) < SETTINGS_VER) for (const k of ['detail', 'outline']) delete saved[k]; // better defaults since v0.0.12
+  Object.assign(st, saved);
+} catch {}
+st.v = SETTINGS_VER;
 const saveSettings = () => { try { localStorage.setItem('patchrack.linedrawing', JSON.stringify(st)); } catch {} };
 
 let src = null;        // { cv, data, w, h } source photo (downscaled if huge)
@@ -578,24 +595,30 @@ function gaussBlur(a, W, H, sigma) {
   return out;
 }
 function lineMask(r) {
+  if (st.source === 'drawing') return drawingMask(r);
   const W = r.w, H = r.h, N = W * H, D = r.data;
-  // 1. grey + contrast stretch (1st–99th percentile) so dark faceplates still show their silkscreen
-  let g = new Float32Array(N); const hist = new Uint32Array(256);
-  for (let i = 0; i < N; i++) { const v = 0.299 * D[i * 4] + 0.587 * D[i * 4 + 1] + 0.114 * D[i * 4 + 2]; g[i] = v; hist[v | 0]++; }
+  // 1. contrast stretch (1st–99th percentile of brightness) so dark faceplates still show their silkscreen
+  const hist = new Uint32Array(256); const lum = new Float32Array(N);
+  for (let i = 0; i < N; i++) { const v = 0.299 * D[i * 4] + 0.587 * D[i * 4 + 1] + 0.114 * D[i * 4 + 2]; lum[i] = v; hist[v | 0]++; }
   let lo = 0, hi = 255, acc = 0;
   for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > N * 0.01) { lo = i; break; } }
   acc = 0; for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > N * 0.01) { hi = i; break; } }
-  const span = Math.max(1, hi - lo); for (let i = 0; i < N; i++) g[i] = Math.max(0, Math.min(1, (g[i] - lo) / span));
-  // 2. smooth away texture and JPEG noise
-  g = gaussBlur(g, W, H, st.smooth * PROC_K / 2);
-  // 3. gradients (Sobel)
+  const span = Math.max(1, hi - lo);
+  // 2. smooth each colour channel (texture, JPEG noise), 3. gradients: the strongest of R, G, B,
+  //    so a dark-grey button on a black panel or a coloured LED still gets its outline
+  const sig = st.smooth * PROC_K / 2;
+  const ch = [0, 1, 2].map((c) => { const a = new Float32Array(N); for (let i = 0; i < N; i++) a[i] = Math.max(0, Math.min(1, (D[i * 4 + c] - lo) / span)); return gaussBlur(a, W, H, sig); });
   const mag = new Float32Array(N), dir = new Uint8Array(N);
   for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-    const i = y * W + x;
-    const gx = (g[i - W + 1] + 2 * g[i + 1] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - 1] + g[i + W - 1]);
-    const gy = (g[i + W - 1] + 2 * g[i + W] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - W] + g[i - W + 1]);
-    mag[i] = Math.hypot(gx, gy);
-    let a = Math.atan2(gy, gx) * 180 / Math.PI; if (a < 0) a += 180;
+    const i = y * W + x; let bx = 0, by = 0, bm = 0;
+    for (let c = 0; c < 3; c++) {
+      const g = ch[c];
+      const gx = (g[i - W + 1] + 2 * g[i + 1] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - 1] + g[i + W - 1]);
+      const gy = (g[i + W - 1] + 2 * g[i + W] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - W] + g[i - W + 1]);
+      const m2 = gx * gx + gy * gy; if (m2 > bm) { bm = m2; bx = gx; by = gy; }
+    }
+    mag[i] = Math.sqrt(bm);
+    let a = Math.atan2(by, bx) * 180 / Math.PI; if (a < 0) a += 180;
     dir[i] = a < 22.5 || a >= 157.5 ? 0 : a < 67.5 ? 1 : a < 112.5 ? 2 : 3;
   }
   // 4. thin to one-pixel ridges
@@ -611,6 +634,7 @@ function lineMask(r) {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (x < bpx || y < bpx || x >= W - bpx || y >= H - bpx) nms[y * W + x] = 0;
   // painted-out areas: no lines, and they don't set the scale for what counts as a strong edge
   if (paintA && paintA.length === N) for (let i = 0; i < N; i++) if (paintA[i] > 96) nms[i] = 0;
+  const ink = st.ink > 0 ? inkMask(lum, lo, span, W, H, bpx) : null;
   // 5. thresholds scaled to this photo's strongest edges (panel outlines, jack rims),
   //    so flat metal with a little grain or JPEG noise stays empty. Detail sets how faint a line may be.
   const samp = []; const step = Math.max(1, Math.floor(N / 250000));
@@ -625,6 +649,8 @@ function lineMask(r) {
   const nb = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
   while (sp) { const i = stack[--sp]; for (const d of nb) { const j = i + d; if (j >= 0 && j < N && e[j] === 1) { e[j] = 2; stack[sp++] = j; } } }
   for (let i = 0; i < N; i++) e[i] = e[i] === 2 ? 1 : 0;
+  // no outlines hugging text and LEDs (that's what makes lettering look blobby); the solid marks replace them
+  if (ink) { const near = morph(ink, W, H, Math.round(3 * PROC_K / 2) * 2 + 1, true); for (let i = 0; i < N; i++) if (near[i]) e[i] = 0; }
   // 7. remove specks (short, isolated bits of line)
   const minLen = st.clean * PROC_K / 2;
   if (minLen > 0) {
@@ -656,14 +682,86 @@ function lineMask(r) {
       const j = yy * W + xx; if (offs[k + 2] > m[j]) m[j] = offs[k + 2];
     }
   }
+  if (ink) for (let i = 0; i < N; i++) if (ink[i]) m[i] = 1;
   return m;
+}
+// The picture is already line art: keep its dark lines (or light ones on a dark drawing), cleaned up.
+function drawingMask(r) {
+  const W = r.w, H = r.h, N = W * H, D = r.data;
+  const f = new Float32Array(N); const sm = [];
+  for (let i = 0; i < N; i++) { f[i] = (0.299 * D[i * 4] + 0.587 * D[i * 4 + 1] + 0.114 * D[i * 4 + 2]) / 255; if (i % 37 === 0) sm.push(f[i]); }
+  sm.sort((a, b) => a - b);
+  if (sm[sm.length >> 1] < 0.5) for (let i = 0; i < N; i++) f[i] = 1 - f[i]; // white lines on black: flip
+  // the drawing's own background is white (1), its darkest line black (0), whatever the scan looked like
+  const s2 = sm.map((v) => (sm[sm.length >> 1] < 0.5 ? 1 - v : v)).sort((a, b) => a - b);
+  const lo = s2[Math.floor(s2.length * 0.005)], hi = s2[Math.floor(s2.length * 0.6)], sp = Math.max(0.05, hi - lo);
+  for (let i = 0; i < N; i++) f[i] = Math.max(0, Math.min(1, (f[i] - lo) / sp));
+  const g = gaussBlur(f, W, H, 0.5 * PROC_K / 2);
+  const cut = st.dcut / 100, soft = 0.12;
+  const bpx = Math.round(st.border / 100 * Math.min(W, H * 4)) + 1;
+  const m = new Float32Array(N); const e = new Uint8Array(N);
+  for (let y = bpx; y < H - bpx; y++) for (let x = bpx; x < W - bpx; x++) {
+    const i = y * W + x; if (paintA && paintA[i] > 96) continue;
+    const v = Math.max(0, Math.min(1, (cut + soft / 2 - g[i]) / soft)); m[i] = v; if (v > 0.5) e[i] = 1;
+  }
+  // remove specks
+  const minLen = st.clean * PROC_K / 2;
+  if (minLen > 0) {
+    const seen = new Uint8Array(N), stack = new Int32Array(N), comp = new Int32Array(N); const nb = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
+    for (let s0 = 0; s0 < N; s0++) {
+      if (!e[s0] || seen[s0]) continue;
+      let n = 0, sp = 0; stack[sp++] = s0; seen[s0] = 1; let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
+      while (sp) { const i = stack[--sp]; comp[n++] = i; const x = i % W, y = (i / W) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (const d of nb) { const j = i + d; if (j >= 0 && j < N && e[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } } }
+      if (Math.max(n / 3, Math.hypot(x1 - x0, y1 - y0)) < minLen) for (let q = 0; q < n; q++) m[comp[q]] = 0;
+    }
+  }
+  // line weight: thicken (or leave) the drawing's own lines
+  const extra = Math.round((st.weight - 1) * PROC_K / 2);
+  return extra > 0 ? morph(m, W, H, extra * 2 + 1, true) : m;
+}
+// Separable square min/max filter (k odd). max=true: dilate, false: erode.
+function morph(a, W, H, k, max) {
+  const r = k >> 1, t = new Float32Array(W * H), o = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) { const row = y * W; for (let x = 0; x < W; x++) { let v = a[row + x]; for (let d = -r; d <= r; d++) { const xx = x + d; if (xx < 0 || xx >= W) continue; const q = a[row + xx]; if (max ? q > v : q < v) v = q; } t[row + x] = v; } }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let v = t[y * W + x]; for (let d = -r; d <= r; d++) { const yy = y + d; if (yy < 0 || yy >= H) continue; const q = t[yy * W + x]; if (max ? q > v : q < v) v = q; } o[y * W + x] = v; }
+  return o;
+}
+// Text & markings: small features that stand out from the panel around them (silkscreen, logos,
+// LEDs, arrows) become solid ink. Big areas (screens, the panel itself) are left to the outlines.
+function inkMask(lum, lo, span, W, H, bpx) {
+  const N = W * H; const f = new Float32Array(N);
+  for (let i = 0; i < N; i++) f[i] = Math.max(0, Math.min(255, (lum[i] - lo) / span * 255));
+  let light = st.inkPol === 'light';
+  if (st.inkPol === 'auto') { const sm = []; for (let i = 0; i < N; i += 37) sm.push(f[i]); sm.sort((a, b) => a - b); light = sm[sm.length >> 1] < 128; }
+  if (!light) for (let i = 0; i < N; i++) f[i] = 255 - f[i];
+  const k = Math.round(7.5 * PROC_K) | 1;                // a bit wider than a letter stroke
+  const bg = morph(morph(f, W, H, k, false), W, H, k, true); // the panel with the small bright bits removed
+  const thr = 70 - st.ink * 0.6;                         // 50 → stands out by 40 of 255
+  const bin = new Uint8Array(N);
+  for (let y = bpx; y < H - bpx; y++) for (let x = bpx; x < W - bpx; x++) { const i = y * W + x; if (f[i] - bg[i] > thr && !(paintA && paintA[i] > 96)) bin[i] = 1; }
+  // keep only text-sized pieces
+  const maxH = 0.22 * APP_U * OUT_K * PROC_K, maxW = 0.12 * APP_W * OUT_K * PROC_K, minA = 4 * (PROC_K / 2) ** 2;
+  const out = new Uint8Array(N), seen = new Uint8Array(N), stack = new Int32Array(N), comp = new Int32Array(N);
+  const nb = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
+  for (let s0 = 0; s0 < N; s0++) {
+    if (!bin[s0] || seen[s0]) continue;
+    let n = 0, sp = 0; stack[sp++] = s0; seen[s0] = 1; let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
+    while (sp) {
+      const i = stack[--sp]; comp[n++] = i; const x = i % W, y = (i / W) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const d of nb) { const j = i + d; if (j >= 0 && j < N && bin[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+    }
+    if (n >= minA && y1 - y0 < maxH && x1 - x0 < maxW) for (let q = 0; q < n; q++) out[comp[q]] = 1;
+  }
+  return out;
 }
 const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 let maskCache = null, maskKey = '';
 function process() {
   if (!rect) return;
   const t0 = performance.now();
-  const key = [paintVer, rect.data.length, corners.flat().map((v) => v.toFixed(1)).join(','), st.detail, st.smooth, st.weight, st.clean, st.border, st.ru, st.width, st.cw, st.ch].join('|');
+  const key = [paintVer, rect.data.length, corners.flat().map((v) => v.toFixed(1)).join(','), st.source, st.dcut, st.ink, st.inkPol, st.detail, st.smooth, st.weight, st.clean, st.border, st.ru, st.width, st.cw, st.ch].join('|');
   if (key !== maskKey) { maskCache = lineMask(rect); maskKey = key; }
   compose(maskCache);
   const o = outSize();
@@ -804,14 +902,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---------- controls ---------- */
-const RANGES = { detail: (v) => `${v}`, smooth: (v) => (+v).toFixed(1), weight: (v) => `${(+v).toFixed(2).replace(/0$/, '')} px`, clean: (v) => (+v ? `${v} px` : 'off'), under: (v) => `${v}%`, border: (v) => (+v ? `${v}%` : 'off') };
+const RANGES = { dcut: (v) => `${v}%`, ink: (v) => (+v ? `${v}` : 'off'), detail: (v) => `${v}`, smooth: (v) => (+v).toFixed(1), weight: (v) => `${(+v).toFixed(2).replace(/0$/, '')} px`, clean: (v) => (+v ? `${v} px` : 'off'), under: (v) => `${v}%`, border: (v) => (+v ? `${v}%` : 'off') };
 function syncControls() {
   $('#ru').value = st.ru; $('#width').value = st.width; $('#cw').value = st.cw; $('#ch').value = st.ch; $('#face').value = st.face;
   $('#make').value = st.make; $('#model').value = st.model;
   const custom = st.ru === 'custom'; $('#f-width').hidden = custom; $('#f-cw').hidden = !custom; $('#f-ch').hidden = !custom;
   for (const k in RANGES) { $('#' + k).value = st[k]; $('#v-' + k).textContent = RANGES[k](st[k]); }
+  $('#inkPol').value = st.inkPol;
   $('#brush').value = st.brush; $('#v-brush').textContent = `${st.brush} px`;
   $('#color').value = st.color; $('#grey').checked = st.grey; $('#outline').checked = st.outline;
+  document.querySelectorAll('#source button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.source));
+  const drw = st.source === 'drawing';
+  document.querySelectorAll('#photo-controls > .field').forEach((f) => { f.hidden = drw ? !f.classList.contains('drawing-only') && !/weight|clean|under|border/.test(f.querySelector('input,select')?.id || '') : f.classList.contains('drawing-only'); });
   document.querySelectorAll('#style button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.style));
 }
 for (const k in RANGES) $('#' + k).addEventListener('input', (e) => { st[k] = +e.target.value; $('#v-' + k).textContent = RANGES[k](st[k]); saveSettings(); scheduleProcess(); });
@@ -831,6 +933,8 @@ $('#style').addEventListener('click', (e) => {
   if (st.color === STYLE_COLORS[st.style]) st.color = STYLE_COLORS[b.dataset.v]; // follow the style unless a colour was picked
   st.style = b.dataset.v; syncControls(); saveSettings(); if (rect) compose(maskCache || lineMask(rect));
 });
+$('#source').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; st.source = b.dataset.v; syncControls(); saveSettings(); scheduleProcess(); });
+$('#inkPol').addEventListener('change', (e) => { st.inkPol = e.target.value; saveSettings(); scheduleProcess(); });
 $('#color').addEventListener('input', (e) => { st.color = e.target.value; saveSettings(); if (maskCache) compose(maskCache); });
 $('#grey').addEventListener('change', (e) => { st.grey = e.target.checked; saveSettings(); if (maskCache) compose(maskCache); });
 $('#outline').addEventListener('change', (e) => { st.outline = e.target.checked; saveSettings(); if (maskCache) compose(maskCache); });

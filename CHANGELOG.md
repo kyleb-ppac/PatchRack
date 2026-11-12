@@ -3,6 +3,14 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.12 (2026-11-12)
+- **Line drawing tool looks more like a manufacturer's drawing:**
+  - **Text & markings:** printed labels, logos, LEDs and arrows are drawn solid instead of as fuzzy outlines. Works on dark panels (light lettering) and light ones (dark lettering), worked out automatically or chosen.
+  - Outlines are found from colour as well as brightness, so dark-grey buttons on a black panel and coloured LEDs get their edges.
+  - Outlines hugging the lettering are dropped, so text stays crisp.
+  - New defaults: more outline detail, faceplate outline on.
+- **"The picture is: Already a drawing":** for front-panel diagrams from user guides, spec sheets and websites. It squares the drawing up and keeps its own lines (cleaned, thickened if you like) instead of tracing around them.
+
 ## v0.0.11 (2026-11-12)
 - **Line drawing tool: paint out areas.** In step 3, choose *Paint out* and brush over handles, knobs, cables, reflections or anything else you don't want drawn, on either the squared-up photo or the drawing. Painted areas come out empty, and they're ignored when the tool works out what a strong line is, so the rest of the panel can keep more detail.
   - *Erase* wipes painting away; *Undo stroke* (Ctrl/Cmd+Z) and *Clear all painting* are there too. Brush size slider, or `[` and `]`.
