@@ -3,6 +3,14 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.9 (2026-11-12)
+- **Line drawing tool** (`dist/Line-Drawing-Tool.html`, a separate page): turns a gear photo into a clean line drawing for a gear definition's front or rear photo.
+  - **Square it up:** drag four corners onto the faceplate's corners and the photo is straightened out, so a picture taken at an angle comes out flat and square. A magnifier shows the corner while dragging; arrow keys nudge; guides follow the perspective so you can check rows of jacks are straight.
+  - **Exact size:** choose 1U–8U, full or half width (or a custom size in mm). The drawing comes out exactly the faceplate's shape at the same resolution the app stores, so Add photo → Fill lines up with nothing stretched.
+  - **Line drawing controls:** detail, smoothing, line weight, speck removal, a faint copy of the photo underneath if you want more to recognise it by, and three styles (light on dark like the rack, dark on white, see-through).
+  - Download as PNG (named from make/model) or copy it. Open a photo by choosing, dropping or pasting it. Nothing leaves your computer.
+- The Photos section of each gear definition links to the tool.
+
 ## v0.0.8 (2026-11-10)
 - **Rig sheet tab:** every location and rack written out top to bottom: what's in each space (and which spaces are empty), IP addresses, details and notes, every cable and tie line, and Dante routes. Matching runs of connections are grouped (e.g. "In 1–6 ← Pocket MS-SR · Tie 1–6"). Show the whole rig, one location or one rack; choose what to include; print/PDF or copy as text.
 - **Details & notes on every unit:** free-form detail fields (firmware, serial, settings…) and a notes box in the unit's panel (rig mode). Shown on the Rig sheet.

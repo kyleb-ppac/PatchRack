@@ -18,12 +18,14 @@ Open the newest `dist/PatchRack-v….html` in a web browser (double-click it on 
   The token is stored only in that browser.
 - **File → Save project file** still writes a local `.patchrack.json` backup if you want one.
 - **Print → Print / Save as PDF** makes the patchlist PDF.
+- **Line drawing tool:** open `dist/Line-Drawing-Tool.html` to turn a gear photo (even one taken at an angle)
+  into a squared-up line drawing at exactly the faceplate's size, then add it as the gear's photo.
 
 ## What's where
 
 | Folder | What it holds |
 |---|---|
-| `dist/` | The app, ready to open (`PatchRack-v<version>.html`) |
+| `dist/` | The app, ready to open (`PatchRack-v<version>.html`), and `Line-Drawing-Tool.html` |
 | `projects/` | Saved projects (one `.patchrack.json` per rig/venue) |
 | `src/` | Source code |
 
@@ -37,6 +39,7 @@ Open the newest `dist/PatchRack-v….html` in a web browser (double-click it on 
 | `src/app.js` | Signal tracing, checks, rack view, patchlist, Dante, print, library editor |
 | `src/github.js` | Saving to and opening from GitHub |
 | `src/main.js` | Start-up |
+| `src/tools/line-drawing.html` | The separate photo → line drawing tool (one self-contained page) |
 | `build.py` | Bundles `src/` into the single files in `dist/`; the version number comes from `VERSION` |
 
 After changing anything in `src/`, rebuild with:

@@ -411,7 +411,8 @@ function photoHTML(def, editable = true) {
   return `<div class="photos">${['front', 'rear'].map((f) => `<div class="photo-slot"><div class="eyebrow">${f}</div>
     ${def.images?.[f] ? `<img src="${def.images[f]}" alt="${esc(def.model)} ${f} panel" style="aspect-ratio:${sz.w}/${sz.h}">` : `<div class="photo-empty" style="aspect-ratio:${sz.w}/${sz.h}">No photo</div>`}
     ${editable ? `<div class="toolbar">${def.images?.[f] ? `<button data-act="adjustPhoto" data-def="${def.id}" data-face="${f}">Adjust</button>` : ''}<button data-act="addPhoto" data-def="${def.id}" data-face="${f}">${def.images?.[f] ? 'Replace' : 'Add photo'}</button>${def.images?.[f] ? `<button data-act="removePhoto" data-def="${def.id}" data-face="${f}">Remove</button>` : ''}</div>` : ''}</div>`).join('')}</div>
-    <p class="small muted" style="margin:0">Photos belong to the gear definition, so every ${esc(def.model)} shows them. After choosing a photo you can move, zoom and rotate it inside the faceplate window. If you change the gear's height or width, use Adjust again.</p>`;
+    <p class="small muted" style="margin:0">Photos belong to the gear definition, so every ${esc(def.model)} shows them. After choosing a photo you can move, zoom and rotate it inside the faceplate window. If you change the gear's height or width, use Adjust again.</p>
+    <p class="small muted" style="margin:0">Photo taken at an angle? <a href="Line-Drawing-Tool.html" target="_blank" rel="noopener">Line drawing tool</a> (next to this file in <code>dist/</code>) squares it up and turns it into a clean line drawing at exactly this size: ${def.ru}U${def.width === 'half' ? ', half width' : ''}.</p>`;
 }
 
 // ----- photo editor: frame a photo inside the faceplate, like a profile picture -----

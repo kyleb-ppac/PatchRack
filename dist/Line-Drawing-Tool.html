@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PatchRack Line Drawing</title>
+<meta name="description" content="Turn a gear photo into a squared-up line drawing sized for a PatchRack faceplate.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Same look as the main PatchRack app. */
+:root {
+  --bg: #eceff3; --panel: #ffffff; --panel-2: #f6f8fa; --fg: #18202a; --muted: #5a6776;
+  --line: #d3d9e0; --accent: #3a5068; --accent-fg: #ffffff; --accent-soft: #dfe7ef;
+  --handle: #f2a900; --metal: #202327;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --f-ui: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151a; --panel: #192028; --panel-2: #1f2730; --fg: #e5eaf0; --muted: #95a2b0;
+    --line: #2c3540; --accent: #8db1d6; --accent-fg: #0f1720; --accent-soft: #24313f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151a; --panel: #192028; --panel-2: #1f2730; --fg: #e5eaf0; --muted: #95a2b0;
+  --line: #2c3540; --accent: #8db1d6; --accent-fg: #0f1720; --accent-soft: #24313f;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(--f-ui); }
+button, input, select { font: inherit; color: inherit; }
+button {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 5px 10px; cursor: pointer; white-space: nowrap;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type=text], input[type=number], select {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; min-width: 0;
+}
+input[type=range] { width: 100%; accent-color: var(--accent); }
+header.top {
+  display: flex; align-items: baseline; gap: 10px; padding: 10px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { font: 600 20px/1 var(--f-display); letter-spacing: .02em; }
+.brand small { font: 500 12px var(--f-mono); color: var(--muted); margin-left: 6px; }
+header .what { color: var(--muted); font-size: 13px; }
+main { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.card h2 { margin: 0; font: 600 17px/1.1 var(--f-display); letter-spacing: .03em; text-transform: uppercase; display: flex; gap: 8px; align-items: baseline; }
+.card h2 .n { color: var(--muted); }
+.small { font-size: 12.5px; } .muted { color: var(--muted); }
+p { margin: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; }
+.field { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); min-width: 0; }
+.field > span b { color: var(--fg); font-weight: 500; font-family: var(--f-mono); }
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; margin-left: -1px; }
+.seg button:first-child { border-radius: var(--r) 0 0 var(--r); margin-left: 0; }
+.seg button:last-child { border-radius: 0 var(--r) var(--r) 0; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); position: relative; }
+.tog { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.spacer { flex: 1; }
+.drop {
+  border: 1.5px dashed var(--line); border-radius: 8px; padding: 28px 16px; text-align: center;
+  display: grid; gap: 8px; justify-items: center; color: var(--muted);
+}
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.stagewrap { position: relative; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; touch-action: none; }
+#stage { display: block; width: 100%; cursor: crosshair; }
+.out { background: repeating-conic-gradient(var(--panel-2) 0 25%, var(--bg) 0 50%) 0 0 / 16px 16px; border: 1px solid var(--line); border-radius: 4px; padding: 0; line-height: 0; }
+.out canvas { width: 100%; height: auto; display: block; }
+.eyebrow { font: 500 11px var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+.status { font: 12px var(--f-mono); color: var(--muted); min-height: 1em; }
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--fg); color: var(--bg);
+  padding: 8px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px);
+}
+.toast.show { opacity: 1; }
+ol.steps { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+@media (max-width: 640px) { main { padding: 12px; } header.top { flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">PatchRack<small>Line drawing · v0.0.9</small></div>
+  <span class="what">Photo → squared-up line drawing for a gear definition</span>
+</header>
+
+<main>
+  <section class="card" id="c-photo">
+    <h2><span class="n">1</span> Photo and faceplate size</h2>
+    <div class="drop" id="drop">
+      <div>Drop a photo of the front or rear panel here, paste one (Cmd/Ctrl+V), or</div>
+      <button class="primary" id="btn-open">Choose a photo…</button>
+      <input type="file" id="file" accept="image/*" hidden>
+    </div>
+    <div class="row">
+      <label class="field"><span>Height</span>
+        <select id="ru">
+          <option value="1">1U</option><option value="2">2U</option><option value="3">3U</option><option value="4">4U</option>
+          <option value="5">5U</option><option value="6">6U</option><option value="7">7U</option><option value="8">8U</option>
+          <option value="custom">Custom size…</option>
+        </select></label>
+      <label class="field" id="f-width"><span>Width</span>
+        <select id="width"><option value="full">Full width (19")</option><option value="half">Half width</option></select></label>
+      <label class="field" id="f-cw" hidden><span>Width (mm)</span><input type="number" id="cw" min="10" max="2000" value="483" style="width:90px"></label>
+      <label class="field" id="f-ch" hidden><span>Height (mm)</span><input type="number" id="ch" min="10" max="2000" value="88" style="width:90px"></label>
+      <label class="field"><span>Side</span>
+        <select id="face"><option value="front">Front</option><option value="rear">Rear</option></select></label>
+      <label class="field"><span>Make</span><input type="text" id="make" placeholder="e.g. Allen &amp; Heath" style="width:150px"></label>
+      <label class="field"><span>Model</span><input type="text" id="model" placeholder="e.g. DX168" style="width:130px"></label>
+    </div>
+    <p class="small muted">Pick the same height and width as the gear definition in PatchRack. The drawing comes out exactly that shape, so it drops into the faceplate with nothing stretched.</p>
+  </section>
+
+  <section class="card" id="c-square" hidden>
+    <h2><span class="n">2</span> Square it up</h2>
+    <ol class="steps small muted">
+      <li>Drag the four amber corners onto the four corners of the faceplate (include the rack ears for rack gear). The labels say which corner is which.</li>
+      <li>Line the dashed guides up with straight things on the panel (rows of jacks, the top edge) to check.</li>
+      <li>Click a corner, then use the arrow keys to nudge it (Shift = bigger steps). Drag inside the box to move all four.</li>
+    </ol>
+    <div class="row">
+      <button id="btn-rot" title="Turn the photo a quarter turn">↻ Rotate photo 90°</button>
+      <button id="btn-reset">Reset corners</button>
+      <button id="btn-newphoto">Choose a different photo…</button>
+      <span class="spacer"></span>
+      <label class="tog"><input type="checkbox" id="guides" checked> Guides</label>
+    </div>
+    <div class="stagewrap" id="stagewrap"><canvas id="stage" tabindex="0" aria-label="Photo with four draggable corner handles"></canvas></div>
+  </section>
+
+  <section class="card" id="c-lines" hidden>
+    <h2><span class="n">3</span> Line drawing</h2>
+    <div>
+      <div class="eyebrow">Squared-up photo</div>
+      <div class="out"><canvas id="rectview"></canvas></div>
+    </div>
+    <div>
+      <div class="eyebrow">Line drawing <span id="outsize"></span></div>
+      <div class="out"><canvas id="result"></canvas></div>
+    </div>
+    <div class="status" id="status" aria-live="polite"></div>
+    <div class="controls">
+      <label class="field"><span>Detail <b id="v-detail"></b></span><input type="range" id="detail" min="0" max="100" step="1"></label>
+      <label class="field"><span>Smoothing <b id="v-smooth"></b></span><input type="range" id="smooth" min="0.5" max="5" step="0.1"></label>
+      <label class="field"><span>Line weight <b id="v-weight"></b></span><input type="range" id="weight" min="0.5" max="4" step="0.25"></label>
+      <label class="field"><span>Remove specks <b id="v-clean"></b></span><input type="range" id="clean" min="0" max="150" step="1"></label>
+      <label class="field"><span>Photo underneath <b id="v-under"></b></span><input type="range" id="under" min="0" max="100" step="1"></label>
+      <label class="field"><span>Ignore the outer edge <b id="v-border"></b></span><input type="range" id="border" min="0" max="5" step="0.5"></label>
+    </div>
+    <div class="row">
+      <div class="field"><span>Style</span>
+        <div class="seg" id="style">
+          <button data-v="dark" aria-pressed="false" title="Light lines on dark metal, like the rack view">Light on dark</button>
+          <button data-v="light" aria-pressed="false">Dark on white</button>
+          <button data-v="clear" aria-pressed="false" title="Lines only, see-through background">See-through</button>
+        </div></div>
+      <label class="field"><span>Line colour</span><input type="color" id="color" style="width:52px;height:30px;padding:1px"></label>
+      <label class="tog"><input type="checkbox" id="grey"> Greyscale photo</label>
+      <label class="tog"><input type="checkbox" id="outline"> Outline the faceplate</label>
+      <span class="spacer"></span>
+      <button id="btn-defaults">Reset settings</button>
+    </div>
+    <div class="row">
+      <button class="primary" id="btn-save">Download PNG</button>
+      <button id="btn-copy">Copy image</button>
+      <span class="small muted">Then in PatchRack: the gear's <b>Photos</b> section → Add photo → choose this PNG → <b>Fill</b> → Save photo.</span>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+'use strict';
+// Faceplate pixel sizes match the main app: 520 px per 19" width, 48 px per rack unit.
+// Drawings are saved at 2x that (1040 px wide for full width), the same as the app's photo editor.
+const APP_W = 520, APP_U = 48, OUT_K = 2;
+const PROC_K = 2;           // edge detection runs at 2x the saved size, then is scaled down (smoother lines)
+const BG_METAL = [32, 35, 39];
+const DEFAULTS = { detail: 55, smooth: 1.4, weight: 1.25, clean: 25, under: 0, border: 1, style: 'dark', color: '#d7dce1', grey: true, outline: false };
+const STYLE_COLORS = { dark: '#d7dce1', light: '#18202a', clear: '#d7dce1' };
+const $ = (s) => document.querySelector(s);
+
+let st = { ru: '1', width: 'full', cw: 483, ch: 88, face: 'front', make: '', model: '', ...DEFAULTS };
+try { Object.assign(st, JSON.parse(localStorage.getItem('patchrack.linedrawing') || '{}')); } catch {}
+const saveSettings = () => { try { localStorage.setItem('patchrack.linedrawing', JSON.stringify(st)); } catch {} };
+
+let src = null;        // { cv, data, w, h } source photo (downscaled if huge)
+let corners = null;    // [TL, TR, BR, BL] in source pixels
+let rect = null;       // squared-up photo at processing size: { data: Uint8ClampedArray, w, h }
+let view = { s: 1, ox: 0, oy: 0 };
+let drag = null, selected = -1;
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); }
+
+/* ---------- sizes ---------- */
+function outSize() {
+  if (st.ru === 'custom') {
+    const w = Math.max(10, +st.cw || 483), h = Math.max(10, +st.ch || 88);
+    const W = APP_W * OUT_K; return { w: W, h: Math.max(8, Math.round(W * h / w)) };
+  }
+  return { w: (st.width === 'half' ? APP_W / 2 : APP_W) * OUT_K, h: (+st.ru) * APP_U * OUT_K };
+}
+
+/* ---------- loading ---------- */
+function loadFile(file) {
+  if (!file || !/^image\//.test(file.type)) { toast("That file isn't an image. Try a JPG or PNG."); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 3200 / Math.max(img.width, img.height));
+    const cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    URL.revokeObjectURL(url);
+    setSource(cv);
+    resetCorners();
+    $('#c-square').hidden = false; $('#c-lines').hidden = false;
+    layoutStage(); drawStage(); rectifyAndProcess();
+    $('#c-square').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("That photo couldn't be opened. Try a JPG or PNG."); };
+  img.src = url;
+}
+function setSource(cv) {
+  src = { cv, w: cv.width, h: cv.height, data: cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data };
+}
+function resetCorners() {
+  // start with a box the faceplate's shape, centred on the photo
+  const o = outSize(); const a = o.w / o.h;
+  let w = src.w * 0.8, h = w / a;
+  if (h > src.h * 0.8) { h = src.h * 0.8; w = h * a; }
+  const x = (src.w - w) / 2, y = (src.h - h) / 2;
+  corners = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+}
+function rotateSource() {
+  const cv = document.createElement('canvas'); cv.width = src.h; cv.height = src.w;
+  const c = cv.getContext('2d'); c.translate(src.h, 0); c.rotate(Math.PI / 2); c.drawImage(src.cv, 0, 0);
+  const oh = src.h;
+  corners = corners.map(([x, y]) => [oh - y, x]);
+  setSource(cv);
+}
+
+/* ---------- corner stage ---------- */
+const stage = $('#stage');
+function layoutStage() {
+  if (!src) return;
+  const wrap = $('#stagewrap'); const cw = wrap.clientWidth;
+  const maxH = Math.max(260, Math.min(window.innerHeight * 0.68, 900));
+  const m = 28; // margin so corners can sit right at the photo's edge
+  const s = Math.min((cw - 2 * m) / src.w, (maxH - 2 * m) / src.h);
+  const ch = Math.round(src.h * s + 2 * m);
+  const dpr = window.devicePixelRatio || 1;
+  stage.style.height = ch + 'px'; stage.width = Math.round(cw * dpr); stage.height = Math.round(ch * dpr);
+  view = { s, ox: (cw - src.w * s) / 2, oy: m, dpr, cw, ch };
+}
+const toScreen = ([x, y]) => [view.ox + x * view.s, view.oy + y * view.s];
+const toSrc = (sx, sy) => [(sx - view.ox) / view.s, (sy - view.oy) / view.s];
+function lerp(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+function drawStage() {
+  if (!src) return;
+  const c = stage.getContext('2d'); const { dpr } = view;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, view.cw, view.ch);
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(src.cv, view.ox, view.oy, src.w * view.s, src.h * view.s);
+  const P = corners.map(toScreen);
+  // dim everything outside the quad
+  c.save(); c.fillStyle = 'rgba(0,0,0,.42)'; c.beginPath(); c.rect(0, 0, view.cw, view.ch);
+  c.moveTo(...P[0]); c.lineTo(...P[3]); c.lineTo(...P[2]); c.lineTo(...P[1]); c.closePath(); c.fill('evenodd'); c.restore();
+  // guides: lines across the quad at even steps (they follow the perspective)
+  if ($('#guides').checked) {
+    const o = outSize(); const rows = st.ru === 'custom' ? 4 : Math.max(2, +st.ru * 2);
+    c.save(); c.setLineDash([5, 5]); c.lineWidth = 1; c.strokeStyle = 'rgba(242,169,0,.75)';
+    for (let i = 1; i < rows; i++) { const t = i / rows; c.beginPath(); c.moveTo(...toScreen(lerp(corners[0], corners[3], t))); c.lineTo(...toScreen(lerp(corners[1], corners[2], t))); c.stroke(); }
+    const cols = Math.max(4, Math.round(8 * o.w / 1040));
+    for (let i = 1; i < cols; i++) { const t = i / cols; c.beginPath(); c.moveTo(...toScreen(lerp(corners[0], corners[1], t))); c.lineTo(...toScreen(lerp(corners[3], corners[2], t))); c.stroke(); }
+    c.restore();
+  }
+  c.save(); c.lineWidth = 2; c.strokeStyle = '#f2a900'; c.beginPath(); c.moveTo(...P[0]); for (const p of [P[1], P[2], P[3]]) c.lineTo(...p); c.closePath(); c.stroke(); c.restore();
+  const labels = ['TL', 'TR', 'BR', 'BL'];
+  P.forEach((p, i) => {
+    c.beginPath(); c.arc(p[0], p[1], 9, 0, Math.PI * 2);
+    c.fillStyle = i === selected ? '#ffffff' : 'rgba(242,169,0,.28)'; c.fill();
+    c.lineWidth = 2; c.strokeStyle = '#f2a900'; c.stroke();
+    c.beginPath(); c.moveTo(p[0] - 4, p[1]); c.lineTo(p[0] + 4, p[1]); c.moveTo(p[0], p[1] - 4); c.lineTo(p[0], p[1] + 4); c.strokeStyle = '#111'; c.lineWidth = 1; c.stroke();
+    const lx = p[0] + (i === 0 || i === 3 ? -14 : 14), ly = p[1] + (i < 2 ? -14 : 18);
+    c.font = '600 12px "IBM Plex Mono", monospace'; c.textAlign = 'center';
+    c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,.8)'; c.strokeText(labels[i], lx, ly); c.fillStyle = '#f2a900'; c.fillText(labels[i], lx, ly);
+  });
+  // magnifier while dragging a corner
+  const li = drag?.i ?? -1;
+  if (li >= 0) drawLoupe(c, corners[li], P[li]);
+}
+function drawLoupe(c, sp, scr) {
+  const R = 64, Z = 4; // radius on screen, magnification relative to the photo's own pixels at 1:1 screen scale
+  const z = Math.max(Z * view.s, 2);
+  let cx = scr[0] + (scr[0] < view.cw / 2 ? 100 : -100), cy = scr[1] + (scr[1] < view.ch / 2 ? 100 : -100);
+  cx = Math.max(R + 4, Math.min(view.cw - R - 4, cx)); cy = Math.max(R + 4, Math.min(view.ch - R - 4, cy));
+  c.save(); c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.closePath(); c.fillStyle = '#000'; c.fill(); c.clip();
+  c.imageSmoothingEnabled = false;
+  const k = z / view.s; // screen px per source px inside the loupe
+  c.drawImage(src.cv, cx - sp[0] * k, cy - sp[1] * k, src.w * k, src.h * k);
+  c.strokeStyle = '#f2a900'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx + R, cy); c.moveTo(cx, cy - R); c.lineTo(cx, cy + R); c.stroke();
+  c.restore();
+  c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.lineWidth = 2; c.strokeStyle = '#f2a900'; c.stroke();
+}
+function inQuad(p) {
+  // point in convex/concave quad via winding of the polygon
+  let inside = false;
+  for (let i = 0, j = 3; i < 4; j = i++) {
+    const [xi, yi] = corners[i], [xj, yj] = corners[j];
+    if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function evPos(e) { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+stage.addEventListener('pointerdown', (e) => {
+  if (!src) return;
+  const p = evPos(e); const P = corners.map(toScreen);
+  let best = -1, bd = 30;
+  P.forEach((q, i) => { const d = Math.hypot(q[0] - p[0], q[1] - p[1]); if (d < bd) { bd = d; best = i; } });
+  if (best >= 0) { drag = { i: best, off: [P[best][0] - p[0], P[best][1] - p[1]] }; selected = best; }
+  else if (inQuad(toSrc(...p))) { drag = { all: true, start: toSrc(...p), c0: corners.map((q) => q.slice()) }; }
+  else { selected = -1; drawStage(); return; }
+  stage.setPointerCapture(e.pointerId); stage.focus({ preventScroll: true }); e.preventDefault(); drawStage();
+});
+stage.addEventListener('pointermove', (e) => {
+  if (!drag) {
+    const p = evPos(e); const near = corners?.map(toScreen).some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 30);
+    stage.style.cursor = near ? 'grab' : (corners && inQuad(toSrc(...p)) ? 'move' : 'crosshair'); return;
+  }
+  const p = evPos(e);
+  if (drag.all) {
+    const q = toSrc(...p); const dx = q[0] - drag.start[0], dy = q[1] - drag.start[1];
+    corners = drag.c0.map(([x, y]) => [x + dx, y + dy]);
+  } else {
+    const q = toSrc(p[0] + drag.off[0], p[1] + drag.off[1]);
+    const mx = 28 / view.s;
+    corners[drag.i] = [Math.max(-mx, Math.min(src.w + mx, q[0])), Math.max(-mx, Math.min(src.h + mx, q[1]))];
+  }
+  drawStage(); quickRect();
+});
+const endDrag = () => { if (!drag) return; drag = null; drawStage(); rectifyAndProcess(); };
+stage.addEventListener('pointerup', endDrag);
+stage.addEventListener('pointercancel', endDrag);
+stage.addEventListener('keydown', (e) => {
+  if (selected < 0 || !corners) return;
+  const step = (e.shiftKey ? 10 : 1) / view.s;
+  const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+  if (e.key === 'Tab' && !e.shiftKey && selected < 3) { selected++; drawStage(); e.preventDefault(); return; }
+  if (!d) return;
+  e.preventDefault(); corners[selected] = [corners[selected][0] + d[0], corners[selected][1] + d[1]];
+  drawStage(); quickRect(); clearTimeout(stage.kt); stage.kt = setTimeout(rectifyAndProcess, 250);
+});
+
+/* ---------- perspective correction ---------- */
+// H maps output pixel (x, y) to the photo: u = (h0 x + h1 y + h2) / (h6 x + h7 y + 1), likewise v.
+function homography(from, to) {
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = from[i], [u, v] = to[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+  }
+  for (let c = 0; c < 8; c++) {
+    let p = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]]; [b[c], b[p]] = [b[p], b[c]];
+    const d = A[c][c]; if (Math.abs(d) < 1e-12) return null;
+    for (let r = 0; r < 8; r++) {
+      if (r === c) continue; const f = A[r][c] / d; if (!f) continue;
+      for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k]; b[r] -= f * b[c];
+    }
+  }
+  return b.map((v, i) => v / A[i][i]);
+}
+function rectify(W, H) {
+  const h = homography([[0, 0], [W, 0], [W, H], [0, H]], corners);
+  const out = new Uint8ClampedArray(W * H * 4);
+  if (!h) return { data: out, w: W, h: H };
+  const S = src.data, sw = src.w, shh = src.h;
+  for (let y = 0; y < H; y++) {
+    const yy = y + 0.5;
+    for (let x = 0; x < W; x++) {
+      const xx = x + 0.5;
+      const w = h[6] * xx + h[7] * yy + 1;
+      const u = (h[0] * xx + h[1] * yy + h[2]) / w - 0.5, v = (h[3] * xx + h[4] * yy + h[5]) / w - 0.5;
+      const o = (y * W + x) * 4;
+      if (u < -0.5 || v < -0.5 || u > sw - 0.5 || v > shh - 0.5) { out[o] = BG_METAL[0]; out[o + 1] = BG_METAL[1]; out[o + 2] = BG_METAL[2]; out[o + 3] = 255; continue; }
+      const x0 = Math.max(0, Math.min(sw - 1, Math.floor(u))), y0 = Math.max(0, Math.min(shh - 1, Math.floor(v)));
+      const x1 = Math.min(sw - 1, x0 + 1), y1 = Math.min(shh - 1, y0 + 1);
+      const fx = Math.max(0, Math.min(1, u - x0)), fy = Math.max(0, Math.min(1, v - y0));
+      const a = (y0 * sw + x0) * 4, bb = (y0 * sw + x1) * 4, cc = (y1 * sw + x0) * 4, dd = (y1 * sw + x1) * 4;
+      for (let k = 0; k < 3; k++) {
+        const top = S[a + k] + (S[bb + k] - S[a + k]) * fx, bot = S[cc + k] + (S[dd + k] - S[cc + k]) * fx;
+        out[o + k] = top + (bot - top) * fy;
+      }
+      out[o + 3] = 255;
+    }
+  }
+  return { data: out, w: W, h: H };
+}
+function showRect(r) {
+  const o = outSize(); const cv = $('#rectview'); cv.width = o.w; cv.height = o.h;
+  const tmp = document.createElement('canvas'); tmp.width = r.w; tmp.height = r.h;
+  tmp.getContext('2d').putImageData(new ImageData(r.data, r.w, r.h), 0, 0);
+  const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(tmp, 0, 0, o.w, o.h);
+}
+let quickPending = false;
+function quickRect() { // fast low-res preview while dragging
+  if (quickPending) return; quickPending = true;
+  requestAnimationFrame(() => { quickPending = false; const o = outSize(); showRect(rectify(Math.round(o.w / 2), Math.round(o.h / 2))); });
+}
+function rectifyAndProcess() {
+  if (!src) return;
+  const o = outSize();
+  rect = rectify(o.w * PROC_K, o.h * PROC_K);
+  showRect(rect);
+  scheduleProcess();
+}
+
+/* ---------- line drawing ---------- */
+function gaussBlur(a, W, H, sigma) {
+  const r = Math.max(1, Math.ceil(sigma * 3)); const k = new Float32Array(2 * r + 1); let sum = 0;
+  for (let i = -r; i <= r; i++) { k[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma)); sum += k[i + r]; }
+  for (let i = 0; i < k.length; i++) k[i] /= sum;
+  const t = new Float32Array(W * H), out = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) { const row = y * W; for (let x = 0; x < W; x++) { let s = 0; for (let i = -r; i <= r; i++) { const xx = Math.min(W - 1, Math.max(0, x + i)); s += a[row + xx] * k[i + r]; } t[row + x] = s; } }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let s = 0; for (let i = -r; i <= r; i++) { const yy = Math.min(H - 1, Math.max(0, y + i)); s += t[yy * W + x] * k[i + r]; } out[y * W + x] = s; }
+  return out;
+}
+function lineMask(r) {
+  const W = r.w, H = r.h, N = W * H, D = r.data;
+  // 1. grey + contrast stretch (1st–99th percentile) so dark faceplates still show their silkscreen
+  let g = new Float32Array(N); const hist = new Uint32Array(256);
+  for (let i = 0; i < N; i++) { const v = 0.299 * D[i * 4] + 0.587 * D[i * 4 + 1] + 0.114 * D[i * 4 + 2]; g[i] = v; hist[v | 0]++; }
+  let lo = 0, hi = 255, acc = 0;
+  for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > N * 0.01) { lo = i; break; } }
+  acc = 0; for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > N * 0.01) { hi = i; break; } }
+  const span = Math.max(1, hi - lo); for (let i = 0; i < N; i++) g[i] = Math.max(0, Math.min(1, (g[i] - lo) / span));
+  // 2. smooth away texture and JPEG noise
+  g = gaussBlur(g, W, H, st.smooth * PROC_K / 2);
+  // 3. gradients (Sobel)
+  const mag = new Float32Array(N), dir = new Uint8Array(N);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x;
+    const gx = (g[i - W + 1] + 2 * g[i + 1] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - 1] + g[i + W - 1]);
+    const gy = (g[i + W - 1] + 2 * g[i + W] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - W] + g[i - W + 1]);
+    mag[i] = Math.hypot(gx, gy);
+    let a = Math.atan2(gy, gx) * 180 / Math.PI; if (a < 0) a += 180;
+    dir[i] = a < 22.5 || a >= 157.5 ? 0 : a < 67.5 ? 1 : a < 112.5 ? 2 : 3;
+  }
+  // 4. thin to one-pixel ridges
+  const nms = new Float32Array(N);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x, m = mag[i]; if (!m) continue;
+    let a, b;
+    switch (dir[i]) { case 0: a = mag[i - 1]; b = mag[i + 1]; break; case 1: a = mag[i - W - 1]; b = mag[i + W + 1]; break; case 2: a = mag[i - W]; b = mag[i + W]; break; default: a = mag[i - W + 1]; b = mag[i + W - 1]; }
+    if (m >= a && m >= b) nms[i] = m;
+  }
+  // ignore the outer edge (the faceplate border and whatever is just outside it)
+  const bpx = Math.round(st.border / 100 * Math.min(W, H * 4)) + 1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (x < bpx || y < bpx || x >= W - bpx || y >= H - bpx) nms[y * W + x] = 0;
+  // 5. thresholds scaled to this photo's strongest edges (panel outlines, jack rims),
+  //    so flat metal with a little grain or JPEG noise stays empty. Detail sets how faint a line may be.
+  const samp = []; const step = Math.max(1, Math.floor(N / 250000));
+  for (let i = 0; i < N; i += step) if (nms[i] > 0) samp.push(nms[i]);
+  samp.sort((a, b) => a - b);
+  const ref = samp.length ? samp[Math.floor(samp.length * 0.985)] : 1;
+  const high = Math.max(0.02, ref * (0.6 - (st.detail / 100) * 0.54)); // detail 0 → 60% of the strongest, 100 → 6%
+  const low = high * 0.45;
+  // 6. hysteresis: weak ridges survive only when joined to a strong one
+  const e = new Uint8Array(N); const stack = new Int32Array(N); let sp = 0;
+  for (let i = 0; i < N; i++) if (nms[i] >= high) { e[i] = 2; stack[sp++] = i; } else if (nms[i] >= low) e[i] = 1;
+  const nb = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
+  while (sp) { const i = stack[--sp]; for (const d of nb) { const j = i + d; if (j >= 0 && j < N && e[j] === 1) { e[j] = 2; stack[sp++] = j; } } }
+  for (let i = 0; i < N; i++) e[i] = e[i] === 2 ? 1 : 0;
+  // 7. remove specks (short, isolated bits of line)
+  const minLen = st.clean * PROC_K / 2;
+  if (minLen > 0) {
+    const seen = new Uint8Array(N); const comp = new Int32Array(N);
+    for (let s = 0; s < N; s++) {
+      if (!e[s] || seen[s]) continue;
+      let n = 0; sp = 0; stack[sp++] = s; seen[s] = 1;
+      let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
+      while (sp) {
+        const i = stack[--sp]; comp[n++] = i; const x = i % W, y = (i / W) | 0;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (const d of nb) { const j = i + d; if (j >= 0 && j < N && e[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+      }
+      if (Math.max(n, Math.hypot(x1 - x0, y1 - y0)) < minLen) for (let k = 0; k < n; k++) e[comp[k]] = 0;
+    }
+  }
+  // 8. line weight: draw a soft round dot at every ridge pixel
+  const rad = Math.max(0.5, st.weight * PROC_K / 2); const R = Math.ceil(rad + 1);
+  const offs = [];
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    const a = Math.max(0, Math.min(1, rad + 0.5 - Math.hypot(dx, dy)));
+    if (a > 0) offs.push(dx, dy, a);
+  }
+  const m = new Float32Array(N);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!e[y * W + x]) continue;
+    for (let k = 0; k < offs.length; k += 3) {
+      const xx = x + offs[k], yy = y + offs[k + 1]; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+      const j = yy * W + xx; if (offs[k + 2] > m[j]) m[j] = offs[k + 2];
+    }
+  }
+  return m;
+}
+const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+let maskCache = null, maskKey = '';
+function process() {
+  if (!rect) return;
+  const t0 = performance.now();
+  const key = [rect.data.length, corners.flat().map((v) => v.toFixed(1)).join(','), st.detail, st.smooth, st.weight, st.clean, st.border, st.ru, st.width, st.cw, st.ch].join('|');
+  if (key !== maskKey) { maskCache = lineMask(rect); maskKey = key; }
+  compose(maskCache);
+  const o = outSize();
+  $('#outsize').textContent = `· ${o.w}×${o.h} px`;
+  $('#status').textContent = `Done in ${Math.round(performance.now() - t0)} ms.`;
+}
+function compose(mask) {
+  const W = rect.w, H = rect.h, N = W * H;
+  const img = new ImageData(W, H); const O = img.data, D = rect.data;
+  const bg = st.style === 'light' ? [255, 255, 255] : BG_METAL; const bgA = st.style === 'clear' ? 0 : 255;
+  const lc = hexRGB(st.color); const u = st.under / 100;
+  // layers, bottom to top: background, photo (at "Photo underneath" strength), lines. Premultiplied "over".
+  for (let i = 0; i < N; i++) {
+    let a = bgA / 255, r = bg[0] * a, g = bg[1] * a, b = bg[2] * a;
+    if (u > 0) {
+      let pr = D[i * 4], pg = D[i * 4 + 1], pb = D[i * 4 + 2];
+      if (st.grey) { const v = 0.299 * pr + 0.587 * pg + 0.114 * pb; pr = pg = pb = v; }
+      r = pr * u + r * (1 - u); g = pg * u + g * (1 - u); b = pb * u + b * (1 - u); a = u + a * (1 - u);
+    }
+    const m = mask[i];
+    if (m > 0) { r = lc[0] * m + r * (1 - m); g = lc[1] * m + g * (1 - m); b = lc[2] * m + b * (1 - m); a = m + a * (1 - m); }
+    const o = i * 4;
+    if (a > 0) { O[o] = r / a; O[o + 1] = g / a; O[o + 2] = b / a; }
+    O[o + 3] = Math.round(a * 255);
+  }
+  const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; tmp.getContext('2d').putImageData(img, 0, 0);
+  const o = outSize(); const cv = $('#result'); cv.width = o.w; cv.height = o.h;
+  const c = cv.getContext('2d'); c.clearRect(0, 0, o.w, o.h); c.imageSmoothingQuality = 'high'; c.drawImage(tmp, 0, 0, o.w, o.h);
+  if (st.outline) { c.lineWidth = Math.max(1, st.weight * OUT_K / 2 + 0.5); c.strokeStyle = st.color; c.strokeRect(c.lineWidth / 2, c.lineWidth / 2, o.w - c.lineWidth, o.h - c.lineWidth); }
+}
+let procT = 0;
+function scheduleProcess() { $('#status').textContent = 'Working…'; clearTimeout(procT); procT = setTimeout(() => requestAnimationFrame(process), 60); }
+
+/* ---------- controls ---------- */
+const RANGES = { detail: (v) => `${v}`, smooth: (v) => (+v).toFixed(1), weight: (v) => `${(+v).toFixed(2).replace(/0$/, '')} px`, clean: (v) => (+v ? `${v} px` : 'off'), under: (v) => `${v}%`, border: (v) => (+v ? `${v}%` : 'off') };
+function syncControls() {
+  $('#ru').value = st.ru; $('#width').value = st.width; $('#cw').value = st.cw; $('#ch').value = st.ch; $('#face').value = st.face;
+  $('#make').value = st.make; $('#model').value = st.model;
+  const custom = st.ru === 'custom'; $('#f-width').hidden = custom; $('#f-cw').hidden = !custom; $('#f-ch').hidden = !custom;
+  for (const k in RANGES) { $('#' + k).value = st[k]; $('#v-' + k).textContent = RANGES[k](st[k]); }
+  $('#color').value = st.color; $('#grey').checked = st.grey; $('#outline').checked = st.outline;
+  document.querySelectorAll('#style button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === st.style));
+}
+for (const k in RANGES) $('#' + k).addEventListener('input', (e) => { st[k] = +e.target.value; $('#v-' + k).textContent = RANGES[k](st[k]); saveSettings(); scheduleProcess(); });
+function sizeChanged() {
+  syncControls(); saveSettings();
+  if (!src) return;
+  // keep the corners where they are; only the output shape changes
+  drawStage(); rectifyAndProcess();
+}
+$('#ru').addEventListener('change', (e) => { st.ru = e.target.value; sizeChanged(); });
+$('#width').addEventListener('change', (e) => { st.width = e.target.value; sizeChanged(); });
+$('#cw').addEventListener('change', (e) => { st.cw = +e.target.value; sizeChanged(); });
+$('#ch').addEventListener('change', (e) => { st.ch = +e.target.value; sizeChanged(); });
+for (const k of ['face', 'make', 'model']) $('#' + k).addEventListener('input', (e) => { st[k] = e.target.value; saveSettings(); });
+$('#style').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (st.color === STYLE_COLORS[st.style]) st.color = STYLE_COLORS[b.dataset.v]; // follow the style unless a colour was picked
+  st.style = b.dataset.v; syncControls(); saveSettings(); if (rect) compose(maskCache || lineMask(rect));
+});
+$('#color').addEventListener('input', (e) => { st.color = e.target.value; saveSettings(); if (maskCache) compose(maskCache); });
+$('#grey').addEventListener('change', (e) => { st.grey = e.target.checked; saveSettings(); if (maskCache) compose(maskCache); });
+$('#outline').addEventListener('change', (e) => { st.outline = e.target.checked; saveSettings(); if (maskCache) compose(maskCache); });
+$('#guides').addEventListener('change', drawStage);
+$('#btn-defaults').addEventListener('click', () => { Object.assign(st, DEFAULTS); syncControls(); saveSettings(); scheduleProcess(); });
+$('#btn-open').addEventListener('click', () => $('#file').click());
+$('#btn-newphoto').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) loadFile(f); });
+$('#btn-rot').addEventListener('click', () => { if (!src) return; rotateSource(); layoutStage(); drawStage(); rectifyAndProcess(); });
+$('#btn-reset').addEventListener('click', () => { if (!src) return; resetCorners(); selected = -1; drawStage(); rectifyAndProcess(); });
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); if (t === 'drop' || e.target === document.documentElement) drop.classList.remove('over'); }));
+document.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f) loadFile(f); });
+document.addEventListener('paste', (e) => {
+  const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+  if (it) { e.preventDefault(); loadFile(it.getAsFile()); }
+});
+window.addEventListener('resize', () => { if (src) { layoutStage(); drawStage(); } });
+
+function fileName() {
+  const base = [st.make, st.model].map((s) => s.trim()).filter(Boolean).join(' ') || 'gear';
+  return `${base} ${st.face} line drawing.png`.replace(/[\\/:*?"<>|]+/g, '-');
+}
+$('#btn-save').addEventListener('click', () => {
+  if (!rect) { toast('Choose a photo first.'); return; }
+  $('#result').toBlob((b) => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fileName();
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Saved ' + a.download);
+  }, 'image/png');
+});
+$('#btn-copy').addEventListener('click', () => {
+  if (!rect) { toast('Choose a photo first.'); return; }
+  $('#result').toBlob(async (b) => {
+    try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); toast('Image copied.'); }
+    catch { toast("This browser won't copy images. Use Download PNG instead."); }
+  }, 'image/png');
+});
+
+syncControls();
+</script>
+</body>
+</html>
