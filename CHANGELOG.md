@@ -3,6 +3,20 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.13 (2026-11-13)
+- **Line drawing tool: Clean shapes (CAD style)**, now the default drawing style. Instead of tracing every wobble in the photo, the tool recognises jacks, knobs, LEDs, screw holes, buttons, screens, switches, slots and dividers and redraws them as perfect circles, rounded rectangles and straight lines. Near-identical parts get identical sizes, and rows and columns line up exactly. Lettering stays solid.
+- **Edit the drawing:**
+  - Click to select (Shift-click or drag a box for several). Drag to move; shapes snap into line with each other. Drag the handles to resize. Arrow keys nudge.
+  - Draw rectangles, circles, lines and text labels.
+  - Delete, Duplicate, Align tops/middles/centres, Space across/down, Same size, Repeat (copies every N mm), Undo/Redo.
+  - **Find more like this:** select one part (say a channel's SEL button) and the tool finds every other place the photo has the same part and adds it there.
+  - The selected shape's position and size are shown and edited in **mm on the real faceplate**.
+  - Shapes follow the photo until you start editing; *Detect shapes again* starts over (undoable). A faint copy of the photo shows behind while editing (screen only).
+- **Download SVG**, so the shapes stay sharp at any size. PNG works as before.
+- **Zoom** (2×–4×) for working on thin 1U strips.
+- **Sizes up to 16U** (plus half width and custom sizes in mm). Tall gear is processed at 1× to stay quick.
+- *Traced* is still there for the old look.
+
 ## v0.0.12 (2026-11-12)
 - **Line drawing tool looks more like a manufacturer's drawing:**
   - **Text & markings:** printed labels, logos, LEDs and arrows are drawn solid instead of as fuzzy outlines. Works on dark panels (light lettering) and light ones (dark lettering), worked out automatically or chosen.
