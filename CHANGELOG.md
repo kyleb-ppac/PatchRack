@@ -3,6 +3,12 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.17 (2026-11-13)
+- **Library: collapse categories.** Each group in the Library list folds open and shut by clicking its heading, with a count of what's inside. **Expand all / Collapse all** buttons sit above the list. The app remembers which groups you closed. While you search, every group with a match opens.
+- **Library: group and sort.** *Group by* Category, Make, Height (U), Mounting (rack, shelf, desk, floor pocket), In use, or no groups. *Sort by* Make & model, Model, Height (U), Most used or Newest first. Your choice is remembered in this browser. Search also matches category names (e.g. "amplifiers").
+- **Version numbers fixed.** The line drawing tool was built on a side branch that also used v0.0.9–v0.0.13, clashing with the main app's numbers. From v0.0.17 both live together: `dist/Line-Drawing-Tool.html` ships next to the app, and its own history is listed at the bottom of this file.
+- Fold arrows are drawn with CSS so they point the right way in every font.
+
 ## v0.0.16 (2026-11-10)
 - **Pick the console channel first:** a new source with no input yet now shows a Console Ch picker. Choose the channel and the input that feeds it is filled in from the routing (a floor pocket jack rather than the stage box input behind it). Works for stereo too (the next channel fills the right side). If nothing is routed to that channel yet, it says so.
 - **Inputs don't have to be on stage:** "Stage input" is now just **Input**, and the picker also lists the mixer's own inputs (local XLR, USB…), Dante channels that start on a device (playback computer, processor) and wireless channels, after the usual stage jacks.
@@ -108,3 +114,49 @@ The version also shows next to the PatchRack name in the app's top bar.
 - Patchlist with groups, stereo pairs, custom columns, cable colours and outputs.
 - Dante routing tab, print layouts (volunteer/technical), CSV export, gear library editor.
 - Checks, undo/redo and change history. Sample built from the Sunday Nov 8 2026 patchlist.
+
+## Line drawing tool history
+These updates were made on a side branch, where they were numbered v0.0.9–v0.0.13 (the same numbers the main app used). They're renumbered here; from v0.0.17 the tool ships with the app.
+
+### Update 5 (2026-11-13)
+- **Line drawing tool: Clean shapes (CAD style)**, now the default drawing style. Instead of tracing every wobble in the photo, the tool recognises jacks, knobs, LEDs, screw holes, buttons, screens, switches, slots and dividers and redraws them as perfect circles, rounded rectangles and straight lines. Near-identical parts get identical sizes, and rows and columns line up exactly. Lettering stays solid.
+- **Edit the drawing:**
+  - Click to select (Shift-click or drag a box for several). Drag to move; shapes snap into line with each other. Drag the handles to resize. Arrow keys nudge.
+  - Draw rectangles, circles, lines and text labels.
+  - Delete, Duplicate, Align tops/middles/centres, Space across/down, Same size, Repeat (copies every N mm), Undo/Redo.
+  - **Find more like this:** select one part (say a channel's SEL button) and the tool finds every other place the photo has the same part and adds it there.
+  - The selected shape's position and size are shown and edited in **mm on the real faceplate**.
+  - Shapes follow the photo until you start editing; *Detect shapes again* starts over (undoable). A faint copy of the photo shows behind while editing (screen only).
+- **Download SVG**, so the shapes stay sharp at any size. PNG works as before.
+- **Zoom** (2×–4×) for working on thin 1U strips.
+- **Sizes up to 16U** (plus half width and custom sizes in mm). Tall gear is processed at 1× to stay quick.
+- *Traced* is still there for the old look.
+
+### Update 4 (2026-11-12)
+- **Line drawing tool looks more like a manufacturer's drawing:**
+  - **Text & markings:** printed labels, logos, LEDs and arrows are drawn solid instead of as fuzzy outlines. Works on dark panels (light lettering) and light ones (dark lettering), worked out automatically or chosen.
+  - Outlines are found from colour as well as brightness, so dark-grey buttons on a black panel and coloured LEDs get their edges.
+  - Outlines hugging the lettering are dropped, so text stays crisp.
+  - New defaults: more outline detail, faceplate outline on.
+- **"The picture is: Already a drawing":** for front-panel diagrams from user guides, spec sheets and websites. It squares the drawing up and keeps its own lines (cleaned, thickened if you like) instead of tracing around them.
+
+### Update 3 (2026-11-12)
+- **Line drawing tool: paint out areas.** In step 3, choose *Paint out* and brush over handles, knobs, cables, reflections or anything else you don't want drawn, on either the squared-up photo or the drawing. Painted areas come out empty, and they're ignored when the tool works out what a strong line is, so the rest of the panel can keep more detail.
+  - *Erase* wipes painting away; *Undo stroke* (Ctrl/Cmd+Z) and *Clear all painting* are there too. Brush size slider, or `[` and `]`.
+  - Shortcuts: P paint, E erase, Esc stop painting.
+  - Painting stays in place if you move the corners or change the faceplate size. Choosing a new photo starts fresh.
+
+### Update 2 (2026-11-12)
+- **Line drawing tool opens far more photos:** iPhone HEIC/HEIF (even when named .jpg), TIFF, WebP, AVIF, GIF, BMP and SVG, as well as JPG and PNG. The tool now works out a file's real format from its contents instead of trusting its name or the type the computer reports, which fixes photos being refused when dragged in or downloaded. Phone photos that were taken sideways come in the right way up.
+- HEIC and TIFF are converted inside the tool, with no internet needed.
+- Dragging an image straight from a web page works when the site allows it; otherwise the tool says to save it first.
+- When a file still won't open, a message stays on screen with what the file looks like and what to try, instead of a quick pop-up.
+
+### Update 1 (2026-11-12)
+- **Line drawing tool** (`dist/Line-Drawing-Tool.html`, a separate page): turns a gear photo into a clean line drawing for a gear definition's front or rear photo.
+  - **Square it up:** drag four corners onto the faceplate's corners and the photo is straightened out, so a picture taken at an angle comes out flat and square. A magnifier shows the corner while dragging; arrow keys nudge; guides follow the perspective so you can check rows of jacks are straight.
+  - **Exact size:** choose 1U–8U, full or half width (or a custom size in mm). The drawing comes out exactly the faceplate's shape at the same resolution the app stores, so Add photo → Fill lines up with nothing stretched.
+  - **Line drawing controls:** detail, smoothing, line weight, speck removal, a faint copy of the photo underneath if you want more to recognise it by, and three styles (light on dark like the rack, dark on white, see-through).
+  - Download as PNG (named from make/model) or copy it. Open a photo by choosing, dropping or pasting it. Nothing leaves your computer.
+- The Photos section of each gear definition links to the tool.
+

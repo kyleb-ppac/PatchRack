@@ -122,7 +122,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 details.sec { border-top: 1px solid var(--line); padding-top: 8px; }
 details.sec > summary { cursor: pointer; list-style: none; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
 details.sec > summary::-webkit-details-marker { display: none; }
-details.sec > summary::before { content: "▸"; font-size: 10px; transition: transform .15s; }
+details.sec > summary::before { content: ""; flex: none; border-style: solid; border-width: 4px 0 4px 6px; border-color: transparent transparent transparent currentColor; transition: transform .15s; }
 details.sec[open] > summary::before { transform: rotate(90deg); }
 details.sec > summary:hover { color: var(--fg); }
 .sec-body { display: grid; gap: 8px; margin-top: 8px; }
@@ -373,7 +373,7 @@ details.dgrp > summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 /* library */
 .lib-split { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start; }
 @media (max-width: 800px) { .lib-split { grid-template-columns: minmax(0,1fr); } }
-.lib-list { max-height: calc(100vh - 220px); overflow: auto; }
+.lib-list { max-height: calc(100vh - 300px); overflow: auto; }
 .lib-list button.on { border-color: var(--accent); background: var(--accent-soft); }
 
 /* checks */
@@ -506,3 +506,16 @@ td.mx-cell.pending { box-shadow: inset 0 0 0 2px var(--trace); }
 table.grid tr.noprint td { opacity: .55; }
 table.grid tr.noprint td:nth-last-child(2), table.grid tr.noprint td:last-child { opacity: 1; }
 table.grid td.c { text-align: center; }
+.lib-side { display: grid; gap: 8px; }
+.lib-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.lib-tools select { width: 100%; }
+.lib-fold { gap: 4px; }
+.lib-fold button { font-size: 12px; padding: 2px 8px; }
+.lib-list details.lib-grp { border-top: 0; padding-top: 0; margin-top: 6px; }
+.lib-list details.lib-grp > summary { padding: 4px 2px; border-radius: 4px; }
+.lib-list details.lib-grp > summary:hover { background: var(--panel-2); }
+.lib-list details.lib-grp > .list { margin-top: 2px; }
+.lib-list .grp-n { font-weight: 500; letter-spacing: 0; background: var(--panel-2); border-radius: 8px; padding: 0 6px; margin-left: auto; }
+.lib-list .list { grid-template-columns: minmax(0, 1fr); }
+.lib-list .list button > span { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.lib-list .list button > small { flex: none; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: center; }

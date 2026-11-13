@@ -428,7 +428,8 @@ function photoHTML(def, editable = true) {
   return `<div class="photos">${['front', 'rear'].map((f) => `<div class="photo-slot"><div class="eyebrow">${f}</div>
     ${def.images?.[f] ? `<img src="${def.images[f]}" alt="${esc(def.model)} ${f} panel" style="aspect-ratio:${sz.w}/${sz.h}">` : `<div class="photo-empty" style="aspect-ratio:${sz.w}/${sz.h}">No photo</div>`}
     ${editable ? `<div class="toolbar">${def.images?.[f] ? `<button data-act="adjustPhoto" data-def="${def.id}" data-face="${f}">Adjust</button>` : ''}<button data-act="addPhoto" data-def="${def.id}" data-face="${f}">${def.images?.[f] ? 'Replace' : 'Add photo'}</button>${def.images?.[f] ? `<button data-act="removePhoto" data-def="${def.id}" data-face="${f}">Remove</button>` : ''}</div>` : ''}</div>`).join('')}</div>
-    <p class="small muted" style="margin:0">Photos belong to the gear definition, so every ${esc(def.model)} shows them. After choosing a photo you can move, zoom and rotate it inside the faceplate window. If you change the gear's height or width, use Adjust again.</p>`;
+    <p class="small muted" style="margin:0">Photos belong to the gear definition, so every ${esc(def.model)} shows them. After choosing a photo you can move, zoom and rotate it inside the faceplate window. If you change the gear's height or width, use Adjust again.</p>
+    <p class="small muted" style="margin:0">Photo taken at an angle? <a href="Line-Drawing-Tool.html" target="_blank" rel="noopener">Line drawing tool</a> (next to this file in <code>dist/</code>) squares it up and turns it into a clean line drawing at exactly this size: ${def.ru}U${def.width === 'half' ? ', half width' : ''}.</p>`;
 }
 
 // ----- photo editor: frame a photo inside the faceplate, like a profile picture -----
@@ -2402,23 +2403,83 @@ function csvText() {
 }
 
 /* ---------- 11. library ---------- */
-function libraryView() {
+const LIB_GROUPS = { category: 'Category', make: 'Make', size: 'Height (U)', form: 'Mounting', use: 'In use', none: 'No groups' };
+const LIB_SORTS = { name: 'Make & model', model: 'Model', ru: 'Height (U)', used: 'Most used', recent: 'Newest first' };
+const FORM_NAMES = { rack: 'Rack-mounted', shelf: 'On a rack shelf', desk: 'Desk / free-standing', pocket: 'Floor pockets & wall plates' };
+const libPrefs = (() => { try { return JSON.parse(localStorage.getItem('patchrack.libview') || '{}'); } catch { return {}; } })();
+ui.libGroup = LIB_GROUPS[libPrefs.group] ? libPrefs.group : 'category';
+ui.libSort = LIB_SORTS[libPrefs.sort] ? libPrefs.sort : 'name';
+const saveLibPrefs = () => { try { localStorage.setItem('patchrack.libview', JSON.stringify({ group: ui.libGroup, sort: ui.libSort })); } catch { /* storage unavailable */ } };
+const makeOf = (d) => (d.make || '').trim() || 'No make';
+// group key, label and order for one definition under the chosen grouping
+function libGroupOf(d, used) {
+  switch (ui.libGroup) {
+    case 'make': return { key: makeOf(d).toLowerCase(), label: makeOf(d), order: makeOf(d).toLowerCase() };
+    case 'size':
+      if (!rackable(d)) return { key: 'f-' + d.form, label: FORM_NAMES[d.form] || d.form, order: 1000 };
+      return { key: 'u' + d.ru, label: `${d.ru}U`, order: d.ru };
+    case 'form': return { key: d.form, label: FORM_NAMES[d.form] || d.form, order: Object.keys(FORM_NAMES).indexOf(d.form) };
+    case 'use': return used ? { key: 'used', label: 'In this rig', order: 0 } : { key: 'unused', label: 'Not used yet', order: 1 };
+    case 'none': return { key: 'all', label: 'All gear', order: 0 };
+    default: {
+      const c = d.category || 'other';
+      return { key: c, label: CATEGORY_NAMES[c] || c, order: Object.keys(CATEGORY_NAMES).indexOf(c) };
+    }
+  }
+}
+function libSortFn(usedOf) {
+  const name = (a, b) => `${makeOf(a)} ${a.model}`.localeCompare(`${makeOf(b)} ${b.model}`, undefined, { numeric: true, sensitivity: 'base' });
+  const pos = new Map(project.library.map((d, i) => [d.id, i]));
+  return {
+    name,
+    model: (a, b) => (a.model || '').localeCompare(b.model || '', undefined, { numeric: true, sensitivity: 'base' }) || name(a, b),
+    ru: (a, b) => (rackable(b) - rackable(a)) || (a.ru || 0) - (b.ru || 0) || (a.width === 'half') - (b.width === 'half') || name(a, b),
+    used: (a, b) => usedOf(b) - usedOf(a) || name(a, b),
+    recent: (a, b) => pos.get(b.id) - pos.get(a.id),
+  }[ui.libSort] || name;
+}
+const libGroupKey = (k) => `lib:${ui.libGroup}:${k}`;
+function libListHTML() {
   const q = ui.libQuery.toLowerCase();
-  const defs = project.library.filter((d) => !q || `${d.make} ${d.model} ${d.category}`.toLowerCase().includes(q))
-    .sort((a, b) => (a.category || '').localeCompare(b.category || '') || `${a.make} ${a.model}`.localeCompare(`${b.make} ${b.model}`));
-  const sel = project.library.find((d) => d.id === ui.libSel) || null;
-  let cat = '';
-  const list = defs.map((d) => {
-    const h = d.category !== cat ? `<div class="eyebrow" style="margin-top:8px">${esc(CATEGORY_NAMES[d.category] || d.category)}</div>` : '';
-    cat = d.category;
-    const used = project.devices.filter((x) => x.defId === d.id).length;
-    return `${h}<button class="${d.id === ui.libSel ? 'on' : ''}" data-act="libSel" data-def="${d.id}"><span>${esc(d.make)} ${esc(d.model)} ${d.verified ? '' : '<span class="pill unv">?</span>'}</span><small>${used ? used + ' in use' : ''}</small></button>`;
+  const count = new Map();
+  for (const x of project.devices) count.set(x.defId, (count.get(x.defId) || 0) + 1);
+  const defs = project.library.filter((d) => !q || `${d.make} ${d.model} ${d.short || ''} ${d.category} ${CATEGORY_NAMES[d.category] || ''}`.toLowerCase().includes(q));
+  const usedOf = (d) => count.get(d.id) || 0;
+  if (!defs.length) return '<p class="muted small">No matching gear.</p>';
+  const groups = new Map();
+  for (const d of defs) {
+    const g = libGroupOf(d, usedOf(d));
+    if (!groups.has(g.key)) groups.set(g.key, { ...g, items: [] });
+    groups.get(g.key).items.push(d);
+  }
+  const sorted = [...groups.values()].sort((a, b) => (typeof a.order === 'number' && typeof b.order === 'number' ? a.order - b.order : String(a.order).localeCompare(String(b.order))) || a.label.localeCompare(b.label));
+  const sortFn = libSortFn(usedOf);
+  const item = (d) => `<button class="${d.id === ui.libSel ? 'on' : ''}" data-act="libSel" data-def="${d.id}"><span>${esc(ui.libGroup === 'make' ? d.model : `${d.make} ${d.model}`)} ${d.verified ? '' : '<span class="pill unv">?</span>'}</span><small>${[usedOf(d) ? usedOf(d) + ' in use' : '', (ui.libSort === 'ru' && ui.libGroup !== 'size') || (ui.libGroup === 'size' && !rackable(d)) || d.form === 'shelf' && ui.libGroup === 'size' ? esc(sizeText(d)) : ''].filter(Boolean).join(' · ')}</small></button>`;
+  if (ui.libGroup === 'none') return `<div class="list">${defs.sort(sortFn).map(item).join('')}</div>`;
+  return sorted.map((g) => {
+    const items = g.items.sort(sortFn).map(item).join('');
+    const title = `${esc(g.label)} <span class="grp-n">${g.items.length}</span>`;
+    // while searching, every group with a match is shown open (and not remembered)
+    if (q) return `<details class="sec lib-grp" open><summary>${title}</summary><div class="list">${items}</div></details>`;
+    const k = libGroupKey(g.key);
+    const open = k in secState ? secState[k] : true;
+    return `<details class="sec lib-grp" data-sec="${esc(k)}" data-grp="${esc(g.key)}" ${open ? 'open' : ''}><summary>${title}</summary><div class="list">${items}</div></details>`;
   }).join('');
+}
+function libraryView() {
+  const sel = project.library.find((d) => d.id === ui.libSel) || null;
+  const opts = (obj, v) => Object.entries(obj).map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('');
   return `<section class="view">
     <div class="card-head"><h2>Gear library</h2><span class="muted small">${project.library.length} definitions</span><span class="spacer"></span>
       <button class="primary" data-act="newDef">+ New gear</button><button data-act="exportLib">Export library</button><button data-act="importLib">Import library</button></div>
     <div class="lib-split">
-      <div class="card"><input id="lib-q" data-inp="libQuery" placeholder="Search…" value="${esc(ui.libQuery)}"><div class="list lib-list" id="lib-list">${list}</div></div>
+      <div class="card lib-side"><input id="lib-q" data-inp="libQuery" placeholder="Search…" value="${esc(ui.libQuery)}">
+        <div class="lib-tools">
+          <label class="field"><span>Group by</span><select id="lib-group" data-chg="libView" data-f="group">${opts(LIB_GROUPS, ui.libGroup)}</select></label>
+          <label class="field"><span>Sort by</span><select id="lib-sort" data-chg="libView" data-f="sort">${opts(LIB_SORTS, ui.libSort)}</select></label>
+        </div>
+        ${ui.libGroup === 'none' ? '' : '<div class="toolbar lib-fold"><button data-act="libFold" data-open="1">Expand all</button><button data-act="libFold" data-open="0">Collapse all</button></div>'}
+        <div class="lib-list" id="lib-list">${libListHTML()}</div></div>
       <div class="card">${sel ? defEditor(sel) : '<p class="muted">Pick a piece of gear to see or edit its definition. A definition is the template for one model: its size and every connector. Change it once and every unit of that model updates.</p>'}</div>
     </div>
   </section>`;
@@ -2854,6 +2915,11 @@ const actions = {
   copyCsv: () => copyText(csvText(), 'CSV copied. Paste it into Numbers, Excel or Google Sheets.'),
   // library
   libSel: (el) => { ui.libSel = el.dataset.def; render(); },
+  libFold: (el) => {
+    const open = el.dataset.open === '1';
+    for (const d of document.querySelectorAll('#lib-list details.lib-grp[data-sec]')) { secState[d.dataset.sec] = open; d.open = open; }
+    try { localStorage.setItem('patchrack.sections', JSON.stringify(secState)); } catch { /* storage unavailable */ }
+  },
   editDef: (el) => { ui.tab = 'library'; ui.libSel = el.dataset.def; render(); },
   newDef: () => { const id = uid('def'); commit('Created a gear definition', (p) => p.library.push({ id, userAdded: true, make: 'New', model: 'Gear', short: 'NEW', category: 'other', form: 'rack', ru: 1, width: 'full', watts: 0, verified: false, ref: '', groups: [{ id: 'in', label: 'In', count: 8, start: 1, conn: 'xlr', dir: 'in', face: 'rear', src: true }], links: [], ipSlots: [] }), { quiet: true }); ui.tab = 'library'; ui.libSel = id; render(); },
   dupDef: (el) => { const src = project.library.find((d) => d.id === el.dataset.def); const id = uid('def'); commit(`Duplicated ${src.model}`, (p) => p.library.push({ ...JSON.parse(JSON.stringify(src)), id, userAdded: true, model: src.model + ' copy', verified: false }), { quiet: true }); ui.libSel = id; render(); },
@@ -2894,6 +2960,10 @@ function revealFace(p) {
 }
 
 const changes = {
+  libView: (el) => {
+    if (el.dataset.f === 'group') ui.libGroup = el.value; else ui.libSort = el.value;
+    saveLibPrefs(); render();
+  },
   projName: (el) => commit('Renamed project', (p) => { p.name = el.value; }),
   pickPatch: (el) => { ui.patchId = el.value; ui.sel = null; render(); toast(`Now editing ${patch().name}`); },
   cableMode: (el) => { project.view.cableMode = el.value; save(); render(); },
@@ -3069,8 +3139,7 @@ const inputs = {
   },
   libQuery: (el) => {
     ui.libQuery = el.value;
-    const tmp = document.createElement('div'); tmp.innerHTML = libraryView();
-    $('#lib-list').innerHTML = $('#lib-list', tmp).innerHTML;
+    $('#lib-list').innerHTML = libListHTML();
   },
 };
 
