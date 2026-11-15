@@ -3,6 +3,19 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.18 (2026-11-15)
+- **View ▾ → Labels:** show unit labels as *Name and model*, *Name only*, or *Hidden (show on hover)*. When hidden, the strip is still there, so hovering shows it and you can still click or drag a unit by it. Jack group labels (INPUTS, OUT…) and jack numbers can each be switched off. Settings are saved with the project.
+- **View ▾ → Locations to show:** tick which locations (and "Racks not in a location") appear in the Rack tab, with Show all / Hide all. A line under the racks says how many are hidden. Cables to hidden gear aren't drawn.
+- **Connect to list only shows jacks that make sense:** click a power inlet and you only see power jacks; an audio input shows only audio jacks (analog and AES); network shows network, and so on for fiber, speaker, SDI, HDMI, DMX, RF, USB/Thunderbolt and control. Tick **Show every jack** for the odd adapter job. Jacks of type "Other" always show.
+- **Add gear panel:** the same Group by / Sort by, collapsible groups and Expand all / Collapse all as the Library, with its own settings. **Only gear that fits here** (on by default) hides what won't fit the empty space you clicked.
+- **Every label can be edited or added to:**
+  - **Units → Labels** (rig mode) now covers every group of jacks, not just inputs: the heading printed on the faceplate (per unit), the jack label prefix and the first number. Stage zone and position can be set on any unit.
+  - **Jacks:** a **Note** next to the custom name. It shows when you hover the jack. In Patch mode the jack panel shows the note and how to edit it.
+  - **Cables, tie lines and Dante routes:** a **Label** (e.g. C-12) and a **Note**. The label shows in the cable's panel, the jack's cable list, the hover text and the Rig sheet.
+  - **Racks and locations:** a **Notes** box. Notes print on the Rig sheet.
+  - **Gear categories:** rename any category (Library → gear → *Category name*), or add your own with *+ New category…*.
+- Collapse all also applies to groups that aren't on screen yet (for example after unticking "Only gear that fits").
+
 ## v0.0.17 (2026-11-13)
 - **Library: collapse categories.** Each group in the Library list folds open and shut by clicking its heading, with a count of what's inside. **Expand all / Collapse all** buttons sit above the list. The app remembers which groups you closed. While you search, every group with a match opens.
 - **Library: group and sort.** *Group by* Category, Make, Height (U), Mounting (rack, shelf, desk, floor pocket), In use, or no groups. *Sort by* Make & model, Model, Height (U), Most used or Newest first. Your choice is remembered in this browser. Search also matches category names (e.g. "amplifiers").

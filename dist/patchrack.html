@@ -526,11 +526,22 @@ table.grid td.c { text-align: center; }
 .lib-list .list { grid-template-columns: minmax(0, 1fr); }
 .lib-list .list button > span { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .lib-list .list button > small { flex: none; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: center; }
+.add-list { max-height: none; overflow: visible; }
+/* unit labels hidden: the strip is still there to click or drag, and shows on hover */
+.dev-label.lbl-hover { opacity: 0; transition: opacity .12s; }
+.dev:hover > .dev-label.lbl-hover, .dev.sel > .dev-label.lbl-hover { opacity: 1; }
+.dev.photo .dev-label.lbl-hover { background: rgba(10, 12, 14, .72); }
+.hidden-locs { margin: 4px 0 0; }
+/* per-unit labels table in the gear panel */
+.lblrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) 56px; gap: 4px; align-items: center; }
+.lblrow input { min-width: 0; width: 100%; }
+.lblrow .lbl-g { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbl-head { font-size: 11px; color: var(--muted); }
 
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.17</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.18</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -579,7 +590,7 @@ table.grid td.c { text-align: center; }
 <input type="file" id="file-dante" accept=".xml,text/xml,application/xml" hidden>
 
 <script>
-const APP_VERSION = '0.0.17';
+const APP_VERSION = '0.0.18';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -1106,6 +1117,8 @@ function migrate(p) {
   p.patches ||= []; p.groups ||= []; p.columns ||= []; p.history ||= [];
   p.view ||= {}; p.view.cableMode ||= 'all'; p.view.cables ||= {};
   p.view.colorBy ||= 'type'; p.view.hideTypes ||= {}; if (p.view.photos === undefined) p.view.photos = true;
+  p.view.unitLabels ||= 'full'; p.view.hideLocs ||= {}; p.catNames ||= {};
+  if (p.view.grpLabels === undefined) p.view.grpLabels = true; if (p.view.jackNums === undefined) p.view.jackNums = true;
   if ((p.schema || 1) < 2) {
     // v0.0.6: the Avantis gets its own control network jack (separate from the Dante card)
     const av = p.library.find((d) => d.id === 'ah-avantis');
@@ -1555,6 +1568,12 @@ const COMPAT = {
   lc: ['lc', 'opticalcon'], opticalcon: ['opticalcon', 'lc'],
 };
 const compatible = (a, b) => a === b || (COMPAT[a] || []).includes(b);
+// Signal families for the Connect to list: a jack only lists jacks of the same
+// family (you never plug power into an audio input). "Other" matches anything.
+const SIG_FAMILY = { analog: 'audio', aes: 'audio', usb: 'data', thunderbolt: 'data' };
+const FAMILY_NAMES = { audio: 'audio', speaker: 'speaker', network: 'network', fiber: 'fiber', power: 'power', sdi: 'SDI video', hdmi: 'HDMI / display', dmx: 'DMX / lighting', rf: 'antenna / RF', data: 'USB / Thunderbolt', control: 'control' };
+const sigFamily = (g) => { const t = sigOf(g); return SIG_FAMILY[t] || t; };
+const sameFamily = (a, b) => { const x = sigFamily(a), y = sigFamily(b); return x === y || x === 'other' || y === 'other'; };
 
 /* ---------- 4. checks ---------- */
 function runChecks() {
@@ -1669,7 +1688,7 @@ function layoutFace(def, face, w, h) {
     for (const g of [...gs.filter((g) => g.pos), ...gs.filter((g) => !g.pos)]) {
       const dm = groupDims(g, s, h, top);
       const x = g.pos ? g.pos.x : pad, y = g.pos ? g.pos.y : bottom + 3;
-      if (!g.nolabel) labels.push({ x, y, text: g.label, s });
+      if (!g.nolabel) labels.push({ gid: g.id, x, y, text: g.label, s });
       for (let i = 0; i < g.count; i++) ports.push({ gid: g.id, n: i + 1, ...jackXY(g, dm, i, x, y), p: dm.p, conn: g.conn, dir: g.dir });
       blocks.push({ gid: g.id, x, y, w: dm.bw, h: dm.bh });
       bottom = Math.max(bottom, y + dm.bh);
@@ -1685,7 +1704,7 @@ function layoutFace(def, face, w, h) {
       const dm = groupDims(g, s, h, top); const { p, bw, bh } = dm;
       if (x + bw > w - pad && x > pad) { x = pad; y += bandH + 3; bandH = 0; }
       blocks.push({ gid: g.id, x, y, w: bw, h: bh });
-      if (!g.nolabel) labels.push({ x, y, text: g.label, s });
+      if (!g.nolabel) labels.push({ gid: g.id, x, y, text: g.label, s });
       for (let i = 0; i < g.count; i++) ports.push({ gid: g.id, n: i + 1, ...jackXY(g, dm, i, x, y), p, conn: g.conn, dir: g.dir });
       x += bw + 12 * s; bandH = Math.max(bandH, bh); maxR = Math.max(maxR, x - 12 * s);
     }
@@ -1836,6 +1855,15 @@ function viewMenuHTML() {
     <label class="tog"><input type="checkbox" id="tg-ties" data-chg="showTies" ${ui.showTies ? 'checked' : ''}> Show in-wall tie lines</label>
     <label class="tog"><input type="checkbox" id="tg-photos" data-chg="viewField" data-f="photos" ${v.photos !== false ? 'checked' : ''}> Show gear photos</label>
     <hr>
+    <div class="eyebrow">Labels</div>
+    <label class="field"><span>Unit labels</span><select id="unit-labels" data-chg="viewField" data-f="unitLabels" data-val="${v.unitLabels}"><option value="full">Name and model</option><option value="name">Name only</option><option value="hover">Hidden (show on hover)</option></select></label>
+    <label class="tog"><input type="checkbox" id="tg-grplabels" data-chg="viewField" data-f="grpLabels" ${v.grpLabels ? 'checked' : ''}> Jack group labels (INPUTS, OUT…)</label>
+    <label class="tog"><input type="checkbox" id="tg-jacknums" data-chg="viewField" data-f="jackNums" ${v.jackNums ? 'checked' : ''}> Jack numbers</label>
+    <hr>
+    <div class="eyebrow">Locations to show</div>
+    <div class="typelist">${locChoices().map(([id, name]) => `<label class="tog"><input type="checkbox" id="lv-${safeId(id)}" data-chg="locVis" data-id="${esc(id)}" ${v.hideLocs[id] ? '' : 'checked'}>${esc(name)}</label>`).join('')}</div>
+    <div class="toolbar" style="gap:6px"><button data-act="locVisAll" data-on="1">Show all</button><button data-act="locVisAll" data-on="0">Hide all</button></div>
+    <hr>
     <div class="eyebrow">Jack rings</div>
     <div class="legend"><span><i style="--ring:var(--ring-in)"></i>Input</span><span><i style="--ring:var(--ring-out)"></i>Output</span><span><i style="--ring:var(--ring-io)"></i>Network / two-way</span><span>Filled = source colour · white dot = plugged in</span></div>
   </div></details>`;
@@ -1868,11 +1896,20 @@ function rackView() {
 }
 // The stage is a stack of locations (Stage, FOH…). Each shows its racks and its
 // loose gear. Racks not yet in a location are shown first.
+// '' stands for "racks not in a location" in the View menu's list of locations
+function locChoices() {
+  const locIds = new Set(project.locations.map((l) => l.id));
+  const out = project.racks.some((r) => !r.locId || !locIds.has(r.locId)) ? [['', 'Racks not in a location']] : [];
+  return out.concat(project.locations.map((l) => [l.id, l.name || 'Untitled location']));
+}
 function stageHTML() {
   const locIds = new Set(project.locations.map((l) => l.id));
+  const hide = project.view.hideLocs;
   const loose = project.racks.filter((r) => !r.locId || !locIds.has(r.locId));
-  let html = loose.length ? areaHTML(null, loose) : '';
-  for (const l of project.locations) html += areaHTML(l, project.racks.filter((r) => r.locId === l.id));
+  let html = loose.length && !hide[''] ? areaHTML(null, loose) : '';
+  for (const l of project.locations) if (!hide[l.id]) html += areaHTML(l, project.racks.filter((r) => r.locId === l.id));
+  const hidden = locChoices().filter(([id]) => hide[id]).length;
+  if (hidden) html += `<p class="small muted hidden-locs">${hidden} location${hidden > 1 ? 's' : ''} hidden. <a href="#" data-act="locVisAll" data-on="1">Show all</a> or choose in View ▾. Cables to hidden gear aren't drawn.</p>`;
   return html || `<p class="muted" style="margin:0">Nothing here yet.${rigMode() ? ' Use + Location and + Rack above.' : ' Switch to The rig to add locations and racks.'}</p>`;
 }
 function areaHTML(loc, racks) {
@@ -2007,7 +2044,8 @@ function devHTML(d, def, face, box) {
   const sub = d.zone ? `${d.zone} · ${d.position || ''}` : `${def.make} ${def.model}`;
   const photo = (box.photo ?? project.view.photos !== false) && def.images?.[face] ? ` photo ph-${phCls(def.id)}-${face}` : '';
   let html = `<div class="dev ${box.cls || ''} ${def.style ? 'st-' + def.style : ''} ${selDev ? 'sel' : ''}${photo}" data-dev="${d.id}" style="${box.free ? '' : `top:${box.top}px;left:${box.left}px;`}width:${box.w}px;height:${box.h}px">`;
-  html += `<div class="dev-label" data-act="selDev" data-id="${d.id}" title="${esc(def.make + ' ' + def.model)}"><b>${esc(d.name)}</b> <em>${esc(sub)}</em>${def.verified ? '' : '<span class="unv">· unverified</span>'}</div>`;
+  const ul = box.preview ? 'full' : project.view.unitLabels;
+  html += `<div class="dev-label ${ul === 'hover' ? 'lbl-hover' : ''}" data-act="selDev" data-id="${d.id}" title="${esc(`${d.name} · ${def.make} ${def.model}${d.notes ? '\n' + d.notes : ''}`)}"><b>${esc(d.name)}</b>${ul === 'name' ? '' : ` <em>${esc(sub)}</em>`}${def.verified || ul === 'name' ? '' : '<span class="unv">· unverified</span>'}</div>`;
   const mode = project.view.cableMode;
   if (mode !== 'none' && !def.style && !box.preview && def.groups.some(isPhysical)) {
     const on = cablesOn(d.id);
@@ -2015,7 +2053,7 @@ function devHTML(d, def, face, box) {
   }
   if (!lay.ports.length && !def.style) html += `<div class="dev-empty">No connectors on the ${face}</div>`;
   if (def.style === 'drawer') html += `<div class="dev-empty"></div>`;
-  for (const l of lay.labels) html += `<div class="grp-label" style="left:${l.x}px;top:${l.y}px;font-size:${Math.max(7, 8.5 * l.s)}px">${esc(l.text)}</div>`;
+  if (box.preview || project.view.grpLabels) for (const l of lay.labels) html += `<div class="grp-label" style="left:${l.x}px;top:${l.y}px;font-size:${Math.max(7, 8.5 * l.s)}px">${esc(d.groupLabels?.[l.gid] ?? l.text)}</div>`;
   for (const pp of lay.ports) {
     const ref = mkRef(d.id, pp.gid, pp.n);
     const sh = portShape(pp.conn, pp.p);
@@ -2029,9 +2067,9 @@ function devHTML(d, def, face, box) {
     else if (hl.has(ref)) cls.push('hl');
     const p = port(ref);
     const num = p ? portNum(p) : pp.n;
-    const tip = [portLong(ref), ipOf(ref) ? `IP ${ipOf(ref)}` : '', src ? `Source: ${src.name}` : '', ...(idx.out.get(ref) || []).concat(idx.in.get(ref) || []).filter((c) => c.kind !== 'dante').map((c) => '↔ ' + portLong(c.a === ref ? c.b : c.a))].filter(Boolean).join('\n');
+    const tip = [portLong(ref), d.portNotes?.[`${pp.gid}:${pp.n}`] || '', ipOf(ref) ? `IP ${ipOf(ref)}` : '', src ? `Source: ${src.name}` : '', ...(idx.out.get(ref) || []).concat(idx.in.get(ref) || []).filter((c) => c.kind !== 'dante').map((c) => '↔ ' + portLong(c.a === ref ? c.b : c.a))].filter(Boolean).join('\n');
     html += `<div class="${cls.join(' ')}" data-ref="${ref}" title="${esc(tip)}" style="${fill}left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${sh.w.toFixed(1)}px;height:${sh.h.toFixed(1)}px"></div>`;
-    if (lay.s > 0.45) html += `<div class="pn" style="left:${pp.x.toFixed(1)}px;width:${pp.p.toFixed(1)}px;top:${(pp.y + pp.p * 0.72).toFixed(1)}px;font-size:${Math.max(6.5, 8 * lay.s).toFixed(1)}px">${esc(num)}</div>`;
+    if (lay.s > 0.45 && (box.preview || project.view.jackNums)) html += `<div class="pn" style="left:${pp.x.toFixed(1)}px;width:${pp.p.toFixed(1)}px;top:${(pp.y + pp.p * 0.72).toFixed(1)}px;font-size:${Math.max(6.5, 8 * lay.s).toFixed(1)}px">${esc(num)}</div>`;
   }
   return html + '</div>';
 }
@@ -2084,7 +2122,7 @@ function drawCables() {
     // rig cables get a dark outline; cables that belong to this patch only get a light one
     html += `<path d="${d}" fill="none" stroke="${c.layer === 'rig' ? '#000' : '#fff'}" stroke-opacity="${c.layer === 'rig' ? '.55' : '.7'}" stroke-width="${(sel ? 4.5 : 2.4) + wd}" stroke-linecap="round"/>`;
     html += `<path d="${d}" fill="none" stroke="${sel ? '#f2a900' : col}" stroke-width="${sel ? wd + 1.4 : wd}" stroke-linecap="round" ${dash}/>`;
-    html += `<path class="hit" data-conn="${c.id}" d="${d}" fill="none" stroke="transparent" stroke-width="12"><title>${esc(`${portLong(c.a)} → ${portLong(c.b)}\n${sigName(t)}${c.spec ? ' · ' + c.spec : ''}${c.kind === 'tie' ? ' · tie line' : ''}${c.layer === 'rig' ? '' : ' · this patch only'}`)}</title></path>`;
+    html += `<path class="hit" data-conn="${c.id}" d="${d}" fill="none" stroke="transparent" stroke-width="12"><title>${esc(`${c.label ? c.label + ': ' : ''}${portLong(c.a)} → ${portLong(c.b)}${c.note ? '\n' + c.note : ''}\n${sigName(t)}${c.spec ? ' · ' + c.spec : ''}${c.kind === 'tie' ? ' · tie line' : ''}${c.layer === 'rig' ? '' : ' · this patch only'}`)}</title></path>`;
   }
   html += `<path id="cable-temp" fill="none" stroke="#6fbf8e" stroke-width="3" stroke-dasharray="6 4" d=""/>`;
   svg.innerHTML = html;
@@ -2334,31 +2372,33 @@ function inspectorHome() {
   <div class="eyebrow">Checks</div>
   ${errs.length ? errs.map(checkHTML).join('') + (checks.length > 4 ? `<button data-act="tab" data-tab="checks">See all ${checks.length}</button>` : '') : '<p class="small muted" style="margin:0">No problems found in this patch.</p>'}`;
 }
-function addGearHTML(title, s) {
+function addListHTML(s) {
   const q = ui.addQuery.toLowerCase();
-  let defs = project.library.filter((d) => !q || `${d.make} ${d.model} ${d.category}`.toLowerCase().includes(q));
-  let fits = (d) => true;
+  let defs = project.library.filter((d) => gearMatches(d, q));
+  let fits = () => true;
   if (s.kind === 'slot') {
     const rack = project.racks.find((r) => r.id === s.rackId);
     defs = defs.filter(rackable);
     fits = (d) => s.side === 'full'
       ? canPlace(rack, s.u, d.ru, d.width === 'half' ? 'L' : 'full')
       : d.width === 'half' && canPlace(rack, s.u, d.ru, s.side);
-  } else defs.sort((a, b) => rackable(a) - rackable(b));
-  const byCat = new Map();
-  for (const d of defs) push(byCat, d.category || 'other', d);
-  let list = '';
-  for (const [cat, ds] of byCat) {
-    list += `<div class="eyebrow" style="margin-top:6px">${esc(CATEGORY_NAMES[cat] || cat)}</div><div class="list">`;
-    for (const d of ds) {
-      const ok = fits(d);
-      list += `<button data-act="install" data-def="${d.id}" ${ok ? '' : 'disabled title="Does not fit here"'}><span>${esc(d.make)} ${esc(d.model)}</span><small>${esc(sizeText(d))}</small></button>`;
-    }
-    list += '</div>';
+    if (ui.addFitOnly) defs = defs.filter(fits);
   }
+  return gearListHTML({
+    defs, q, group: ui.addGroup, sort: ui.addSort, key: 'add',
+    empty: s.kind === 'slot' && ui.addFitOnly ? 'Nothing matching fits here. Untick “Only gear that fits” to see the rest.' : 'No matching gear. Add it in the Library tab.',
+    item: (d) => {
+      const ok = fits(d);
+      return `<button data-act="install" data-def="${d.id}" ${ok ? '' : 'disabled title="Does not fit here"'}><span>${esc(ui.addGroup === 'make' ? d.model : `${d.make} ${d.model}`)}</span><small>${esc(sizeText(d))}</small></button>`;
+    },
+  });
+}
+function addGearHTML(title, s) {
   return `<h3>${title}</h3>
     <input id="add-q" data-inp="addQuery" placeholder="Search gear…" value="${esc(ui.addQuery)}">
-    <div id="add-list">${list || '<p class="muted small">No matching gear. Add it in the Library tab.</p>'}</div>
+    ${gearListTools('add', ui.addGroup, ui.addSort, 'add-list')}
+    ${s.kind === 'slot' ? `<label class="tog"><input type="checkbox" id="add-fit" data-chg="addFitOnly" ${ui.addFitOnly ? 'checked' : ''}> Only gear that fits here</label>` : ''}
+    <div class="lib-list add-list" id="add-list">${addListHTML(s)}</div>
     <button data-act="newGearFromAdd">+ Define new gear…</button>`;
 }
 function deviceInspector(d) {
@@ -2386,13 +2426,16 @@ function deviceInspector(d) {
     return `${head}
       <dl class="kv"><dt>Where</dt><dd>${esc(where)}</dd>${d.place.type === 'rack' ? `<dt>Position</dt><dd>U${d.place.u}${d.place.side === 'full' ? '' : d.place.side === 'L' ? ', left half' : ', right half'}</dd>` : ''}${d.zone ? `<dt>Stage</dt><dd>${esc(d.zone)} · ${esc(d.position || '')}</dd>` : ''}</dl>
       ${ipSec}${notesRO}${ref}
-      ${lockNote('rename, move, relabel or remove it')}`;
+      ${lockNote('rename, move, relabel, add notes or remove it')}`;
   }
   const containers = [...project.racks.map((r) => `<option value="r:${r.id}">Rack: ${esc(r.name)}</option>`), ...project.locations.map((l) => `<option value="l:${l.id}">Location: ${esc(l.name)}</option>`)].join('');
   const cur = d.place.type === 'rack' ? 'r:' + d.place.rackId : 'l:' + d.place.locId;
-  const labelRows = def.groups.filter((g) => (g.src || g.id === 'tie') && isPhysical(g)).map((g) => {
-    const ov = d.labels?.[g.id] || {};
-    return `<div class="row"><label>${esc(g.label)} label</label><div class="inline-fields" style="gap:4px;flex-wrap:nowrap"><input id="lp-${g.id}" style="width:90px" placeholder="${esc(d.short + ' ' + g.label)}" value="${esc(ov.prefix ?? '')}" data-chg="devLabel" data-g="${g.id}" data-f="prefix"><input id="ls-${g.id}" type="number" style="width:64px" placeholder="1" value="${esc(ov.start ?? '')}" data-chg="devLabel" data-g="${g.id}" data-f="start"></div></div>`;
+  const labelRows = def.groups.filter(isPhysical).map((g) => {
+    const ov = d.labels?.[g.id] || {}; const k = safeId(g.id);
+    return `<div class="lblrow"><span class="lbl-g">${esc(g.label)} <span class="muted">${esc(g.face)}</span></span>
+      <input id="lh-${k}" placeholder="${esc(g.label)}" value="${esc(d.groupLabels?.[g.id] ?? '')}" data-chg="devGroupLabel" data-g="${esc(g.id)}" aria-label="${esc(g.label)} heading on the faceplate">
+      <input id="lp-${k}" placeholder="${esc(d.short + ' ' + g.label)}" value="${esc(ov.prefix ?? '')}" data-chg="devLabel" data-g="${esc(g.id)}" data-f="prefix" aria-label="${esc(g.label)} jack label prefix">
+      <input id="ls-${k}" type="number" placeholder="${esc(g.start ?? 1)}" value="${esc(ov.start ?? '')}" data-chg="devLabel" data-g="${esc(g.id)}" data-f="start" aria-label="${esc(g.label)} first number"></div>`;
   }).join('');
   let pb = '';
   if (def.patchbay) {
@@ -2405,9 +2448,11 @@ function deviceInspector(d) {
     <div class="row"><label for="dv-where">Where</label><select id="dv-where" data-chg="devMove" data-val="${cur}">${containers}</select></div>
     ${d.place.type === 'rack' ? `<div class="row"><label for="dv-u">Top U</label><div class="inline-fields" style="gap:4px;flex-wrap:nowrap"><input id="dv-u" type="number" min="1" style="width:70px" value="${d.place.u}" data-chg="devU">${def.width === 'half' ? `<select id="dv-side" data-chg="devSide" data-val="${d.place.side}"><option value="L">Left half</option><option value="R">Right half</option></select>` : ''}</div></div>` : ''}
     ${ipSec}
-    ${labelRows || def.category === 'pocket' || d.zone ? sec('dev-labels', 'Jack labels &amp; stage position', `${labelRows ? `<p class="small muted" style="margin:0">What volunteers see printed. For example, prefix “RIO” and start 31 makes these jacks RIO 31–36.</p>${labelRows}` : ''}
+    ${sec('dev-labels', 'Labels', `${labelRows ? `<p class="small muted" style="margin:0">For each group of jacks on this unit: the <b>heading</b> printed on the faceplate, the <b>label</b> volunteers see (prefix “RIO” and first number 31 makes RIO 31–36) and the <b>first number</b>. Leave blank for the gear definition's own. To name a single jack, click it.</p>
+      <div class="lblrow lbl-head"><span></span><span>Heading</span><span>Label</span><span>First #</span></div>${labelRows}` : ''}
+      <p class="small muted" style="margin:0">Stage zone and position replace the model name on the unit's label strip.</p>
       <div class="row"><label for="dv-zone">Stage zone</label><input id="dv-zone" value="${esc(d.zone || '')}" placeholder="Down-stage" data-chg="devField" data-f="zone"></div>
-      <div class="row"><label for="dv-pos">Position</label><input id="dv-pos" value="${esc(d.position || '')}" placeholder="Stage Right" data-chg="devField" data-f="position"></div>`, false) : ''}
+      <div class="row"><label for="dv-pos">Position</label><input id="dv-pos" value="${esc(d.position || '')}" placeholder="Stage Right" data-chg="devField" data-f="position"></div>`, false)}
     ${notesRW}
     ${sec('dev-photo', 'Photos', photoHTML(def), !!def.images?.front || !!def.images?.rear)}
     ${pb}${ref}
@@ -2431,27 +2476,31 @@ function portInspector(ref) {
   const canSrc = p.g.dir === 'in' || p.g.conn === 'dante';
   const slot = slotFor(p); const net = !!slot; const ipv = slot ? p.dev.ips?.[slot.id] || {} : {};
   const srcOpts = patch().sources.map((s) => `<option value="${s.id}">${esc(s.name || 'Untitled')}${(s.ports || []).some(Boolean) ? ' · ' + esc(stereoLabel(s.ports)) : ''}</option>`).join('');
+  const pnote = p.dev.portNotes?.[key] || '';
   const more = rigMode() ? `<div class="row"><label for="pt-name">Custom name</label><input id="pt-name" value="${esc(p.dev.portNames?.[key] || '')}" placeholder="e.g. PREACH MIC" data-chg="portName" data-ref="${ref}"></div>
+    <div class="row"><label for="pt-note">Note</label><input id="pt-note" value="${esc(pnote)}" placeholder="e.g. Pin 2 hot, ground lift on" data-chg="portNote" data-ref="${ref}"></div>
     ${net ? `<div class="row"><label for="pt-ip">${esc(slot.label)} IP</label><input id="pt-ip" class="mono" value="${esc(ipv.ip || '')}" placeholder="192.168.1.10" data-chg="devIp" data-dev="${p.dev.id}" data-k="${esc(slot.id)}" data-f="ip"></div>
     <div class="row"><label for="pt-ipn">IP note</label><input id="pt-ipn" value="${esc(ipv.note || '')}" placeholder="note" data-chg="devIp" data-dev="${p.dev.id}" data-k="${esc(slot.id)}" data-f="note"></div>` : ''}` : '';
   return `<div><div class="eyebrow">${esc(p.dev.name)} · ${esc(CONN_NAMES[p.g.conn] || p.g.conn)} ${p.g.dir === 'in' ? 'input' : p.g.dir === 'out' ? 'output' : 'two-way'}${isPhysical(p.g) ? ' · ' + esc(sigName(sigOf(p.g))) : ''}</div>
-    <h3>${esc(portLabel(ref))}</h3><div class="small muted">${esc(portLong(ref))}</div>${net && ipv.ip ? `<div class="small mono">IP ${esc(ipv.ip)}${ipv.note ? ` · ${esc(ipv.note)}` : ''}</div>` : ''}</div>
+    <h3>${esc(portLabel(ref))}</h3><div class="small muted">${esc(portLong(ref))}</div>${pnote && rigMode() ? `<div class="small">${esc(pnote)}</div>` : ''}${net && ipv.ip ? `<div class="small mono">IP ${esc(ipv.ip)}${ipv.note ? ` · ${esc(ipv.note)}` : ''}</div>` : ''}</div>
     ${canSrc ? sec('pt-src', 'Source plugged in here', `
       ${srcs.length ? srcs.map((s) => `<div class="chips"><span class="chip"><span class="sw" style="background:${project.groups.find((g) => g.id === s.groupId)?.color || '#ccc'}"></span>${esc(s.name)}</span><span class="small muted">${esc(s.mic || '')}</span><button data-act="unassign" data-src="${s.id}" data-ref="${ref}" style="padding:1px 6px">Remove</button></div>`).join('') : '<p class="small muted" style="margin:0">None in this patch.</p>'}
       <div class="inline-fields" style="gap:4px"><select id="pt-assign" style="flex:1"><option value="">Assign a source…</option>${srcOpts}</select><button data-act="assign" data-ref="${ref}">Assign</button></div>
       <button data-act="newSrcHere" data-ref="${ref}">+ New source on this jack</button>`) : ''}
     ${isPhysical(p.g) ? sec('pt-connect', 'Connect to', `
       <input id="pt-q" data-inp="connQuery" data-ref="${ref}" placeholder="Search, e.g. PSM or Out 3" value="${esc(ui.connQuery || '')}" autocomplete="off">
+      <label class="tog small"><input type="checkbox" id="pt-all" data-chg="connAll" ${ui.connAll ? 'checked' : ''}> Show every jack${sigFamily(p.g) === 'other' ? '' : ` (now: ${esc(FAMILY_NAMES[sigFamily(p.g)] || sigFamily(p.g))} jacks only)`}</label>
       <select id="pt-target" size="7" style="width:100%" aria-label="Jack to connect to">${connectOptions(ref, ui.connQuery)}</select>
       <div class="toolbar"><button class="primary" data-act="connectPicked" data-ref="${ref}">Connect${rigMode() && ui.newKind === 'tie' ? ' tie line' : ''}</button><button data-act="pickMode" data-ref="${ref}">Pick on the rack…</button></div>
       <p class="small muted" style="margin:0">Shortcut: with this jack selected, hold <b>Shift</b> and click another jack. New connections go in ${rigMode() ? '<b>the rig</b>' : `<b>${esc(patch().name)}</b>`}.</p>`) : ''}
-    ${sec('pt-cables', `Cables (${conns.length})`, conns.length ? conns.map((c) => `<div class="chips"><span class="pill ${c.layer === 'rig' ? 'rig' : 'patch'}">${c.kind === 'dante' ? 'Dante' : c.kind === 'tie' ? 'Tie line' : c.layer === 'rig' ? 'Rig' : 'Patch'}</span>${c.kind === 'dante' ? '' : `<span class="swl" style="--c:${(SIGNALS[connType(c)] || SIGNALS.other).color}" title="${esc(sigName(connType(c)))}"></span>`}<span class="chip" data-act="selConn" data-id="${c.id}" style="cursor:pointer">${c.a === ref ? '→' : '←'} ${esc(portLong(c.a === ref ? c.b : c.a))}</span></div>`).join('') : '<p class="small muted" style="margin:0">Nothing plugged in.</p>')}
+    ${sec('pt-cables', `Cables (${conns.length})`, conns.length ? conns.map((c) => `<div class="chips"><span class="pill ${c.layer === 'rig' ? 'rig' : 'patch'}">${c.kind === 'dante' ? 'Dante' : c.kind === 'tie' ? 'Tie line' : c.layer === 'rig' ? 'Rig' : 'Patch'}</span>${c.kind === 'dante' ? '' : `<span class="swl" style="--c:${(SIGNALS[connType(c)] || SIGNALS.other).color}" title="${esc(sigName(connType(c)))}"></span>`}<span class="chip" data-act="selConn" data-id="${c.id}" style="cursor:pointer">${c.label ? `<b>${esc(c.label)}</b> ` : ''}${c.a === ref ? '→' : '←'} ${esc(portLong(c.a === ref ? c.b : c.a))}</span></div>`).join('') : '<p class="small muted" style="margin:0">Nothing plugged in.</p>')}
     ${sec('pt-trace', 'Signal trace', `<div class="small muted">Comes from</div>${traceHTML(bpaths)}<div class="small muted">Goes to</div>${traceHTML(fpaths)}`)}
-    ${more ? sec('pt-more', net ? 'Name &amp; IP address' : 'Custom name', more, net) : ''}`;
+    ${more ? sec('pt-more', net ? 'Name, note &amp; IP address' : 'Name &amp; note', more, true) : `${pnote ? `<p class="small" style="margin:0"><span class="muted">Note:</span> ${esc(pnote)}</p>` : ''}${lockNote('name this jack or add a note')}`}`;
 }
 // jacks that `ref` could be cabled to, for the "Connect to" list
 function connectOptions(ref, q = '') {
   const p = port(ref); if (!p) return '';
+  const all = !!ui.connAll;
   const want = p.g.dir === 'in' ? ['out', 'io'] : p.g.dir === 'out' ? ['in', 'io'] : ['io'];
   q = (q || '').toLowerCase().trim();
   let html = '';
@@ -2460,6 +2509,7 @@ function connectOptions(ref, q = '') {
     let opts = '';
     for (const g of def.groups) {
       if (!isPhysical(g) || !want.includes(g.dir)) continue;
+      if (!all && !sameFamily(p.g, g)) continue;
       for (let i = 1; i <= g.count; i++) {
         const r = mkRef(d.id, g.id, i); if (r === ref) continue;
         const pp = port(r); const custom = d.portNames?.[`${g.id}:${i}`];
@@ -2479,8 +2529,10 @@ function connInspector(c) {
   const t = connType(c);
   const typeOpts = `<option value="">Automatic (${esc(sigName(autoType(c)))})</option>` + Object.entries(SIGNALS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
   return `<div><div class="eyebrow">${c.kind === 'dante' ? 'Dante subscription' : c.kind === 'tie' ? 'In-wall tie line' : 'Cable'}${c.kind === 'dante' ? '' : ' · ' + esc(sigName(t))}</div>
-    <h3>${esc(portLabel(c.a))} → ${esc(portLabel(c.b))}</h3></div>
+    <h3>${c.label ? `${esc(c.label)}: ` : ''}${esc(portLabel(c.a))} → ${esc(portLabel(c.b))}</h3></div>
     <dl class="kv"><dt>From</dt><dd><a href="#" data-act="selPort" data-ref="${c.a}">${esc(portLong(c.a))}</a></dd><dt>To</dt><dd><a href="#" data-act="selPort" data-ref="${c.b}">${esc(portLong(c.b))}</a></dd></dl>
+    <div class="row"><label for="cn-label">Label</label><input id="cn-label" value="${esc(c.label || '')}" placeholder="${c.kind === 'dante' ? 'e.g. Pastor IEM feed' : 'e.g. C-12'}" data-chg="connText" data-f="label" data-id="${c.id}"></div>
+    <div class="row"><label for="cn-note">Note</label><input id="cn-note" value="${esc(c.note || '')}" placeholder="e.g. runs under the stage" data-chg="connText" data-f="note" data-id="${c.id}"></div>
     ${c.kind !== 'dante' ? `<div class="row"><label for="cn-type">Signal</label><select id="cn-type" data-chg="connType" data-id="${c.id}" data-val="${c.type || ''}">${typeOpts}</select></div>
       <div class="row"><label for="cn-spec">Spec</label><input id="cn-spec" list="spec-list" value="${esc(c.spec || '')}" placeholder="e.g. ${esc((SPEC_SUGGEST[t] || ['3G', 'Cat6'])[0])}" data-chg="connSpec" data-id="${c.id}"><datalist id="spec-list">${(SPEC_SUGGEST[t] || []).map((x) => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>` : ''}
     ${c.kind === 'cable' ? `<div class="row"><label for="cn-col">Cable colour</label><select id="cn-col" data-chg="connColor" data-id="${c.id}" data-val="${c.color || ''}"><option value="">Not set</option>${colors}</select></div>` : ''}
@@ -2492,11 +2544,12 @@ function rackInspector(r) {
   if (!r) return inspectorHome();
   const n = project.devices.filter((d) => d.place?.type === 'rack' && d.place.rackId === r.id).length;
   const locName = project.locations.find((l) => l.id === r.locId)?.name;
-  if (!rigMode()) return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3><dl class="kv"><dt>Location</dt><dd>${esc(locName || 'Not in a location')}</dd><dt>Size</dt><dd>${r.ru}U</dd><dt>Gear</dt><dd>${n} items</dd></dl>${lockNote('rename, resize, move or delete it')}`;
+  if (!rigMode()) return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3><dl class="kv"><dt>Location</dt><dd>${esc(locName || 'Not in a location')}</dd><dt>Size</dt><dd>${r.ru}U</dd><dt>Gear</dt><dd>${n} items</dd></dl>${r.notes ? `<p class="small" style="margin:0;white-space:pre-wrap">${esc(r.notes)}</p>` : ''}${lockNote('rename, resize, move or delete it')}`;
   return `<div class="eyebrow">Rack</div><h3>${esc(r.name)}</h3>
     <div class="row"><label for="rk-name">Name</label><input id="rk-name" value="${esc(r.name)}" data-chg="rackField" data-f="name" data-id="${r.id}"></div>
     <div class="row"><label for="rk-loc">Location</label><select id="rk-loc" data-chg="rackLoc" data-id="${r.id}" data-val="${r.locId && locName ? r.locId : ''}"><option value="">Not in a location</option>${project.locations.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></div>
     <div class="row"><label for="rk-ru">Size (U)</label><input id="rk-ru" type="number" min="1" max="60" value="${r.ru}" data-chg="rackField" data-f="ru" data-id="${r.id}"></div>
+    <label class="field"><span>Notes</span><textarea id="rk-notes" rows="3" data-chg="rackField" data-f="notes" data-id="${r.id}" placeholder="e.g. Key is in the AV closet">${esc(r.notes || '')}</textarea></label>
     <div class="toolbar"><button data-act="moveRack" data-id="${r.id}" data-d="-1">◀ Move left</button><button data-act="moveRack" data-id="${r.id}" data-d="1">Move right ▶</button></div>
     <div class="toolbar">${confirmBtn('delRack', n ? `Delete rack and its ${n} items` : 'Delete rack', `data-id="${r.id}"`)}</div>`;
 }
@@ -2504,10 +2557,11 @@ function locInspector(l) {
   if (!l) return inspectorHome();
   const n = project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === l.id).length;
   const nr = project.racks.filter((r) => r.locId === l.id).length;
-  if (!rigMode()) return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3><dl class="kv"><dt>Racks</dt><dd>${nr}</dd><dt>Loose gear</dt><dd>${n} items</dd></dl>${lockNote('rename, reorder or delete it, or add racks and gear')}`;
+  if (!rigMode()) return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3><dl class="kv"><dt>Racks</dt><dd>${nr}</dd><dt>Loose gear</dt><dd>${n} items</dd></dl>${l.notes ? `<p class="small" style="margin:0;white-space:pre-wrap">${esc(l.notes)}</p>` : ''}${lockNote('rename, reorder or delete it, or add racks and gear')}`;
   return `<div class="eyebrow">Location</div><h3>${esc(l.name)}</h3>
     <p class="small muted" style="margin:0">A location is a place in the building (Stage, FOH, Backstage, the amp room). It holds racks, plus loose gear like floor pockets, wall plates and the console.</p>
-    <div class="row"><label for="lc-name">Name</label><input id="lc-name" value="${esc(l.name)}" data-chg="locField" data-id="${l.id}"></div>
+    <div class="row"><label for="lc-name">Name</label><input id="lc-name" value="${esc(l.name)}" data-chg="locField" data-f="name" data-id="${l.id}"></div>
+    <label class="field"><span>Notes</span><textarea id="lc-notes" rows="3" data-chg="locField" data-f="notes" data-id="${l.id}" placeholder="e.g. Pockets are under the carpet flaps">${esc(l.notes || '')}</textarea></label>
     <div class="toolbar"><button data-act="moveLoc" data-id="${l.id}" data-d="-1">▲ Move up</button><button data-act="moveLoc" data-id="${l.id}" data-d="1">Move down ▼</button></div>
     <div class="toolbar"><button data-act="addRack" data-loc="${l.id}">+ Rack here</button><button data-act="locAdd" data-id="${l.id}">+ Gear</button></div>
     <div class="toolbar">${confirmBtn('delLoc', n ? `Delete location and its ${n} loose items` : 'Delete location', `data-id="${l.id}"`)}</div>
@@ -2775,7 +2829,7 @@ function sheetLines(d) {
       if (mine.dev.id !== d.id) continue;
       if (c.kind === 'dante' && dir === '→') continue; // routes are listed on the receiving unit
       const t = connType(c);
-      const tags = c.kind === 'dante' ? [] : [c.kind === 'tie' ? 'tie line' : '', t !== 'analog' ? sigName(t) : '', c.spec || '', c.layer === 'rig' ? '' : 'this patch only'].filter(Boolean);
+      const tags = c.kind === 'dante' ? [c.label || ''].filter(Boolean) : [c.label || '', c.kind === 'tie' ? 'tie line' : '', t !== 'analog' ? sigName(t) : '', c.spec || '', c.layer === 'rig' ? '' : 'this patch only'].filter(Boolean);
       (c.kind === 'dante' ? dan : cab).push({ mine, other, dir, gi: gi(mine), tags, key: [mine.g.id, other.dev.id, other.g.id, dir, c.kind, tags.join(',')].join('|') });
     }
   }
@@ -2817,7 +2871,7 @@ function sheetModel() {
   if (o.scope.startsWith('loc:')) areas = areas.filter((a) => a.loc?.id === o.scope.slice(4));
   if (o.scope.startsWith('rack:')) { onlyRack = o.scope.slice(5); areas = areas.map((a) => ({ ...a, racks: a.racks.filter((r) => r.id === onlyRack) })).filter((a) => a.racks.length); }
   return areas.map((a) => ({
-    title: a.loc ? a.loc.name : 'Racks not in a location',
+    title: a.loc ? a.loc.name : 'Racks not in a location', notes: a.loc?.notes || '',
     racks: a.racks.map((r) => ({ rack: r, rows: rackRows(r) })),
     gear: a.loc && !onlyRack ? project.devices.filter((d) => d.place?.type === 'loc' && d.place.locId === a.loc.id).map((d) => ({ u: '', side: '', unit: unitInfo(d) })) : [],
   })).filter((a) => a.racks.length || a.gear.length);
@@ -2846,8 +2900,8 @@ function sheetPaperHTML() {
     <div class="pbody">
       <div class="ptitle">Rig sheet · ${esc(project.name)}</div>
       <div class="pmeta"><div>${esc(sheetScopeLabel())}${project.sheet.include.patch ? ` · includes ${esc(patch().name)}` : ''}</div><div>Printed ${esc(new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }))}</div></div>
-      ${model.length ? model.map((a) => `<h4>${esc(a.title)}</h4>
-        ${a.racks.map((r) => `<div class="s-rack"><div class="s-rack-h" style="background:${esc(hc)}">${esc(r.rack.name)} · ${r.rack.ru}U</div>${table(r.rows)}</div>`).join('')}
+      ${model.length ? model.map((a) => `<h4>${esc(a.title)}</h4>${a.notes ? `<div class="s-notes">${esc(a.notes)}</div>` : ''}
+        ${a.racks.map((r) => `<div class="s-rack"><div class="s-rack-h" style="background:${esc(hc)}">${esc(r.rack.name)} · ${r.rack.ru}U</div>${r.rack.notes ? `<div class="s-notes">${esc(r.rack.notes)}</div>` : ''}${table(r.rows)}</div>`).join('')}
         ${a.gear.length ? `<div class="s-rack"><div class="s-rack-h" style="background:${esc(hc)}">Gear outside racks</div>${table(a.gear)}</div>` : ''}`).join('') : '<p>Nothing to show for this choice.</p>'}
     </div>
   </div>`;
@@ -2868,7 +2922,8 @@ function sheetText() {
   };
   for (const a of sheetModel()) {
     lines.push(a.title.toUpperCase());
-    for (const r of a.racks) { lines.push(`  ${r.rack.name} (${r.rack.ru}U)`); for (const x of r.rows) lines.push(...unit(x, '    ')); lines.push(''); }
+    if (a.notes) for (const l of a.notes.split('\n')) lines.push(`  Note: ${l}`);
+    for (const r of a.racks) { lines.push(`  ${r.rack.name} (${r.rack.ru}U)`); if (r.rack.notes) for (const l of r.rack.notes.split('\n')) lines.push(`    Note: ${l}`); for (const x of r.rows) lines.push(...unit(x, '    ')); lines.push(''); }
     if (a.gear.length) { lines.push('  Gear outside racks'); for (const x of a.gear) lines.push(...unit(x, '    ')); lines.push(''); }
   }
   return lines.join('\n');
@@ -3453,11 +3508,19 @@ const FORM_NAMES = { rack: 'Rack-mounted', shelf: 'On a rack shelf', desk: 'Desk
 const libPrefs = (() => { try { return JSON.parse(localStorage.getItem('patchrack.libview') || '{}'); } catch { return {}; } })();
 ui.libGroup = LIB_GROUPS[libPrefs.group] ? libPrefs.group : 'category';
 ui.libSort = LIB_SORTS[libPrefs.sort] ? libPrefs.sort : 'name';
-const saveLibPrefs = () => { try { localStorage.setItem('patchrack.libview', JSON.stringify({ group: ui.libGroup, sort: ui.libSort })); } catch { /* storage unavailable */ } };
+// the Add gear list (rack view) has its own grouping and sorting
+ui.addGroup = LIB_GROUPS[libPrefs.addGroup] ? libPrefs.addGroup : 'category';
+ui.addSort = LIB_SORTS[libPrefs.addSort] ? libPrefs.addSort : 'name';
+ui.addFitOnly = libPrefs.addFitOnly !== false;
+const saveLibPrefs = () => { try { localStorage.setItem('patchrack.libview', JSON.stringify({ group: ui.libGroup, sort: ui.libSort, addGroup: ui.addGroup, addSort: ui.addSort, addFitOnly: ui.addFitOnly })); } catch { /* storage unavailable */ } };
 const makeOf = (d) => (d.make || '').trim() || 'No make';
+// gear categories: the built-in ones, renamed or added to per project
+const catList = () => ({ ...CATEGORY_NAMES, ...project.catNames });
+const catName = (k) => catList()[k || 'other'] || k || 'Other';
+const optsHTML = (obj, v) => Object.entries(obj).map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('');
 // group key, label and order for one definition under the chosen grouping
-function libGroupOf(d, used) {
-  switch (ui.libGroup) {
+function libGroupOf(d, used, mode) {
+  switch (mode) {
     case 'make': return { key: makeOf(d).toLowerCase(), label: makeOf(d), order: makeOf(d).toLowerCase() };
     case 'size':
       if (!rackable(d)) return { key: 'f-' + d.form, label: FORM_NAMES[d.form] || d.form, order: 1000 };
@@ -3467,11 +3530,12 @@ function libGroupOf(d, used) {
     case 'none': return { key: 'all', label: 'All gear', order: 0 };
     default: {
       const c = d.category || 'other';
-      return { key: c, label: CATEGORY_NAMES[c] || c, order: Object.keys(CATEGORY_NAMES).indexOf(c) };
+      const i = Object.keys(catList()).indexOf(c);
+      return { key: c, label: catName(c), order: i < 0 ? 999 : i };
     }
   }
 }
-function libSortFn(usedOf) {
+function libSortFn(usedOf, mode) {
   const name = (a, b) => `${makeOf(a)} ${a.model}`.localeCompare(`${makeOf(b)} ${b.model}`, undefined, { numeric: true, sensitivity: 'base' });
   const pos = new Map(project.library.map((d, i) => [d.id, i]));
   return {
@@ -3480,49 +3544,59 @@ function libSortFn(usedOf) {
     ru: (a, b) => (rackable(b) - rackable(a)) || (a.ru || 0) - (b.ru || 0) || (a.width === 'half') - (b.width === 'half') || name(a, b),
     used: (a, b) => usedOf(b) - usedOf(a) || name(a, b),
     recent: (a, b) => pos.get(b.id) - pos.get(a.id),
-  }[ui.libSort] || name;
+  }[mode] || name;
 }
-const libGroupKey = (k) => `lib:${ui.libGroup}:${k}`;
-function libListHTML() {
-  const q = ui.libQuery.toLowerCase();
+const gearMatches = (d, q) => !q || `${d.make} ${d.model} ${d.short || ''} ${d.category} ${catName(d.category)}`.toLowerCase().includes(q);
+// A grouped, sorted, collapsible list of gear definitions. Used by the Library
+// and by the Add gear panel. `key` keeps their open/closed groups apart.
+function gearListHTML({ defs, q, group, sort, key, item, empty }) {
   const count = new Map();
   for (const x of project.devices) count.set(x.defId, (count.get(x.defId) || 0) + 1);
-  const defs = project.library.filter((d) => !q || `${d.make} ${d.model} ${d.short || ''} ${d.category} ${CATEGORY_NAMES[d.category] || ''}`.toLowerCase().includes(q));
   const usedOf = (d) => count.get(d.id) || 0;
-  if (!defs.length) return '<p class="muted small">No matching gear.</p>';
+  if (!defs.length) return `<p class="muted small">${empty}</p>`;
+  const sortFn = libSortFn(usedOf, sort);
+  if (group === 'none') return `<div class="list">${[...defs].sort(sortFn).map((d) => item(d, usedOf(d))).join('')}</div>`;
   const groups = new Map();
   for (const d of defs) {
-    const g = libGroupOf(d, usedOf(d));
+    const g = libGroupOf(d, usedOf(d), group);
     if (!groups.has(g.key)) groups.set(g.key, { ...g, items: [] });
     groups.get(g.key).items.push(d);
   }
   const sorted = [...groups.values()].sort((a, b) => (typeof a.order === 'number' && typeof b.order === 'number' ? a.order - b.order : String(a.order).localeCompare(String(b.order))) || a.label.localeCompare(b.label));
-  const sortFn = libSortFn(usedOf);
-  const item = (d) => `<button class="${d.id === ui.libSel ? 'on' : ''}" data-act="libSel" data-def="${d.id}"><span>${esc(ui.libGroup === 'make' ? d.model : `${d.make} ${d.model}`)} ${d.verified ? '' : '<span class="pill unv">?</span>'}</span><small>${[usedOf(d) ? usedOf(d) + ' in use' : '', (ui.libSort === 'ru' && ui.libGroup !== 'size') || (ui.libGroup === 'size' && !rackable(d)) || d.form === 'shelf' && ui.libGroup === 'size' ? esc(sizeText(d)) : ''].filter(Boolean).join(' · ')}</small></button>`;
-  if (ui.libGroup === 'none') return `<div class="list">${defs.sort(sortFn).map(item).join('')}</div>`;
   return sorted.map((g) => {
-    const items = g.items.sort(sortFn).map(item).join('');
+    const items = g.items.sort(sortFn).map((d) => item(d, usedOf(d))).join('');
     const title = `${esc(g.label)} <span class="grp-n">${g.items.length}</span>`;
     // while searching, every group with a match is shown open (and not remembered)
     if (q) return `<details class="sec lib-grp" open><summary>${title}</summary><div class="list">${items}</div></details>`;
-    const k = libGroupKey(g.key);
-    const open = k in secState ? secState[k] : true;
-    return `<details class="sec lib-grp" data-sec="${esc(k)}" data-grp="${esc(g.key)}" ${open ? 'open' : ''}><summary>${title}</summary><div class="list">${items}</div></details>`;
+    const k = `${key}:${group}:${g.key}`, all = `${key}:${group}:*`;
+    const open = k in secState ? secState[k] : all in secState ? secState[all] : true;
+    return `<details class="sec lib-grp" data-sec="${esc(k)}" data-grp="${esc(g.key)}" data-all="${esc(all)}" ${open ? 'open' : ''}><summary>${title}</summary><div class="list">${items}</div></details>`;
   }).join('');
+}
+// the Group by / Sort by / Expand all / Collapse all controls above a gear list
+function gearListTools(id, group, sort, listId) {
+  return `<div class="lib-tools">
+      <label class="field"><span>Group by</span><select id="${id}-group" data-chg="gearListView" data-list="${id}" data-f="group">${optsHTML(LIB_GROUPS, group)}</select></label>
+      <label class="field"><span>Sort by</span><select id="${id}-sort" data-chg="gearListView" data-list="${id}" data-f="sort">${optsHTML(LIB_SORTS, sort)}</select></label>
+    </div>
+    ${group === 'none' ? '' : `<div class="toolbar lib-fold"><button data-act="gearFold" data-list="${listId}" data-open="1">Expand all</button><button data-act="gearFold" data-list="${listId}" data-open="0">Collapse all</button></div>`}`;
+}
+function libListHTML() {
+  const q = ui.libQuery.toLowerCase();
+  const sizeShown = (d) => (ui.libSort === 'ru' && ui.libGroup !== 'size') || (ui.libGroup === 'size' && (!rackable(d) || d.form === 'shelf'));
+  return gearListHTML({
+    defs: project.library.filter((d) => gearMatches(d, q)), q, group: ui.libGroup, sort: ui.libSort, key: 'lib', empty: 'No matching gear.',
+    item: (d, used) => `<button class="${d.id === ui.libSel ? 'on' : ''}" data-act="libSel" data-def="${d.id}"><span>${esc(ui.libGroup === 'make' ? d.model : `${d.make} ${d.model}`)} ${d.verified ? '' : '<span class="pill unv">?</span>'}</span><small>${[used ? used + ' in use' : '', sizeShown(d) ? esc(sizeText(d)) : ''].filter(Boolean).join(' · ')}</small></button>`,
+  });
 }
 function libraryView() {
   const sel = project.library.find((d) => d.id === ui.libSel) || null;
-  const opts = (obj, v) => Object.entries(obj).map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('');
   return `<section class="view">
     <div class="card-head"><h2>Gear library</h2><span class="muted small">${project.library.length} definitions</span><span class="spacer"></span>
       <button class="primary" data-act="newDef">+ New gear</button><button data-act="exportLib">Export library</button><button data-act="importLib">Import library</button></div>
     <div class="lib-split">
       <div class="card lib-side"><input id="lib-q" data-inp="libQuery" placeholder="Search…" value="${esc(ui.libQuery)}">
-        <div class="lib-tools">
-          <label class="field"><span>Group by</span><select id="lib-group" data-chg="libView" data-f="group">${opts(LIB_GROUPS, ui.libGroup)}</select></label>
-          <label class="field"><span>Sort by</span><select id="lib-sort" data-chg="libView" data-f="sort">${opts(LIB_SORTS, ui.libSort)}</select></label>
-        </div>
-        ${ui.libGroup === 'none' ? '' : '<div class="toolbar lib-fold"><button data-act="libFold" data-open="1">Expand all</button><button data-act="libFold" data-open="0">Collapse all</button></div>'}
+        ${gearListTools('lib', ui.libGroup, ui.libSort, 'lib-list')}
         <div class="lib-list" id="lib-list">${libListHTML()}</div></div>
       <div class="card">${sel ? defEditor(sel) : '<p class="muted">Pick a piece of gear to see or edit its definition. A definition is the template for one model: its size and every connector. Change it once and every unit of that model updates.</p>'}</div>
     </div>
@@ -3550,7 +3624,8 @@ function defEditor(d) {
   return `<div class="card-head"><h3>${esc(d.make)} ${esc(d.model)}</h3>${d.verified ? '<span class="pill ver">verified</span>' : '<span class="pill unv">unverified</span>'}<span class="muted small">${used} in use</span><span class="spacer"></span>
       <button data-act="dupDef" data-def="${d.id}">Duplicate</button>${used ? '' : confirmBtn('delDef', 'Delete', `data-def="${d.id}"`)}</div>
     <div class="inline-fields">${f('make', 'Make')}${f('model', 'Model')}${f('short', 'Short label')}
-      <label class="field"><span>Category</span><select id="df-category" data-chg="defField" data-f="category">${opt(CATEGORY_NAMES, d.category)}</select></label>
+      <label class="field"><span>Category</span><select id="df-category" data-chg="defField" data-f="category">${opt(catList(), d.category)}<option value="__new">+ New category…</option></select></label>
+      <label class="field"><span>Category name</span><input id="df-catname" value="${esc(catName(d.category))}" data-chg="catName" data-k="${esc(d.category || 'other')}" title="Renames this category for every piece of gear in it"></label>
       <label class="field"><span>Mounting</span><select id="df-form" data-chg="defField" data-f="form">${opt({ rack: 'Mounted in a 19" rack', shelf: 'Sits on a rack shelf', desk: 'Desk / free-standing', pocket: 'Floor pocket / wall plate' }, d.form)}</select></label>
       <label class="field"><span>Size</span><select id="df-width" data-chg="defField" data-f="width">${opt(d.form === 'rack' ? { full: 'Full rack width', half: 'Half rack width' } : { full: 'Full rack width', half: 'Half rack width', custom: 'Custom size (inches)' }, d.width)}</select></label>
       ${customSize(d) ? `${f('wIn', 'Width (in)', 'number', 'min="0.5" max="60" step="0.05" style="width:90px"')}${f('hIn', 'Height (in)', 'number', 'min="0.5" max="40" step="0.05" style="width:90px"')}` : ''}
@@ -3778,6 +3853,12 @@ const actions = {
   newKind: (el) => { ui.newKind = el.dataset.k; render(); },
   pickMode: (el) => { ui.pick = el.dataset.ref; render(); },
   cancelPick: () => { ui.pick = null; render(); },
+  locVisAll: (el, e) => {
+    e?.preventDefault?.();
+    project.view.hideLocs = {};
+    if (el.dataset.on !== '1') for (const [id] of locChoices()) project.view.hideLocs[id] = true;
+    save(); render();
+  },
   connectPicked: (el) => {
     const t = $('#pt-target')?.value;
     if (!t) { toast('Choose a jack from the list first.'); return; }
@@ -3959,9 +4040,12 @@ const actions = {
   copyCsv: () => copyText(csvText(), 'CSV copied. Paste it into Numbers, Excel or Google Sheets.'),
   // library
   libSel: (el) => { ui.libSel = el.dataset.def; render(); },
-  libFold: (el) => {
+  gearFold: (el) => {
     const open = el.dataset.open === '1';
-    for (const d of document.querySelectorAll('#lib-list details.lib-grp[data-sec]')) { secState[d.dataset.sec] = open; d.open = open; }
+    const ds = document.querySelectorAll(`#${el.dataset.list} details.lib-grp[data-sec]`);
+    for (const d of ds) { secState[d.dataset.sec] = open; d.open = open; }
+    // groups not on screen yet (hidden by search or by "only gear that fits") follow suit
+    if (ds[0]) { const all = ds[0].dataset.all; for (const k of Object.keys(secState)) if (k.startsWith(all.slice(0, -1))) secState[k] = open; secState[all] = open; }
     try { localStorage.setItem('patchrack.sections', JSON.stringify(secState)); } catch { /* storage unavailable */ }
   },
   editDef: (el) => { ui.tab = 'library'; ui.libSel = el.dataset.def; render(); },
@@ -4004,10 +4088,11 @@ function revealFace(p) {
 }
 
 const changes = {
-  libView: (el) => {
-    if (el.dataset.f === 'group') ui.libGroup = el.value; else ui.libSort = el.value;
-    saveLibPrefs(); render();
+  gearListView: (el) => {
+    const k = (el.dataset.list === 'add' ? 'add' : 'lib') + (el.dataset.f === 'group' ? 'Group' : 'Sort');
+    ui[k] = el.value; saveLibPrefs(); render();
   },
+  addFitOnly: (el) => { ui.addFitOnly = el.checked; saveLibPrefs(); render(); },
   projName: (el) => commit('Renamed project', (p) => { p.name = el.value; }),
   pickPatch: (el) => { ui.patchId = el.value; ui.sel = null; render(); toast(`Now editing ${patch().name}`); },
   cableMode: (el) => { project.view.cableMode = el.value; save(); render(); },
@@ -4072,6 +4157,8 @@ const changes = {
     if (rx || off) toast((rx ? (rigMode() ? 'Dante route saved in the rig.' : `Dante route saved in ${patch().name} only.`) : '') + offNote(off), 6000);
   },
   viewField: (el) => { project.view[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; save(); render(); },
+  connAll: (el) => { ui.connAll = el.checked; const s = $('#pt-target'); const r = $('#pt-q')?.dataset.ref; if (s && r) s.innerHTML = connectOptions(r, ui.connQuery); },
+  locVis: (el) => { if (el.checked) delete project.view.hideLocs[el.dataset.id]; else project.view.hideLocs[el.dataset.id] = true; save(); render(); },
   typeVis: (el) => { if (el.checked) delete project.view.hideTypes[el.dataset.t]; else project.view.hideTypes[el.dataset.t] = true; save(); render(); },
   connKind: (el) => commit(el.value === 'tie' ? 'Made a cable into a tie line' : 'Made a tie line into a cable', (p) => {
     const c = p.connections.find((x) => x.id === el.dataset.id); c.kind = el.value;
@@ -4086,9 +4173,14 @@ const changes = {
       const low = project.devices.filter((d) => d.place.type === 'rack' && d.place.rackId === r.id).some((d) => d.place.u + (idx.def.get(d.defId)?.ru || 1) - 1 > ru);
       if (low) { toast('Some gear sits below that height. Move it first.'); render(); return; }
       commit(`Resized ${r.name}`, () => { r.ru = ru; });
-    } else commit('Renamed rack', () => { r.name = el.value; });
+    } else if (el.dataset.f === 'notes') commit('Edited rack notes', () => { if (el.value.trim()) r.notes = el.value; else delete r.notes; });
+    else commit('Renamed rack', () => { r.name = el.value; });
   },
-  locField: (el) => commit('Renamed location', (p) => { p.locations.find((l) => l.id === el.dataset.id).name = el.value; }),
+  locField: (el) => commit(el.dataset.f === 'notes' ? 'Edited location notes' : 'Renamed location', (p) => { const l = p.locations.find((x) => x.id === el.dataset.id); if (el.dataset.f === 'notes' && !el.value.trim()) delete l.notes; else l[el.dataset.f || 'name'] = el.value; }),
+  catName: (el) => { const v = el.value.trim(); if (!v) { render(); return; } commit('Renamed a gear category', (p) => { p.catNames[el.dataset.k] = v; }); },
+  devGroupLabel: (el) => commit('Edited a faceplate heading', (p) => { const d = p.devices.find((y) => y.id === ui.sel.id); d.groupLabels ||= {}; if (el.value.trim()) d.groupLabels[el.dataset.g] = el.value.trim(); else delete d.groupLabels[el.dataset.g]; }),
+  portNote: (el) => { const p = port(el.dataset.ref); commit(`Added a note to ${portShort(el.dataset.ref)}`, () => { const d = project.devices.find((y) => y.id === p.dev.id); const k = `${p.g.id}:${p.n}`; d.portNotes ||= {}; if (el.value.trim()) d.portNotes[k] = el.value.trim(); else delete d.portNotes[k]; }); },
+  connText: (el) => commit(el.dataset.f === 'label' ? 'Labelled a cable' : 'Added a cable note', (p) => { const c = p.connections.find((x) => x.id === el.dataset.id); if (el.value.trim()) c[el.dataset.f] = el.value.trim(); else delete c[el.dataset.f]; }),
   src: (el) => commit(`Edited ${findSrc(el.dataset.id)?.name || 'source'}`, () => { findSrc(el.dataset.id)[el.dataset.f] = el.value; }),
   srcCustom: (el) => commit('Edited a custom column', () => { const s = findSrc(el.dataset.id); (s.custom ||= {})[el.dataset.c] = el.value; }),
   srcPort: (el) => commit(`Patched ${findSrc(el.dataset.id)?.name}`, () => {
@@ -4137,7 +4229,10 @@ const changes = {
     if (f === 'verified' || f === 'mixer') d[f] = el.checked;
     else if (f === 'ru' || f === 'watts') d[f] = Math.max(f === 'ru' ? 1 : 0, +el.value || 0);
     else if (f === 'wIn' || f === 'hIn') d[f] = Math.min(f === 'wIn' ? 60 : 40, Math.max(0.5, +el.value || 1));
-    else d[f] = el.value;
+    else if (f === 'category' && el.value === '__new') {
+      const k = uid('cat'); project.catNames[k] = 'New category'; d.category = k;
+      setTimeout(() => { const i = $('#df-catname'); if (i) { i.focus(); i.select(); } });
+    } else d[f] = el.value;
     if (f === 'width' && d.width === 'custom') { d.wIn ||= 8; d.hIn ||= 1.75; }
     if (f === 'form' && d.form === 'rack' && d.width === 'custom') d.width = 'full';
     // a shelf has to be at least as tall as the gear sitting on it
@@ -4178,8 +4273,7 @@ const inputs = {
   connQuery: (el) => { ui.connQuery = el.value; const s = $('#pt-target'); if (s) s.innerHTML = connectOptions(el.dataset.ref, el.value); },
   addQuery: (el) => {
     ui.addQuery = el.value;
-    const tmp = document.createElement('div'); tmp.innerHTML = inspectorHTML();
-    $('#add-list').innerHTML = $('#add-list', tmp).innerHTML;
+    if (ui.sel) $('#add-list').innerHTML = addListHTML(ui.sel);
   },
   libQuery: (el) => {
     ui.libQuery = el.value;

@@ -519,3 +519,14 @@ table.grid td.c { text-align: center; }
 .lib-list .list { grid-template-columns: minmax(0, 1fr); }
 .lib-list .list button > span { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .lib-list .list button > small { flex: none; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: center; }
+.add-list { max-height: none; overflow: visible; }
+/* unit labels hidden: the strip is still there to click or drag, and shows on hover */
+.dev-label.lbl-hover { opacity: 0; transition: opacity .12s; }
+.dev:hover > .dev-label.lbl-hover, .dev.sel > .dev-label.lbl-hover { opacity: 1; }
+.dev.photo .dev-label.lbl-hover { background: rgba(10, 12, 14, .72); }
+.hidden-locs { margin: 4px 0 0; }
+/* per-unit labels table in the gear panel */
+.lblrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) 56px; gap: 4px; align-items: center; }
+.lblrow input { min-width: 0; width: 100%; }
+.lblrow .lbl-g { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbl-head { font-size: 11px; color: var(--muted); }
