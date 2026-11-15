@@ -107,7 +107,7 @@ ol.steps { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 </head>
 <body>
 <header class="top">
-  <div class="brand">PatchRack<small>Line drawing · v0.0.20</small></div>
+  <div class="brand">PatchRack<small>Line drawing · v0.0.21</small></div>
   <span class="what">Photo → squared-up line drawing for a gear definition</span>
 </header>
 
@@ -130,7 +130,7 @@ ol.steps { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
           <option value="custom">Custom size…</option>
         </select></label>
       <label class="field" id="f-width"><span>Width</span>
-        <select id="width"><option value="full">Full width (19")</option><option value="half">Half width</option></select></label>
+        <select id="width"><option value="full">Full width (19")</option><option value="half">Half width (8.875")</option></select></label>
       <label class="field" id="f-cw" hidden><span>Width (mm)</span><input type="number" id="cw" min="10" max="2000" value="483" style="width:90px"></label>
       <label class="field" id="f-ch" hidden><span>Height (mm)</span><input type="number" id="ch" min="10" max="2000" value="88" style="width:90px"></label>
       <label class="field"><span>Side</span>
@@ -301,7 +301,8 @@ function outSize() {
     const w = Math.max(10, +st.cw || 483), h = Math.max(10, +st.ch || 88);
     const W = APP_W * OUT_K; return { w: W, h: Math.max(8, Math.round(W * h / w)) };
   }
-  return { w: (st.width === 'half' ? APP_W / 2 : APP_W) * OUT_K, h: (+st.ru) * APP_U * OUT_K };
+  // half width is half of the 17.75" opening between the rails (the ear is separate)
+  return { w: Math.round((st.width === 'half' ? APP_W / 2 - (19 - 17.75) / 2 * APP_U / 1.75 : APP_W) * OUT_K), h: (+st.ru) * APP_U * OUT_K };
 }
 
 /* ---------- loading ---------- */
@@ -998,7 +999,7 @@ let shapesEdited = false, shapes = [], sel = [], shapeHist = [], shapeFuture = [
 const sid = () => 's' + (uidN++);
 const measureCtx = document.createElement('canvas').getContext('2d');
 const fontOf = (s) => `${s.bold ? 700 : 500} ${s.size}px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif`;
-function mmPerPx() { const o = outSize(); const mmW = st.ru === 'custom' ? (+st.cw || 483) : (st.width === 'half' ? 241.3 : 482.6); return mmW / o.w; }
+function mmPerPx() { const o = outSize(); const mmW = st.ru === 'custom' ? (+st.cw || 483) : (st.width === 'half' ? 225.425 : 482.6); return mmW / o.w; }
 const toMM = (px) => Math.round(px * mmPerPx() * 10) / 10;
 const fromMM = (mm) => mm / mmPerPx();
 function scaleShapesTo(o) {

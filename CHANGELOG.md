@@ -3,6 +3,10 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.21 (2026-11-15)
+- **Half-rack gear is the right size and sits in the right place.** A half-rack unit is now half of the 17.75" opening between the rails (8.875"), not half of the full 19". Two half units meet in the middle of the rack, and each gets a separate mounting ear on its outer rail, like a real half-rack kit. Front and rear views both follow this.
+- The photo editor, panel layout editor and line drawing tool use the new half size (8.875", 225.4 mm). Photos framed before this update fill the unit without stretching (a sliver is trimmed off each side); use **Adjust** on the photo to reframe it exactly.
+
 ## v0.0.20 (2026-11-15)
 - **Jacks you can't connect to fade out while you drag a cable:** only jacks of the same signal family (audio, power, network…) and the right direction (output to input) stay bright. The same happens in **Pick on the rack** mode. You can still drop on a faded jack for the odd adapter job; it gets a red ring so you know it's unusual.
 

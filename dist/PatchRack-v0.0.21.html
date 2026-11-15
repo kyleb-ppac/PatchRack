@@ -548,11 +548,17 @@ table.grid td.c { text-align: center; }
 /* while dragging a cable (or picking on the rack), jacks it can't go to fade out */
 .port.nofit { opacity: .22; filter: grayscale(1); transition: opacity .1s; }
 .port.nofit.drop { opacity: .7; box-shadow: 0 0 0 3px #e5534b; }
+/* half-rack gear: the unit is 8.875" and meets its neighbour in the middle; its ear is a separate bracket on the rail */
+.dev.half::before, .dev.half::after { display: none; }
+.half-ear { position: absolute; background: linear-gradient(180deg, var(--metal-2), var(--metal)); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 1px 0 rgba(0,0,0,.6); pointer-events: none; }
+.half-ear::after { content: ""; position: absolute; top: 50%; left: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #4b5259; box-shadow: inset 0 0 0 1px #1a1d20; }
+/* photos framed before v0.0.21 were made for the old, wider half size: fill without stretching */
+.dev.half.photo { background-size: cover; background-position: center; }
 
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.20</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.21</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -601,7 +607,7 @@ table.grid td.c { text-align: center; }
 <input type="file" id="file-dante" accept=".xml,text/xml,application/xml" hidden>
 
 <script>
-const APP_VERSION = '0.0.20';
+const APP_VERSION = '0.0.21';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -1962,8 +1968,7 @@ function rackFaceHTML(rack, face, caption) {
     for (const inch of [0.25, 0.875, 1.5]) holes += `<i style="top:${(top + inch * PX_IN - 3).toFixed(1)}px"></i>`;
     const o = occ[u];
     const slot = (side) => {
-      const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
-      const w = side === 'full' ? W : W / 2;
+      const { left, w } = bayBox(side, face);
       const on = selSlot && selSlot.u === u && selSlot.side === side;
       return `<div class="slot ${on ? 'sel' : ''}" data-act="slot" data-rack="${rack.id}" data-u="${u}" data-side="${side}" style="top:${top}px;left:${left}px;width:${w}px;height:${U}px">+ add gear at U${u}${side === 'full' ? '' : ' ' + (side === 'L' ? 'left' : 'right')}</div>`;
     };
@@ -1974,8 +1979,8 @@ function rackFaceHTML(rack, face, caption) {
   const devs = project.devices.filter((d) => d.place?.type === 'rack' && d.place.rackId === rack.id).map((d) => {
     const def = idx.def.get(d.defId); if (!def) return '';
     const side = d.place.side || 'full';
-    const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
-    const top = (d.place.u - 1) * U, slotW = side === 'full' ? W : W / 2, slotH = def.ru * U;
+    const box = bayBox(side, face); const left = box.left;
+    const top = (d.place.u - 1) * U, slotW = box.w, slotH = def.ru * U;
     if (def.form === 'shelf') {
       // gear sitting on a shelf: draw the shelf across its spaces, and the gear at its real size on top of it
       const sz = devSize(def); const w = Math.min(slotW - 8, sz.w), h = Math.min(slotH - 6, sz.h);
@@ -1983,7 +1988,8 @@ function rackFaceHTML(rack, face, caption) {
       return `<div class="shelf" style="top:${top}px;left:${left}px;width:${slotW}px;height:${slotH}px" aria-hidden="true"></div>`
         + devHTML(d, def, face, { top: top + slotH - 6 - h, left: x, w, h, cls: 'free on-shelf' });
     }
-    return devHTML(d, def, face, { top, left, w: slotW, h: slotH, cls: side === 'full' ? '' : 'half-' + side });
+    if (side === 'full') return devHTML(d, def, face, { top, left, w: slotW, h: slotH, cls: '' });
+    return halfEarHTML(box, top, slotH) + devHTML(d, def, face, { top, left, w: slotW, h: slotH, cls: 'half half-' + side });
   }).join('');
   return `<div class="rack-face">${caption ? `<div class="face-cap">${face}</div>` : ''}
     <div class="rack-body">
@@ -1999,11 +2005,24 @@ const LOC_GRID = 10, LOC_MIN_W = 550;
 // the ears sit on the rails, and the opening between the rails is about 17.75".
 const PX_IN = U / 1.75;
 const RAIL_W = (19 - 17.75) / 2 * PX_IN;   // each rail, under the ears (~17px)
+// Half-rack gear is half of the opening between the rails (17.75" / 2 = 8.875"),
+// not half of 19": its ear is a separate bracket. Two units meet in the middle.
+const HALF_W = W / 2 - RAIL_W;
+// where a full or half unit sits across the 19" bay, for the face being drawn
+function bayBox(side, face) {
+  if (side === 'full' || !side) return { left: 0, w: W };
+  const onLeft = (side === 'L') === (face === 'front');
+  return { left: onLeft ? RAIL_W : W / 2, w: HALF_W, onLeft };
+}
+// the mounting ear that fills the gap between a half-rack unit and the rail
+function halfEarHTML(box, top, h) {
+  return `<div class="half-ear" style="top:${top}px;left:${box.onLeft ? 0 : W - RAIL_W}px;width:${RAIL_W}px;height:${h}px" aria-hidden="true"></div>`;
+}
 // gear with its own size (a laptop, a wireless receiver on a shelf…) is measured in inches
 const customSize = (def) => def.width === 'custom' && def.form !== 'rack';
 const devSize = (def) => customSize(def)
   ? { w: Math.round(Math.min(60, Math.max(1, +def.wIn || 8)) * PX_IN), h: Math.round(Math.min(40, Math.max(0.5, +def.hIn || 1.75)) * PX_IN) }
-  : { w: def.width === 'half' ? W / 2 : W, h: (def.ru || 1) * U };
+  : { w: def.width === 'half' ? HALF_W : W, h: (def.ru || 1) * U };
 // can it go in a rack? Rack-mounted gear, or gear that sits on a rack shelf
 const rackable = (def) => def.form === 'rack' || def.form === 'shelf';
 const fmtIn = (v) => `${+(+v || 0).toFixed(2)}″`;
@@ -2210,8 +2229,8 @@ function devDropTarget(e) {
     const face = bay.dataset.face || 'front';
     const leftHalf = e.clientX - br.left < W / 2;
     const side = def.width === 'half' ? (leftHalf === (face === 'front') ? 'L' : 'R') : 'full';
-    const left = side === 'full' ? 0 : ((side === 'L') === (face === 'front') ? 0 : W / 2);
-    return { dest: { type: 'rack', rackId: rack.id, u, side }, el: bay, top: (u - 1) * U, left, w: side === 'full' ? W : W / 2, h: Math.min(h, rack.ru) * U };
+    const box = bayBox(side, face);
+    return { dest: { type: 'rack', rackId: rack.id, u, side }, el: bay, top: (u - 1) * U, left: box.left, w: box.w, h: Math.min(h, rack.ru) * U };
   }
   const loc = hit?.closest('.loc');
   if (loc) {
