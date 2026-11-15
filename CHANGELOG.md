@@ -3,6 +3,9 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.19 (2026-11-15)
+- **Connect to list puts nearby jacks first:** gear in the same rack comes first, then the rest of the same location, then a "Other locations" divider and everything else. Gear in other locations shows where it is (e.g. "Amp Room · UPS Amp"). Search still finds anything.
+
 ## v0.0.18 (2026-11-15)
 - **View ▾ → Labels:** show unit labels as *Name and model*, *Name only*, or *Hidden (show on hover)*. When hidden, the strip is still there, so hovering shows it and you can still click or drag a unit by it. Jack group labels (INPUTS, OUT…) and jack numbers can each be switched off. Settings are saved with the project.
 - **View ▾ → Locations to show:** tick which locations (and "Racks not in a location") appear in the Rack tab, with Show all / Hide all. A line under the racks says how many are hidden. Cables to hidden gear aren't drawn.

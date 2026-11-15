@@ -541,7 +541,7 @@ table.grid td.c { text-align: center; }
 </style>
 
 <header class="top">
-  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.18</span></div>
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PatchRack<span class="ver" title="App version">v0.0.19</span></div>
   <input id="proj-name" class="proj-name" data-chg="projName" aria-label="Project name">
   <label class="patch-pick">Patch <select id="patch-select" data-chg="pickPatch"></select></label>
   <nav class="tabs" id="tabs" aria-label="Views">
@@ -590,7 +590,7 @@ table.grid td.c { text-align: center; }
 <input type="file" id="file-dante" accept=".xml,text/xml,application/xml" hidden>
 
 <script>
-const APP_VERSION = '0.0.18';
+const APP_VERSION = '0.0.19';
 /* =====================================================================
    Starter gear library + sample project
    ---------------------------------------------------------------------
@@ -2497,14 +2497,27 @@ function portInspector(ref) {
     ${sec('pt-trace', 'Signal trace', `<div class="small muted">Comes from</div>${traceHTML(bpaths)}<div class="small muted">Goes to</div>${traceHTML(fpaths)}`)}
     ${more ? sec('pt-more', net ? 'Name, note &amp; IP address' : 'Name &amp; note', more, true) : `${pnote ? `<p class="small" style="margin:0"><span class="muted">Note:</span> ${esc(pnote)}</p>` : ''}${lockNote('name this jack or add a note')}`}`;
 }
+// the location a unit is in: its own, or its rack's ('' when neither has one)
+function devLoc(d) {
+  const pl = d.place || {};
+  if (pl.type === 'loc') return pl.locId || '';
+  const r = project.racks.find((x) => x.id === pl.rackId);
+  return r?.locId && project.locations.some((l) => l.id === r.locId) ? r.locId : '';
+}
 // jacks that `ref` could be cabled to, for the "Connect to" list
 function connectOptions(ref, q = '') {
   const p = port(ref); if (!p) return '';
   const all = !!ui.connAll;
   const want = p.g.dir === 'in' ? ['out', 'io'] : p.g.dir === 'out' ? ['in', 'io'] : ['io'];
   q = (q || '').toLowerCase().trim();
-  let html = '';
-  for (const d of project.devices) {
+  // Same rack first, then the rest of the same location, then everywhere else
+  // (most connections stay within one location).
+  const here = devLoc(p.dev), rackId = p.dev.place?.type === 'rack' ? p.dev.place.rackId : null;
+  const rank = (d) => (d.id === p.dev.id ? 0 : rackId && d.place?.type === 'rack' && d.place.rackId === rackId ? 1 : devLoc(d) === here ? 2 : 3);
+  const order = project.devices.map((d, i) => [d, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([d]) => d);
+  const locName = (id) => project.locations.find((l) => l.id === id)?.name || 'Not in a location';
+  let html = '', shownElsewhere = false;
+  for (const d of order) {
     const def = idx.def.get(d.defId); if (!def) continue;
     let opts = '';
     for (const g of def.groups) {
@@ -2519,8 +2532,13 @@ function connectOptions(ref, q = '') {
         opts += `<option value="${r}">${esc(text)}</option>`;
       }
     }
-    if (opts) html += `<optgroup label="${esc(d.name)}">${opts}</optgroup>`;
+    if (!opts) continue;
+    const far = rank(d) === 3;
+    if (far && !shownElsewhere && html) html += '<option disabled>──── Other locations ────</option>';
+    if (far) shownElsewhere = true;
+    html += `<optgroup label="${esc(far ? `${locName(devLoc(d))} · ${d.name}` : d.name)}">${opts}</optgroup>`;
   }
+  if (shownElsewhere && !html.startsWith('<option disabled>')) html = `<option disabled>──── ${esc(locName(here))} ────</option>` + html;
   return html || '<option disabled>No matching jacks</option>';
 }
 function connInspector(c) {
