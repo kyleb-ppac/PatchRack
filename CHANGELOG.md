@@ -3,6 +3,9 @@
 The app file in `dist/` is named for its version, e.g. `PatchRack-v0.0.2.html`.
 The version also shows next to the PatchRack name in the app's top bar.
 
+## v0.0.20 (2026-11-15)
+- **Jacks you can't connect to fade out while you drag a cable:** only jacks of the same signal family (audio, power, network…) and the right direction (output to input) stay bright. The same happens in **Pick on the rack** mode. You can still drop on a faded jack for the odd adapter job; it gets a red ring so you know it's unusual.
+
 ## v0.0.19 (2026-11-15)
 - **Connect to list puts nearby jacks first:** gear in the same rack comes first, then the rest of the same location, then a "Other locations" divider and everything else. Gear in other locations shows where it is (e.g. "Amp Room · UPS Amp"). Search still finds anything.
 

@@ -1008,6 +1008,7 @@ function devHTML(d, def, face, box) {
     const fill = grp ? `--fill:${grp.color};` : idx.outMark.get(ref) ? '--fill:#5b6f86;' : '';
     const cls = ['port', 'c-' + pp.conn, 'd-' + pp.dir];
     if (idx.cables.get(ref)) cls.push('plugged');
+    if (ui.pick && ui.pick !== ref && !jackFits(ui.pick, ref)) cls.push('nofit');
     if ((ui.sel?.kind === 'port' && ui.sel.ref === ref) || ui.pick === ref) cls.push('sel');
     else if (hl.has(ref)) cls.push('hl');
     const p = port(ref);
@@ -1098,6 +1099,7 @@ function onPointerDown(e) {
 function onPointerMove(e) {
   if (!drag) return;
   if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+  if (!drag.moved) dimJacks(drag.from);
   drag.moved = true;
   const inner = $('#stage-inner').getBoundingClientRect();
   const x = e.clientX - inner.left, y = e.clientY - inner.top;
@@ -1117,6 +1119,7 @@ function onPointerUp(e) {
     select({ kind: 'port', ref: d.from }); return;
   }
   suppressNextClick();
+  undimJacks();
   const t = $('#cable-temp'); if (t) t.setAttribute('d', '');
   const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.port');
   if (over && over.dataset.ref !== d.from) connect(d.from, over.dataset.ref);
@@ -1441,6 +1444,24 @@ function portInspector(ref) {
     ${sec('pt-cables', `Cables (${conns.length})`, conns.length ? conns.map((c) => `<div class="chips"><span class="pill ${c.layer === 'rig' ? 'rig' : 'patch'}">${c.kind === 'dante' ? 'Dante' : c.kind === 'tie' ? 'Tie line' : c.layer === 'rig' ? 'Rig' : 'Patch'}</span>${c.kind === 'dante' ? '' : `<span class="swl" style="--c:${(SIGNALS[connType(c)] || SIGNALS.other).color}" title="${esc(sigName(connType(c)))}"></span>`}<span class="chip" data-act="selConn" data-id="${c.id}" style="cursor:pointer">${c.label ? `<b>${esc(c.label)}</b> ` : ''}${c.a === ref ? '→' : '←'} ${esc(portLong(c.a === ref ? c.b : c.a))}</span></div>`).join('') : '<p class="small muted" style="margin:0">Nothing plugged in.</p>')}
     ${sec('pt-trace', 'Signal trace', `<div class="small muted">Comes from</div>${traceHTML(bpaths)}<div class="small muted">Goes to</div>${traceHTML(fpaths)}`)}
     ${more ? sec('pt-more', net ? 'Name, note &amp; IP address' : 'Name &amp; note', more, true) : `${pnote ? `<p class="small" style="margin:0"><span class="muted">Note:</span> ${esc(pnote)}</p>` : ''}${lockNote('name this jack or add a note')}`}`;
+}
+// could jack `from` sensibly be cabled to jack `to`? Right direction and same
+// signal family (the Connect to list and the dimming while dragging use this)
+function jackFits(from, to) {
+  const a = port(from), b = port(to); if (!a || !b || from === to) return false;
+  if (!isPhysical(a.g) || !isPhysical(b.g)) return false;
+  const want = a.g.dir === 'in' ? ['out', 'io'] : a.g.dir === 'out' ? ['in', 'io'] : ['io'];
+  return want.includes(b.g.dir) && sameFamily(a.g, b.g);
+}
+// dim every jack on screen that `from` can't connect to
+function dimJacks(from) {
+  const inner = $('#stage-inner'); if (!inner) return;
+  inner.classList.add('connecting');
+  for (const el of $$('.port', inner)) el.classList.toggle('nofit', el.dataset.ref !== from && !jackFits(from, el.dataset.ref));
+}
+function undimJacks() {
+  $('#stage-inner')?.classList.remove('connecting');
+  for (const el of $$('.port.nofit, .port.drop')) el.classList.remove('nofit', 'drop');
 }
 // the location a unit is in: its own, or its rack's ('' when neither has one)
 function devLoc(d) {
